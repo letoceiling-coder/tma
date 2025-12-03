@@ -200,30 +200,30 @@ class DeployController extends Controller
     protected function handleGitPull(): array
     {
         try {
-            // Настройка безопасной директории для git
+            // Настройка безопасной директории для git (решает проблему dubious ownership)
+            // ВАЖНО: Это должно быть первым шагом перед всеми git командами
             $this->ensureGitSafeDirectory();
             
-            // Проверяем, что это git репозиторий
-            if (!is_dir($this->basePath . '/.git')) {
-                return [
-                    'success' => false,
-                    'status' => 'error',
-                    'error' => 'Директория не является git репозиторием',
-                ];
-            }
+            // Определяем безопасную директорию для всех git команд
+            $safeDirectoryPath = escapeshellarg($this->basePath);
+            $gitEnv = [
+                'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+            ];
+            $gitBaseCmd = "git -c safe.directory={$safeDirectoryPath}";
 
             // Проверяем статус git перед pull
             $statusProcess = Process::path($this->basePath)
-                ->run('git status --porcelain 2>&1');
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} status --porcelain 2>&1");
 
             $hasChanges = !empty(trim($statusProcess->output()));
 
             // Если есть локальные изменения, сохраняем их в stash
             if ($hasChanges) {
                 Log::info('Обнаружены локальные изменения, сохраняем в stash...');
-                $stashMessage = 'Auto-stash before deploy ' . date('Y-m-d H:i:s');
                 $stashProcess = Process::path($this->basePath)
-                    ->run('git stash push -m ' . escapeshellarg($stashMessage) . ' 2>&1');
+                    ->env($gitEnv)
+                    ->run("{$gitBaseCmd} stash push -m \"Auto-stash before deploy " . now()->toDateTimeString() . "\" 2>&1");
 
                 if (!$stashProcess->successful()) {
                     Log::warning('Не удалось сохранить изменения в stash', [
@@ -236,15 +236,14 @@ class DeployController extends Controller
             $beforeCommit = $this->getCurrentCommitHash();
             Log::info("📦 Commit до обновления: " . ($beforeCommit ?: 'не определен'));
 
-            // Определяем ветку (по умолчанию main)
-            $branchProcess = Process::path($this->basePath)
-                ->run('git rev-parse --abbrev-ref HEAD 2>&1');
-            $branch = trim($branchProcess->output()) ?: 'main';
+            // Используем жестко заданную ветку main (как в рабочем коде)
+            $branch = 'main';
 
             // 1. Получаем последние изменения из репозитория
             Log::info("📥 Выполняем git fetch origin {$branch}...");
             $fetchProcess = Process::path($this->basePath)
-                ->run('git fetch origin ' . escapeshellarg($branch) . ' 2>&1');
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} fetch origin {$branch} 2>&1");
 
             if (!$fetchProcess->successful()) {
                 Log::warning('⚠️ Не удалось выполнить git fetch', [
@@ -255,10 +254,11 @@ class DeployController extends Controller
                 Log::info('✅ Git fetch выполнен успешно');
             }
 
-            // 2. Сбрасываем локальную ветку на origin/{branch}
+            // 2. Сбрасываем локальную ветку на origin/main (принудительное обновление)
             Log::info("🔄 Выполняем git reset --hard origin/{$branch}...");
             $process = Process::path($this->basePath)
-                ->run('git reset --hard origin/' . escapeshellarg($branch) . ' 2>&1');
+                ->env($gitEnv)
+                ->run("{$gitBaseCmd} reset --hard origin/{$branch} 2>&1");
 
             if (!$process->successful()) {
                 Log::warning('Git reset --hard не удался, пробуем git pull', [
@@ -267,7 +267,8 @@ class DeployController extends Controller
 
                 // Если reset не удался, пробуем обычный pull
                 $process = Process::path($this->basePath)
-                    ->run('git pull origin ' . escapeshellarg($branch) . ' --no-rebase --force 2>&1');
+                    ->env($gitEnv)
+                    ->run("{$gitBaseCmd} pull origin {$branch} --no-rebase --force 2>&1");
             }
 
             // 3. Получаем новый commit после обновления
@@ -306,22 +307,30 @@ class DeployController extends Controller
 
     /**
      * Настроить безопасную директорию для git
+     * Решает проблему "detected dubious ownership in repository"
      */
     protected function ensureGitSafeDirectory(): void
     {
         try {
+            // Сначала пытаемся добавить в глобальную конфигурацию
+            // Используем кавычки для экранирования пути с пробелами
             $escapedPath = escapeshellarg($this->basePath);
-            
-            // Пробуем настроить глобально
             $process = Process::path($this->basePath)
-                ->run('git config --global --add safe.directory ' . $escapedPath . ' 2>&1');
+                ->run("git config --global --add safe.directory {$escapedPath} 2>&1");
 
             // Если глобально не получилось, пробуем локально
             if (!$process->successful()) {
                 $processLocal = Process::path($this->basePath)
-                    ->run('git config --local --add safe.directory ' . $escapedPath . ' 2>&1');
+                    ->run("git config --local --add safe.directory {$escapedPath} 2>&1");
+
+                // Если и локально не получилось, используем переменную окружения
+                if (!$processLocal->successful()) {
+                    // Используем переменную окружения для текущей сессии
+                    putenv("GIT_CEILING_DIRECTORIES=" . dirname($this->basePath));
+                }
             }
         } catch (\Exception $e) {
+            // Игнорируем ошибки настройки - возможно, уже настроено или нет прав
             Log::warning('Не удалось настроить safe.directory для git', [
                 'path' => $this->basePath,
                 'error' => $e->getMessage(),
@@ -661,14 +670,23 @@ class DeployController extends Controller
     protected function getCurrentCommitHash(): ?string
     {
         try {
+            $safeDirectoryPath = escapeshellarg($this->basePath);
             $process = Process::path($this->basePath)
-                ->run('git rev-parse HEAD 2>&1');
+                ->env([
+                    'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
+                ])
+                ->run("git -c safe.directory={$safeDirectoryPath} rev-parse HEAD 2>&1");
 
             if ($process->successful()) {
                 $hash = trim($process->output());
                 if (!empty($hash) && strlen($hash) === 40) {
                     return $hash;
                 }
+            } else {
+                Log::warning('Не удалось получить commit hash', [
+                    'output' => $process->output(),
+                    'error' => $process->errorOutput(),
+                ]);
             }
         } catch (\Exception $e) {
             Log::warning('Ошибка при получении commit hash', [
