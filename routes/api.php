@@ -6,11 +6,14 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\DeployController;
+use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\v1\FolderController;
 use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
 
 // Публичные роуты
+// Проверка подписки на канал
+Route::get('/check-subscription/{channelUsername}', [SubscriptionController::class, 'checkSubscription']);
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
