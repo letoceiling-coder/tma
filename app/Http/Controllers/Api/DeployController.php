@@ -419,6 +419,7 @@ class DeployController extends Controller
         // 1. Проверить явно указанный путь в .env
         $composerPath = env('COMPOSER_PATH');
         if ($composerPath && file_exists($composerPath)) {
+            Log::info("Composer найден через .env: {$composerPath}");
             return $composerPath;
         }
 
@@ -433,18 +434,38 @@ class DeployController extends Controller
         foreach ($possiblePaths as $path) {
             if ($path === 'composer') {
                 // Для 'composer' проверяем через which
-                $whichProcess = Process::run('which composer');
-                if ($whichProcess->successful() && trim($whichProcess->output())) {
-                    return trim($whichProcess->output());
+                try {
+                    $whichProcess = Process::run('which composer 2>&1');
+                    if ($whichProcess->successful() && trim($whichProcess->output())) {
+                        $foundPath = trim($whichProcess->output());
+                        Log::info("Composer найден через which: {$foundPath}");
+                        return $foundPath;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Ошибка при поиске composer через which: " . $e->getMessage());
                 }
             } else {
                 if (file_exists($path)) {
+                    Log::info("Composer найден по пути: {$path}");
                     return $path;
                 }
             }
         }
 
-        // 3. Fallback на 'composer' (будет ошибка, если не найден)
+        // 3. Fallback - пробуем через which как последнюю попытку
+        try {
+            $whichProcess = Process::run('which composer 2>&1');
+            if ($whichProcess->successful() && trim($whichProcess->output())) {
+                $foundPath = trim($whichProcess->output());
+                Log::info("Composer найден через which (fallback): {$foundPath}");
+                return $foundPath;
+            }
+        } catch (\Exception $e) {
+            Log::error("Composer не найден, все пути проверены. Ошибка: " . $e->getMessage());
+        }
+
+        // 4. Последний fallback на 'composer' (будет ошибка, если не найден)
+        Log::error("Composer не найден, возвращаем 'composer' (может не работать)");
         return 'composer';
     }
 
