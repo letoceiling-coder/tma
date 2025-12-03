@@ -1,0 +1,148 @@
+{
+  "index.html": {
+    "file": "assets/index-CqByEBvJ.js",
+    "name": "index",
+    "src": "index.html",
+    "isEntry": true,
+    "css": [
+      "assets/index-DN5KSGDf.css"
+    ],
+    "assets": [
+      "assets/loading-bunny-BX_rB9LI.png",
+      "assets/prize-300-DpRNpEnD.png",
+      "assets/prize-500-t12Cviim.png",
+      "assets/prize-0-CHVBjKMz.png",
+      "assets/prize-ticket-WnL5uatS.png",
+      "assets/prize-secret-RGZ8HFNg.png",
+      "assets/prize-wow-gqt_Hbti.png",
+      "assets/popup-bunny-heart-Py57zRM_.png",
+      "assets/wow-bunny-CZMgdVFZ.png",
+      "assets/friends-invite-DpBXtwEb.png",
+      "assets/friends-tickets-CP-XCz89.png",
+      "assets/leaderboard-bunny-1500-D-Jlk-yP.png",
+      "assets/floral-bg-BEfpLaJm.png",
+      "assets/bunny-gifts-new-C-aZ27jf.png",
+      "assets/btn-win-Cl2v-6rX.png",
+      "assets/btn-ot300-Btd9GSNg.png",
+      "assets/btn-do1500-VUlrtCi0.png",
+      "assets/btn-wowbox-B1Cp4jHl.png",
+      "assets/btn-secretbox-Cjg4cxU-.png",
+      "assets/bunnies-podium-new-Ch7vSqmG.png",
+      "assets/btn-invite-RHfL2Jra.png",
+      "assets/btn-tickets-DwUKMchb.png",
+      "assets/bunny-trophy-new-BVaELVvH.png",
+      "assets/btn-zovi-wTvtHfqR.png",
+      "assets/btn-top-Bs5yXjs_.png",
+      "assets/btn-more-C4oFN52F.png",
+      "assets/prize-2-CkO88dv7.png"
+    ]
+  },
+  "src/assets/friends-invite.png": {
+    "file": "assets/friends-invite-DpBXtwEb.png",
+    "src": "src/assets/friends-invite.png"
+  },
+  "src/assets/friends-tickets.png": {
+    "file": "assets/friends-tickets-CP-XCz89.png",
+    "src": "src/assets/friends-tickets.png"
+  },
+  "src/assets/how-to-play/btn-do1500.png": {
+    "file": "assets/btn-do1500-VUlrtCi0.png",
+    "src": "src/assets/how-to-play/btn-do1500.png"
+  },
+  "src/assets/how-to-play/btn-invite.png": {
+    "file": "assets/btn-invite-RHfL2Jra.png",
+    "src": "src/assets/how-to-play/btn-invite.png"
+  },
+  "src/assets/how-to-play/btn-more.png": {
+    "file": "assets/btn-more-C4oFN52F.png",
+    "src": "src/assets/how-to-play/btn-more.png"
+  },
+  "src/assets/how-to-play/btn-ot300.png": {
+    "file": "assets/btn-ot300-Btd9GSNg.png",
+    "src": "src/assets/how-to-play/btn-ot300.png"
+  },
+  "src/assets/how-to-play/btn-secretbox.png": {
+    "file": "assets/btn-secretbox-Cjg4cxU-.png",
+    "src": "src/assets/how-to-play/btn-secretbox.png"
+  },
+  "src/assets/how-to-play/btn-tickets.png": {
+    "file": "assets/btn-tickets-DwUKMchb.png",
+    "src": "src/assets/how-to-play/btn-tickets.png"
+  },
+  "src/assets/how-to-play/btn-top.png": {
+    "file": "assets/btn-top-Bs5yXjs_.png",
+    "src": "src/assets/how-to-play/btn-top.png"
+  },
+  "src/assets/how-to-play/btn-win.png": {
+    "file": "assets/btn-win-Cl2v-6rX.png",
+    "src": "src/assets/how-to-play/btn-win.png"
+  },
+  "src/assets/how-to-play/btn-wowbox.png": {
+    "file": "assets/btn-wowbox-B1Cp4jHl.png",
+    "src": "src/assets/how-to-play/btn-wowbox.png"
+  },
+  "src/assets/how-to-play/btn-zovi.png": {
+    "file": "assets/btn-zovi-wTvtHfqR.png",
+    "src": "src/assets/how-to-play/btn-zovi.png"
+  },
+  "src/assets/how-to-play/bunnies-podium-new.png": {
+    "file": "assets/bunnies-podium-new-Ch7vSqmG.png",
+    "src": "src/assets/how-to-play/bunnies-podium-new.png"
+  },
+  "src/assets/how-to-play/bunny-gifts-new.png": {
+    "file": "assets/bunny-gifts-new-C-aZ27jf.png",
+    "src": "src/assets/how-to-play/bunny-gifts-new.png"
+  },
+  "src/assets/how-to-play/bunny-trophy-new.png": {
+    "file": "assets/bunny-trophy-new-BVaELVvH.png",
+    "src": "src/assets/how-to-play/bunny-trophy-new.png"
+  },
+  "src/assets/how-to-play/floral-bg.png": {
+    "file": "assets/floral-bg-BEfpLaJm.png",
+    "src": "src/assets/how-to-play/floral-bg.png"
+  },
+  "src/assets/how-to-play/prize-2.png": {
+    "file": "assets/prize-2-CkO88dv7.png",
+    "src": "src/assets/how-to-play/prize-2.png"
+  },
+  "src/assets/leaderboard-bunny-1500.png": {
+    "file": "assets/leaderboard-bunny-1500-D-Jlk-yP.png",
+    "src": "src/assets/leaderboard-bunny-1500.png"
+  },
+  "src/assets/loading-bunny.png": {
+    "file": "assets/loading-bunny-BX_rB9LI.png",
+    "src": "src/assets/loading-bunny.png"
+  },
+  "src/assets/popup-bunny-heart.png": {
+    "file": "assets/popup-bunny-heart-Py57zRM_.png",
+    "src": "src/assets/popup-bunny-heart.png"
+  },
+  "src/assets/wheel/prize-0.png": {
+    "file": "assets/prize-0-CHVBjKMz.png",
+    "src": "src/assets/wheel/prize-0.png"
+  },
+  "src/assets/wheel/prize-300.png": {
+    "file": "assets/prize-300-DpRNpEnD.png",
+    "src": "src/assets/wheel/prize-300.png"
+  },
+  "src/assets/wheel/prize-500.png": {
+    "file": "assets/prize-500-t12Cviim.png",
+    "src": "src/assets/wheel/prize-500.png"
+  },
+  "src/assets/wheel/prize-secret.png": {
+    "file": "assets/prize-secret-RGZ8HFNg.png",
+    "src": "src/assets/wheel/prize-secret.png"
+  },
+  "src/assets/wheel/prize-ticket.png": {
+    "file": "assets/prize-ticket-WnL5uatS.png",
+    "src": "src/assets/wheel/prize-ticket.png"
+  },
+  "src/assets/wheel/prize-wow.png": {
+    "file": "assets/prize-wow-gqt_Hbti.png",
+    "src": "src/assets/wheel/prize-wow.png"
+  },
+  "src/assets/wow-bunny.png": {
+    "file": "assets/wow-bunny-CZMgdVFZ.png",
+    "src": "src/assets/wow-bunny.png"
+  }
+}

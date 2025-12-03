@@ -1,0 +1,167 @@
+import { useEffect, useState, useCallback } from "react";
+
+interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  language_code?: string;
+  photo_url?: string;
+}
+
+interface TelegramWebApp {
+  ready: () => void;
+  expand: () => void;
+  close: () => void;
+  enableClosingConfirmation: () => void;
+  disableClosingConfirmation: () => void;
+  setHeaderColor: (color: string) => void;
+  setBackgroundColor: (color: string) => void;
+  initData: string;
+  initDataUnsafe: {
+    user?: TelegramUser;
+    query_id?: string;
+    start_param?: string;
+  };
+  MainButton: {
+    text: string;
+    show: () => void;
+    hide: () => void;
+    onClick: (callback: () => void) => void;
+    offClick: (callback: () => void) => void;
+    setParams: (params: { text?: string; color?: string; text_color?: string; is_active?: boolean }) => void;
+  };
+  BackButton: {
+    show: () => void;
+    hide: () => void;
+    onClick: (callback: () => void) => void;
+    offClick: (callback: () => void) => void;
+  };
+  HapticFeedback: {
+    impactOccurred: (style: "light" | "medium" | "heavy" | "rigid" | "soft") => void;
+    notificationOccurred: (type: "error" | "success" | "warning") => void;
+    selectionChanged: () => void;
+  };
+  openTelegramLink: (url: string) => void;
+  openLink: (url: string) => void;
+  platform: string;
+  version: string;
+  colorScheme: "light" | "dark";
+  themeParams: {
+    bg_color?: string;
+    text_color?: string;
+    hint_color?: string;
+    link_color?: string;
+    button_color?: string;
+    button_text_color?: string;
+  };
+}
+
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp: TelegramWebApp;
+    };
+  }
+}
+
+export const useTelegramWebApp = () => {
+  const [isReady, setIsReady] = useState(false);
+  const [user, setUser] = useState<TelegramUser | null>(null);
+  const [isTelegram, setIsTelegram] = useState(false);
+
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    
+    if (tg) {
+      setIsTelegram(true);
+      
+      // Initialize WebApp
+      tg.ready();
+      tg.expand();
+      
+      // Set colors to match app theme
+      tg.setHeaderColor('#F8A575');
+      tg.setBackgroundColor('#F8A575');
+      
+      // Get user data
+      const userData = tg.initDataUnsafe?.user;
+      if (userData) {
+        setUser(userData);
+      }
+      
+      setIsReady(true);
+    } else {
+      // Not in Telegram, still mark as ready
+      setIsReady(true);
+    }
+  }, []);
+
+  const close = useCallback(() => {
+    window.Telegram?.WebApp?.close();
+  }, []);
+
+  const expand = useCallback(() => {
+    window.Telegram?.WebApp?.expand();
+  }, []);
+
+  const share = useCallback((url: string, text: string) => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink) {
+      tg.openTelegramLink(
+        `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+      );
+      return true;
+    }
+    return false;
+  }, []);
+
+  const showMainButton = useCallback((text: string, onClick: () => void) => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.MainButton) {
+      tg.MainButton.setParams({
+        text,
+        color: '#E07C63',
+        text_color: '#FFFFFF',
+        is_active: true
+      });
+      tg.MainButton.onClick(onClick);
+      tg.MainButton.show();
+    }
+  }, []);
+
+  const hideMainButton = useCallback(() => {
+    window.Telegram?.WebApp?.MainButton?.hide();
+  }, []);
+
+  const haptic = useCallback((type: 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'warning' | 'selection') => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.HapticFeedback) {
+      if (type === 'success' || type === 'error' || type === 'warning') {
+        tg.HapticFeedback.notificationOccurred(type);
+      } else if (type === 'selection') {
+        tg.HapticFeedback.selectionChanged();
+      } else {
+        tg.HapticFeedback.impactOccurred(type);
+      }
+    }
+  }, []);
+
+  return {
+    isReady,
+    isTelegram,
+    user,
+    userName: user?.first_name || user?.username || "Гость",
+    userPhoto: user?.photo_url,
+    close,
+    expand,
+    share,
+    showMainButton,
+    hideMainButton,
+    haptic,
+    platform: window.Telegram?.WebApp?.platform || 'web',
+    colorScheme: window.Telegram?.WebApp?.colorScheme || 'light',
+  };
+};
+
+export default useTelegramWebApp;

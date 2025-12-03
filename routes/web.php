@@ -1,0 +1,63 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+
+// API маршруты должны быть обработаны до SPA маршрутов
+// Они определены в routes/api.php
+
+// Проксирование assets для React приложения - должно быть ПЕРВЫМ
+// Если запрашивается /assets/*, отдаем из /frontend/assets/*
+Route::get('/assets/{path}', function ($path) {
+    // Безопасно получаем имя файла (защита от path traversal)
+    $fileName = basename($path);
+    $filePath = public_path('frontend/assets/' . $fileName);
+    
+    // Проверяем существование файла
+    if (!file_exists($filePath) || !is_file($filePath)) {
+        abort(404, "File not found: {$fileName}");
+    }
+    
+    // Определяем MIME тип по расширению
+    $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    $mimeTypes = [
+        'js' => 'application/javascript; charset=utf-8',
+        'mjs' => 'application/javascript; charset=utf-8',
+        'css' => 'text/css; charset=utf-8',
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif',
+        'svg' => 'image/svg+xml',
+        'webp' => 'image/webp',
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf' => 'font/ttf',
+        'eot' => 'application/vnd.ms-fontobject',
+    ];
+    
+    $mimeType = $mimeTypes[$extension] ?? mime_content_type($filePath);
+    
+    return response()->file($filePath, [
+        'Content-Type' => $mimeType,
+        'Cache-Control' => 'public, max-age=31536000',
+    ]);
+})->where('path', '.+')->name('react.assets');
+
+// Маршруты для админ-панели (Vue)
+Route::get('/admin/{any?}', function () {
+    return view('admin');
+})->where('any', '.*')->name('admin');
+
+// Маршруты для основного приложения (React)
+// Все остальные маршруты (кроме admin, api, storage, build, frontend, assets) отдаются React приложению
+Route::get('/{any?}', function ($any = null) {
+    // Перед отдачей React view проверяем, не запрашивается ли статический файл
+    if ($any && preg_match('/\.(js|css|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$/i', $any)) {
+        $filePath = public_path($any);
+        if (file_exists($filePath) && is_file($filePath)) {
+            return response()->file($filePath);
+        }
+    }
+    
+    return view('react');
+})->where('any', '^(?!admin|api|storage|build|frontend|assets).*')->name('react');
