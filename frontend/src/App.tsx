@@ -32,10 +32,13 @@ const ScrollToTop = () => {
 };
 
 const AppContent = () => {
-  const [isSubscribed, setIsSubscribed] = useState(() => {
-    // Проверяем, была ли подписка подтверждена ранее в этой сессии
-    return sessionStorage.getItem("channel_subscribed") === "true";
-  });
+  // Очищаем sessionStorage при каждом запуске - проверка обязательна каждый раз
+  const [isSubscribed, setIsSubscribed] = useState(false);
+
+  // Очищаем старые данные при монтировании
+  useEffect(() => {
+    sessionStorage.removeItem("channel_subscribed");
+  }, []);
 
   const handleSubscribed = () => {
     setIsSubscribed(true);

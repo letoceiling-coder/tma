@@ -56,8 +56,12 @@ const ChannelSubscriptionCheck = ({
     return null;
   }
 
-  // Получаем список неподписанных каналов
+  // Получаем список неподписанных каналов (включая те, что еще не проверены - null)
   const unsubscribedChannels = channels.filter((ch) => ch.isSubscribed !== true);
+  
+  // Если все каналы еще не проверены (null), показываем их все
+  const allUnchecked = channels.every((ch) => ch.isSubscribed === null);
+  const channelsToShow = allUnchecked ? channels : unsubscribedChannels;
 
   // Показываем экран подписки
   return (
@@ -95,7 +99,7 @@ const ChannelSubscriptionCheck = ({
           marginBottom: "32px",
         }}
       >
-        {unsubscribedChannels.map((channel) => (
+        {channelsToShow.map((channel) => (
           <div
             key={channel.username}
             style={{
@@ -120,6 +124,29 @@ const ChannelSubscriptionCheck = ({
             >
               @{channel.username}
             </div>
+
+            {/* Статус проверки (для отладки) */}
+            {channel.isSubscribed === null && (
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#999",
+                  fontStyle: "italic",
+                }}
+              >
+                Проверка...
+              </div>
+            )}
+            {channel.isSubscribed === false && (
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#CC5C47",
+                }}
+              >
+                Требуется подписка
+              </div>
+            )}
 
             {/* Кнопка "Открыть канал" */}
             <button

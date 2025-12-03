@@ -34,14 +34,14 @@ export const useChannelSubscription = ({
     const tg = window.Telegram?.WebApp;
     
     if (!tg) {
-      // Если не в Telegram, разрешаем доступ для разработки
+      // Если не в Telegram, блокируем доступ (для production)
+      console.warn("Telegram WebApp не обнаружен - проверка подписки невозможна, доступ заблокирован");
       setChannels(
         channelUsernames.map((username) => ({
           username,
-          isSubscribed: true,
+          isSubscribed: false,
         }))
       );
-      onSubscriptionConfirmed?.();
       return;
     }
 
@@ -61,7 +61,7 @@ export const useChannelSubscription = ({
             
             return {
               username,
-              isSubscribed: result?.is_subscribed || false,
+              isSubscribed: result?.is_subscribed === true, // Строгая проверка
             };
           } catch (error) {
             console.error(`Error checking subscription for @${username}:`, error);
@@ -84,21 +84,16 @@ export const useChannelSubscription = ({
         // Для старых версий или если метод недоступен
         // Используем метод через проверку через backend
         const checkPromises = channelUsernames.map(async (username) => {
-          // Для тестирования можно установить флаг в localStorage
-          const testSubscribed = localStorage.getItem(`channel_subscribed_${username}`);
-          
-          if (testSubscribed === "true") {
-            return {
-              username,
-              isSubscribed: true,
-            };
-          }
+          // УБРАНО: автоматическое разрешение через localStorage для production
+          // Проверяем только через API
 
           // Вызываем backend API для проверки подписки
           try {
             const apiUrl = import.meta.env.VITE_API_URL || '';
             const apiPath = apiUrl ? `${apiUrl}/api/check-subscription/${username}` 
                                    : `/api/check-subscription/${username}`;
+            
+            console.log(`Проверка подписки на @${username} через API: ${apiPath}`);
             
             const response = await fetch(apiPath, {
               method: "GET",
@@ -109,25 +104,29 @@ export const useChannelSubscription = ({
               },
             });
             
+            console.log(`Ответ API для @${username}:`, response.status, response.statusText);
+            
             if (response.ok) {
               const data = await response.json();
+              console.log(`Результат проверки @${username}:`, data);
               return {
                 username,
-                isSubscribed: data.is_subscribed || false,
+                isSubscribed: data.is_subscribed === true, // Строгая проверка
               };
             } else {
-              // Если API недоступен, разрешаем доступ (для разработки)
+              // Если API недоступен, считаем что не подписан (блокируем доступ)
+              console.warn(`API недоступен для проверки @${username} (${response.status}), считаем что не подписан`);
               return {
                 username,
-                isSubscribed: true,
+                isSubscribed: false,
               };
             }
           } catch (error) {
             console.error(`Error checking subscription via API for @${username}:`, error);
-            // Для разработки разрешаем доступ
+            // При ошибке считаем что не подписан (блокируем доступ)
             return {
               username,
-              isSubscribed: true,
+              isSubscribed: false,
             };
           }
         });
