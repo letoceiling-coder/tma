@@ -200,30 +200,49 @@ class DeployController extends Controller
     protected function handleGitPull(): array
     {
         try {
+            // Логируем базовый путь для отладки
+            Log::info("🔍 Базовая директория проекта: {$this->basePath}");
+            Log::info("🔍 Проверка существования .git: " . (is_dir($this->basePath . '/.git') ? 'ДА' : 'НЕТ'));
+            
+            // Проверяем, что это git репозиторий
+            $gitDir = $this->basePath . '/.git';
+            if (!is_dir($gitDir)) {
+                $error = "Директория не является git репозиторием. Путь: {$this->basePath}, .git существует: " . (file_exists($gitDir) ? 'да (но не директория)' : 'нет');
+                Log::error($error);
+                return [
+                    'success' => false,
+                    'status' => 'error',
+                    'error' => $error,
+                ];
+            }
+
             // Настройка безопасной директории для git (решает проблему dubious ownership)
             // ВАЖНО: Это должно быть первым шагом перед всеми git командами
             $this->ensureGitSafeDirectory();
             
             // Определяем безопасную директорию для всех git команд
+            // Используем одинарные кавычки внутри двойных для правильного экранирования
             $safeDirectoryPath = escapeshellarg($this->basePath);
             $gitEnv = [
                 'GIT_CEILING_DIRECTORIES' => dirname($this->basePath),
             ];
-            $gitBaseCmd = "git -c safe.directory={$safeDirectoryPath}";
+            // Формируем команду с правильным экранированием
+            $gitBaseCmd = 'git -c safe.directory=' . $safeDirectoryPath;
 
             // Проверяем статус git перед pull
             $statusProcess = Process::path($this->basePath)
                 ->env($gitEnv)
-                ->run("{$gitBaseCmd} status --porcelain 2>&1");
+                ->run($gitBaseCmd . ' status --porcelain 2>&1');
 
             $hasChanges = !empty(trim($statusProcess->output()));
 
             // Если есть локальные изменения, сохраняем их в stash
             if ($hasChanges) {
                 Log::info('Обнаружены локальные изменения, сохраняем в stash...');
+                $stashMessage = 'Auto-stash before deploy ' . now()->toDateTimeString();
                 $stashProcess = Process::path($this->basePath)
                     ->env($gitEnv)
-                    ->run("{$gitBaseCmd} stash push -m \"Auto-stash before deploy " . now()->toDateTimeString() . "\" 2>&1");
+                    ->run($gitBaseCmd . ' stash push -m ' . escapeshellarg($stashMessage) . ' 2>&1');
 
                 if (!$stashProcess->successful()) {
                     Log::warning('Не удалось сохранить изменения в stash', [
@@ -243,7 +262,7 @@ class DeployController extends Controller
             Log::info("📥 Выполняем git fetch origin {$branch}...");
             $fetchProcess = Process::path($this->basePath)
                 ->env($gitEnv)
-                ->run("{$gitBaseCmd} fetch origin {$branch} 2>&1");
+                ->run($gitBaseCmd . ' fetch origin ' . escapeshellarg($branch) . ' 2>&1');
 
             if (!$fetchProcess->successful()) {
                 Log::warning('⚠️ Не удалось выполнить git fetch', [
@@ -258,7 +277,7 @@ class DeployController extends Controller
             Log::info("🔄 Выполняем git reset --hard origin/{$branch}...");
             $process = Process::path($this->basePath)
                 ->env($gitEnv)
-                ->run("{$gitBaseCmd} reset --hard origin/{$branch} 2>&1");
+                ->run($gitBaseCmd . ' reset --hard origin/' . escapeshellarg($branch) . ' 2>&1');
 
             if (!$process->successful()) {
                 Log::warning('Git reset --hard не удался, пробуем git pull', [
@@ -268,7 +287,7 @@ class DeployController extends Controller
                 // Если reset не удался, пробуем обычный pull
                 $process = Process::path($this->basePath)
                     ->env($gitEnv)
-                    ->run("{$gitBaseCmd} pull origin {$branch} --no-rebase --force 2>&1");
+                    ->run($gitBaseCmd . ' pull origin ' . escapeshellarg($branch) . ' --no-rebase --force 2>&1');
             }
 
             // 3. Получаем новый commit после обновления
@@ -297,6 +316,10 @@ class DeployController extends Controller
                 'error' => $process->errorOutput() ?: $process->output(),
             ];
         } catch (\Exception $e) {
+            Log::error('Исключение в handleGitPull', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return [
                 'success' => false,
                 'status' => 'error',
