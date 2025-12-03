@@ -368,14 +368,17 @@ class DeployController extends Controller
     {
         try {
             $composerPath = $this->getComposerPath();
+            Log::info("🔍 Путь к composer: {$composerPath}");
 
             $homeDir = getenv('HOME');
             if (!$homeDir) {
                 $projectUser = posix_getpwuid(posix_geteuid());
                 $homeDir = $projectUser['dir'] ?? '/tmp';
             }
+            Log::info("🔍 HOME директория: {$homeDir}");
 
             $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
+            Log::info("🔍 Команда composer: {$command}");
 
             $process = Process::path($this->basePath)
                 ->timeout(600) // 10 минут
@@ -421,13 +424,15 @@ class DeployController extends Controller
 
         // 2. Попробовать найти composer в стандартных местах
         $possiblePaths = [
+            '/home/d/dsc23ytp/.local/bin/composer',
             '/usr/local/bin/composer',
             '/usr/bin/composer',
-            'composer',
+            'composer', // Последняя попытка - использовать из PATH
         ];
 
         foreach ($possiblePaths as $path) {
             if ($path === 'composer') {
+                // Для 'composer' проверяем через which
                 $whichProcess = Process::run('which composer');
                 if ($whichProcess->successful() && trim($whichProcess->output())) {
                     return trim($whichProcess->output());
@@ -439,6 +444,7 @@ class DeployController extends Controller
             }
         }
 
+        // 3. Fallback на 'composer' (будет ошибка, если не найден)
         return 'composer';
     }
 
