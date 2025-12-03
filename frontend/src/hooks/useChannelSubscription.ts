@@ -93,8 +93,6 @@ export const useChannelSubscription = ({
             const apiPath = apiUrl ? `${apiUrl}/api/check-subscription/${username}` 
                                    : `/api/check-subscription/${username}`;
             
-            console.log(`Проверка подписки на @${username} через API: ${apiPath}`);
-            
             const response = await fetch(apiPath, {
               method: "GET",
               headers: {
@@ -104,25 +102,22 @@ export const useChannelSubscription = ({
               },
             });
             
-            console.log(`Ответ API для @${username}:`, response.status, response.statusText);
-            
             if (response.ok) {
               const data = await response.json();
-              console.log(`Результат проверки @${username}:`, data);
+              // Строгая проверка - только если явно true
+              const isSubscribed = data.is_subscribed === true;
               return {
                 username,
-                isSubscribed: data.is_subscribed === true, // Строгая проверка
+                isSubscribed,
               };
             } else {
               // Если API недоступен, считаем что не подписан (блокируем доступ)
-              console.warn(`API недоступен для проверки @${username} (${response.status}), считаем что не подписан`);
               return {
                 username,
                 isSubscribed: false,
               };
             }
           } catch (error) {
-            console.error(`Error checking subscription via API for @${username}:`, error);
             // При ошибке считаем что не подписан (блокируем доступ)
             return {
               username,

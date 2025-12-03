@@ -49,11 +49,11 @@ class SubscriptionController extends Controller
             $userId = $userData['user']['id'];
             $botToken = config('services.telegram.bot_token');
 
-            // Если токен бота не настроен, возвращаем true для разработки
+            // Если токен бота не настроен, блокируем доступ
             if (!$botToken) {
-                Log::warning('Telegram bot token not configured');
+                Log::error('Telegram bot token not configured - проверка подписки невозможна');
                 return response()->json([
-                    'is_subscribed' => true, // Для разработки разрешаем доступ
+                    'is_subscribed' => false, // Блокируем доступ если токен не настроен
                     'message' => 'Bot token not configured'
                 ]);
             }
@@ -69,12 +69,14 @@ class SubscriptionController extends Controller
                 Log::error('Telegram API error', [
                     'status' => $response->status(),
                     'body' => $response->body(),
+                    'channel' => $channelUsername,
+                    'user_id' => $userId,
                 ]);
                 
-                // При ошибке API разрешаем доступ (для разработки)
+                // При ошибке API блокируем доступ - считаем что не подписан
                 return response()->json([
-                    'is_subscribed' => true,
-                    'message' => 'API error, access granted for development'
+                    'is_subscribed' => false,
+                    'message' => 'API error, subscription check failed'
                 ]);
             }
 
@@ -101,12 +103,13 @@ class SubscriptionController extends Controller
             Log::error('Subscription check error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'channel' => $channelUsername,
             ]);
 
-            // При ошибке разрешаем доступ (для разработки)
+            // При ошибке блокируем доступ - считаем что не подписан
             return response()->json([
-                'is_subscribed' => true,
-                'message' => 'Error occurred, access granted for development'
+                'is_subscribed' => false,
+                'message' => 'Error occurred during subscription check'
             ]);
         }
     }
