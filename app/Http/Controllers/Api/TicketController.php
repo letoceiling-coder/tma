@@ -64,14 +64,15 @@ class TicketController extends Controller
             $nextTicketAt = null;
             $secondsUntilNextTicket = null;
             
-            if ($user->tickets_available < 3 && $user->last_spin_at) {
-                // Рассчитываем сколько полных интервалов прошло с последнего спина
-                $secondsSinceLastSpin = now()->diffInSeconds($user->last_spin_at);
-                $completedIntervals = floor($secondsSinceLastSpin / $restoreIntervalSeconds);
+            // Используем tickets_depleted_at - точку когда билеты закончились
+            if ($user->tickets_available < 3 && $user->tickets_depleted_at) {
+                // Рассчитываем сколько полных интервалов прошло с момента окончания билетов
+                $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
+                $completedIntervals = floor($secondsSinceDepletion / $restoreIntervalSeconds);
                 
                 // Рассчитываем время следующего восстановления
-                // Это будет last_spin_at + (completedIntervals + 1) * interval
-                $nextRestoreTime = $user->last_spin_at->copy()->addSeconds(($completedIntervals + 1) * $restoreIntervalSeconds);
+                // Это будет tickets_depleted_at + (completedIntervals + 1) * interval
+                $nextRestoreTime = $user->tickets_depleted_at->copy()->addSeconds(($completedIntervals + 1) * $restoreIntervalSeconds);
                 
                 // Время до следующего билета (округляем до целого числа секунд)
                 $secondsUntilNextTicket = max(0, (int) $nextRestoreTime->diffInSeconds(now()));
@@ -113,9 +114,8 @@ class TicketController extends Controller
             return;
         }
 
-        // Если пользователь никогда не крутил, не восстанавливаем
-        // (новые пользователи получают 3 билета при создании)
-        if (!$user->last_spin_at) {
+        // Если нет точки отсчета (билеты никогда не заканчивались), не восстанавливаем
+        if (!$user->tickets_depleted_at) {
             return;
         }
 
@@ -123,19 +123,25 @@ class TicketController extends Controller
         $settings = \App\Models\WheelSetting::getSettings();
         $restoreInterval = ($settings->ticket_restore_hours ?? config('app.ticket_restore_hours', 3)) * 3600;
         
-        // Рассчитываем сколько билетов должно быть восстановлено
-        $secondsSinceLastSpin = now()->diffInSeconds($user->last_spin_at);
+        // Рассчитываем сколько билетов должно быть восстановлено с момента окончания билетов
+        $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
         
-        if ($secondsSinceLastSpin >= $restoreInterval) {
+        if ($secondsSinceDepletion >= $restoreInterval) {
             // Рассчитываем количество билетов для восстановления
             $ticketsToRestore = min(
-                floor($secondsSinceLastSpin / $restoreInterval),
+                floor($secondsSinceDepletion / $restoreInterval),
                 3 - $user->tickets_available
             );
             
             if ($ticketsToRestore > 0) {
                 $oldTickets = $user->tickets_available;
                 $user->tickets_available = min($user->tickets_available + $ticketsToRestore, 3);
+                
+                // Сбрасываем точку отсчета, так как билеты восстановились
+                if ($user->tickets_available > 0) {
+                    $user->tickets_depleted_at = null;
+                }
+                
                 $user->save();
                 
                 // Отправляем уведомление о восстановлении билетов

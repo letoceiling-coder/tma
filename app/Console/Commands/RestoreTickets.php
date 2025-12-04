@@ -36,7 +36,7 @@ class RestoreTickets extends Command
         $restoreInterval = ($settings->ticket_restore_hours ?? config('app.ticket_restore_hours', 3)) * 3600;
 
         $users = User::whereNotNull('telegram_id')
-            ->whereNotNull('last_spin_at') // Только пользователи, которые хотя бы раз крутили
+            ->whereNotNull('tickets_depleted_at') // Только пользователи с установленной точкой отсчета
             ->where('tickets_available', '<', 3)
             ->get();
 
@@ -44,21 +44,27 @@ class RestoreTickets extends Command
         $notified = 0;
 
         foreach ($users as $user) {
-            // Рассчитываем сколько билетов должно быть восстановлено
-            $secondsSinceLastSpin = now()->diffInSeconds($user->last_spin_at);
+            // Рассчитываем сколько билетов должно быть восстановлено с момента окончания билетов
+            $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
             
-            if ($secondsSinceLastSpin >= $restoreInterval) {
+            if ($secondsSinceDepletion >= $restoreInterval) {
                 DB::beginTransaction();
                 try {
                     // Рассчитываем количество билетов для восстановления
                     $ticketsToRestore = min(
-                        floor($secondsSinceLastSpin / $restoreInterval),
+                        floor($secondsSinceDepletion / $restoreInterval),
                         3 - $user->tickets_available
                     );
                     
                     if ($ticketsToRestore > 0) {
                         $oldTickets = $user->tickets_available;
                         $user->tickets_available = min($user->tickets_available + $ticketsToRestore, 3);
+                        
+                        // Сбрасываем точку отсчета, так как билеты восстановились
+                        if ($user->tickets_available > 0) {
+                            $user->tickets_depleted_at = null;
+                        }
+                        
                         $user->save();
 
                         // Отправляем уведомление о восстановлении билетов

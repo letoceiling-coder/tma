@@ -166,7 +166,7 @@ const MainWheel = () => {
     }
   }, [tgReady, loadWheelConfig, loadTickets]);
 
-  // Format seconds to HH:MM:SS or MM:SS
+  // Format seconds to HH:MM:SS
   const formatTime = (seconds: number) => {
     // Убеждаемся что это число и округляем до целого
     const totalSeconds = Math.floor(Math.max(0, Number(seconds) || 0));
@@ -177,11 +177,8 @@ const MainWheel = () => {
     const mins = Math.floor(remainingAfterHours / 60);
     const secs = remainingAfterHours % 60;
     
-    // Всегда показываем формат ЧЧ:ММ:СС если есть часы, иначе ММ:СС
-    if (hours > 0) {
-      return `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    }
-    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    // Формат: ЧЧ:ММ:СС (всегда показываем часы)
+    return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
   // Get ticket word form
@@ -607,41 +604,22 @@ const MainWheel = () => {
             margin: 0
           }}
         >
-          <div style={{ 
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '2px'
+          <span style={{ 
+            fontSize: '15px', 
+            fontWeight: 600, 
+            color: '#FFFFFF', 
+            whiteSpace: 'nowrap',
+            textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+            textAlign: 'center'
           }}>
-            <span style={{ 
-              fontSize: '15px', 
-              fontWeight: 600, 
-              color: '#FFFFFF', 
-              whiteSpace: 'nowrap',
-              textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-              textAlign: 'center'
-            }}>
-              {loadingTickets ? (
-                'Загрузка...'
-              ) : tickets > 0 ? (
-                `У вас ${tickets} ${getTicketWord(tickets)}`
-              ) : (
-                `Новый билет через ${formatTime(timeLeft)}`
-              )}
-            </span>
-            {!loadingTickets && tickets === 0 && (
-              <span style={{ 
-                fontSize: '11px', 
-                fontWeight: 400, 
-                color: 'rgba(255, 255, 255, 0.7)', 
-                whiteSpace: 'nowrap',
-                textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                textAlign: 'center'
-              }}>
-                {`(восстановление каждые ${restoreIntervalHours} ${getHourWord(restoreIntervalHours)})`}
-              </span>
+            {loadingTickets ? (
+              'Загрузка...'
+            ) : tickets > 0 ? (
+              `У вас ${tickets} ${getTicketWord(tickets)}`
+            ) : (
+              `Новый билет через ${formatTime(timeLeft)}`
             )}
-          </div>
+          </span>
         </div>
 
         {/* Spin Button */}
