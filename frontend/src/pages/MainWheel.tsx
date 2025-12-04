@@ -30,7 +30,8 @@ const MainWheel = () => {
   const { userName, isReady: tgReady } = useTelegramWebApp();
   const [tickets, setTickets] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [rotation, setRotation] = useState(0);
+  const [rotation, setRotation] = useState(0); // Накопленный rotation для анимации
+  const [lastSpinRotation, setLastSpinRotation] = useState(0); // Последний rotation от сервера для определения сектора
   const [timeLeft, setTimeLeft] = useState(0);
   const [showGiftPopup, setShowGiftPopup] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
@@ -280,8 +281,11 @@ const MainWheel = () => {
       }
 
       // Устанавливаем ротацию, полученную с сервера
+      // Backend возвращает абсолютное значение rotation для каждого спина
+      // Мы накапливаем для непрерывной анимации, но сохраняем последний rotation отдельно
       if (data.rotation !== undefined) {
-        setRotation((prev) => prev + data.rotation);
+        setLastSpinRotation(data.rotation); // Сохраняем для определения сектора
+        setRotation((prev) => prev + data.rotation); // Накапливаем для анимации
       }
 
       // Определяем значение приза для отображения
@@ -528,6 +532,7 @@ const MainWheel = () => {
         <WheelComponent
           segments={wheelSegments}
           rotation={rotation}
+          lastSpinRotation={lastSpinRotation}
           onSpinComplete={(winningIndex) => {
             console.log("WIN:", wheelSegments[winningIndex]);
           }}

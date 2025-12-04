@@ -16,7 +16,8 @@ interface WheelSegment {
 interface WheelComponentProps {
   segments: WheelSegment[];
   onSpinComplete?: (winningIndex: number) => void;
-  rotation: number;
+  rotation: number; // Накопленный rotation для анимации
+  lastSpinRotation?: number; // Последний rotation от сервера для определения сектора
 }
 
 // Функция для получения иконки по типу приза (fallback)
@@ -63,7 +64,7 @@ const sectorColors = [
   "#FFD4C2", // slightly darker peach
 ];
 
-const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentProps) => {
+const WheelComponent = ({ segments, rotation, lastSpinRotation, onSpinComplete }: WheelComponentProps) => {
   const [currentRotation, setCurrentRotation] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [winningIndex, setWinningIndex] = useState<number | null>(null);
@@ -81,7 +82,10 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
 
       const timer = setTimeout(() => {
         setIsAnimating(false);
-        const normalizedRotation = rotation % 360;
+        // Используем lastSpinRotation для определения сектора, если доступно
+        // Иначе используем накопленный rotation (для обратной совместимости)
+        const rotationForCalculation = lastSpinRotation !== undefined ? lastSpinRotation : rotation;
+        const normalizedRotation = rotationForCalculation % 360;
         const calculatedWinningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
         
         // Отладочная информация
@@ -90,7 +94,28 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
         console.log('Normalized rotation:', normalizedRotation);
         console.log('Calculated winningIndex:', calculatedWinningIndex);
         console.log('Winning segment:', segments[calculatedWinningIndex]);
-        console.log('Sector number:', calculatedWinningIndex + 1); // sector_number = index + 1
+        console.log('Sector number (should be):', calculatedWinningIndex + 1);
+        
+        // Проверяем все секторы и их углы
+        console.log('\n=== ALL SECTORS ANALYSIS ===');
+        segments.forEach((seg, idx) => {
+          const sectorStartAngle = idx * 30 - 90; // Начальный угол сектора
+          const sectorEndAngle = (idx + 1) * 30 - 90; // Конечный угол сектора
+          const sectorCenterAngle = (sectorStartAngle + sectorEndAngle) / 2; // Центр сектора
+          
+          // После вращения, где находится этот сектор?
+          const rotatedStart = (sectorStartAngle - currentRotation) % 360;
+          const rotatedEnd = (sectorEndAngle - currentRotation) % 360;
+          const rotatedCenter = (sectorCenterAngle - currentRotation) % 360;
+          
+          console.log(`Sector #${idx + 1} (${seg.prizeType}: ${seg.value}):`);
+          console.log(`  Original angles: ${sectorStartAngle}° to ${sectorEndAngle}° (center: ${sectorCenterAngle}°)`);
+          console.log(`  After rotation: ${rotatedStart.toFixed(1)}° to ${rotatedEnd.toFixed(1)}° (center: ${rotatedCenter.toFixed(1)}°)`);
+        });
+        
+        // Указатель находится на 0° (сверху)
+        console.log('\nПоинтер находится на: 0° (сверху)');
+        console.log('Выигрышный сектор должен содержать 0° после поворота');
         console.log('==================');
         
         setWinningIndex(calculatedWinningIndex); // Устанавливаем выигрышный сектор для подсветки
@@ -381,6 +406,33 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
               }}
             />
           )}
+          
+          {/* Отладка: показываем номера секторов */}
+          {segments.map((segment, index) => {
+            const midAngle = (index * 30 + 15 - 90) * (Math.PI / 180);
+            const textRadius = radius * 0.5;
+            const x = centerX + textRadius * Math.cos(midAngle);
+            const y = centerY + textRadius * Math.sin(midAngle);
+            
+            return (
+              <text
+                key={`label-${index}`}
+                x={x}
+                y={y}
+                fill="#000"
+                fontSize="16"
+                fontWeight="bold"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                style={{
+                  pointerEvents: 'none',
+                  textShadow: '0 0 3px white, 0 0 3px white',
+                }}
+              >
+                #{index + 1}
+              </text>
+            );
+          })}
           
           {/* Center circle */}
           <circle
