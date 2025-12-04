@@ -81,6 +81,16 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
         setIsAnimating(false);
         const normalizedRotation = rotation % 360;
         const winningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
+        
+        // Отладочная информация
+        console.log('=== WHEEL STOPPED ===');
+        console.log('Total rotation:', rotation);
+        console.log('Normalized rotation:', normalizedRotation);
+        console.log('Calculated winningIndex:', winningIndex);
+        console.log('Winning segment:', segments[winningIndex]);
+        console.log('Sector number:', winningIndex + 1); // sector_number = index + 1
+        console.log('==================');
+        
         onSpinComplete?.(winningIndex);
       }, 4000);
 

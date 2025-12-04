@@ -165,7 +165,11 @@ class WheelController extends Controller
                 // normalizedRotation = 375 - winningIndex * 30
                 
                 $segmentAngle = 360 / 12; // 30 градусов на сектор
-                $baseRotation = 360 * 5; // Минимум 5 полных оборотов
+                
+                // Генерируем случайное количество оборотов (5-10) для каждого прокрута
+                // Это гарантирует, что каждый прокрут уникален и rotation постоянно увеличивается
+                $randomSpins = rand(5, 10);
+                $baseRotation = 360 * $randomSpins;
                 
                 // Преобразуем sector_number (1-12) в индекс (0-11)
                 $sectorIndex = $winningSector->sector_number - 1;
@@ -179,15 +183,21 @@ class WheelController extends Controller
                     $normalizedRotation += 360;
                 }
                 
+                // ВАЖНО: Возвращаем ДЕЛЬТУ (относительное значение), а не абсолютное
+                // Фронтенд накапливает rotation: setRotation((prev) => prev + data.rotation)
+                // Случайное количество оборотов гарантирует уникальность каждого прокрута
                 $targetRotation = $baseRotation + $normalizedRotation;
                 
                 // Логирование для отладки
                 Log::debug('Wheel spin calculation', [
                     'sector_number' => $winningSector->sector_number,
+                    'prize_type' => $winningSector->prize_type,
+                    'prize_value' => $winningSector->prize_value,
                     'sector_index' => $sectorIndex,
+                    'random_spins' => $randomSpins,
                     'normalized_rotation' => $normalizedRotation,
                     'target_rotation' => $targetRotation,
-                    'verification' => floor((360 - $normalizedRotation + 15) / 30) % 12, // Должно быть равно $sectorIndex
+                    'verification_index' => floor((360 - $normalizedRotation + 15) / 30) % 12, // Должно быть равно $sectorIndex
                 ]);
 
                 return response()->json([
@@ -205,7 +215,9 @@ class WheelController extends Controller
                     // Добавляем отладочную информацию для проверки
                     '_debug' => [
                         'sector_index' => $sectorIndex,
+                        'random_spins' => $randomSpins,
                         'normalized_rotation' => round($normalizedRotation, 2),
+                        'expected_frontend_index' => floor((360 - $normalizedRotation + 15) / 30) % 12,
                     ],
                 ]);
 

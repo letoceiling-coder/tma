@@ -260,6 +260,13 @@ const MainWheel = () => {
         throw new Error(data.message || 'Ошибка прокрута рулетки');
       }
 
+      // Отладка: выводим данные с сервера
+      console.log('=== SERVER RESPONSE ===');
+      console.log('Sector from server:', data.sector);
+      console.log('Rotation from server:', data.rotation);
+      console.log('Debug info:', data._debug);
+      console.log('=====================');
+
       // Обновляем билеты и таймер
       setTickets(data.tickets_available || 0);
       
