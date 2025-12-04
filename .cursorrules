@@ -1,0 +1,726 @@
+# Правила работы с проектом WOW Рулетка (Telegram Mini App)
+
+## Описание проекта
+
+Это Laravel-приложение с двумя фронтендами:
+- **React** (Telegram Mini App) - публичное приложение для пользователей (/)
+- **Vue.js** - админ-панель для управления (/admin/*)
+
+## Технологический стек
+
+### Backend
+- **Laravel 11** - основной фреймворк
+- **PHP 8.2+** - язык программирования
+- **MySQL** - база данных
+- **Vite** - сборщик для Vue админ-панели
+- **Telegram Bot API** - интеграция с Telegram
+
+### Frontend (React - Mini App)
+- **React 18** - библиотека UI
+- **TypeScript** - типизация
+- **Vite** - сборщик
+- **shadcn-ui** - компоненты UI
+- **Tailwind CSS** - стилизация
+- **Telegram WebApp SDK** - интеграция с Telegram Mini App
+- **React Query** - управление состоянием и кэширование
+
+### Admin Panel (Vue)
+- **Vue 3** (Composition API)
+- **Vuex** - управление состоянием
+- **Vue Router** - маршрутизация
+- **Tailwind CSS** - стилизация
+- **SweetAlert2** - уведомления
+- **Axios** - HTTP клиент
+
+## Структура проекта
+
+```
+.
+├── app/
+│   ├── Console/Commands/         # Artisan команды
+│   │   ├── Deploy.php           # Команда деплоя
+│   │   ├── ServerSeed.php       # Удаленное выполнение seeders
+│   │   ├── RestoreTickets.php   # Восстановление билетов
+│   │   └── SendTicketReminders.php
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   └── Api/             # API контроллеры
+│   │   │       ├── Admin/       # Админ API
+│   │   │       │   ├── ChannelController.php
+│   │   │       │   ├── WheelController.php
+│   │   │       │   └── WowUserController.php
+│   │   │       ├── SubscriptionController.php
+│   │   │       ├── WheelController.php  # Публичный API рулетки
+│   │   │       ├── TicketController.php
+│   │   │       ├── WowAuthController.php # Инициализация пользователя
+│   │   │       └── ...
+│   │   └── Middleware/
+│   │       └── ValidateTelegramInitData.php
+│   ├── Models/
+│   │   ├── User.php
+│   │   ├── Channel.php
+│   │   ├── WheelSector.php
+│   │   ├── WheelSetting.php
+│   │   ├── Spin.php
+│   │   ├── Referral.php
+│   │   ├── UserTicket.php
+│   │   ├── StarExchange.php
+│   │   ├── LeaderboardSnapshot.php
+│   │   ├── Traits/HasUserScope.php
+│   │   └── Scopes/UserScope.php
+│   └── Services/
+│       ├── TelegramService.php           # Валидация initData
+│       ├── TelegramNotificationService.php
+│       └── AdminMenu.php
+├── database/
+│   ├── migrations/
+│   │   ├── *_create_wheel_sectors_table.php
+│   │   ├── *_create_wheel_settings_table.php
+│   │   ├── *_add_ticket_restore_hours_to_wheel_settings_table.php
+│   │   └── ...
+│   └── seeders/
+│       ├── WheelSectorSeeder.php
+│       └── ChannelSeeder.php
+├── frontend/                     # React Mini App
+│   ├── src/
+│   │   ├── pages/               # Страницы
+│   │   │   ├── Index.tsx        # Главная (рулетка)
+│   │   │   ├── Friends.tsx      # Рефералы
+│   │   │   ├── Leaderboard.tsx
+│   │   │   └── HowToPlay.tsx
+│   │   ├── components/
+│   │   │   ├── WheelComponent.tsx
+│   │   │   ├── ChannelSubscriptionCheck.tsx
+│   │   │   └── ...
+│   │   ├── hooks/
+│   │   │   ├── useChannelSubscription.ts
+│   │   │   ├── useTelegramWebApp.ts
+│   │   │   └── useUserInit.ts
+│   │   └── assets/wheel/        # Иконки для секторов
+│   ├── vite.config.ts
+│   └── package.json
+├── resources/
+│   ├── js/
+│   │   ├── admin.js             # Vue админка (entry point)
+│   │   ├── components/admin/
+│   │   │   ├── Header.vue
+│   │   │   └── Sidebar.vue
+│   │   ├── pages/admin/
+│   │   │   ├── Dashboard.vue
+│   │   │   ├── Media.vue
+│   │   │   ├── Documentation.vue
+│   │   │   └── wow/             # WOW Рулетка разделы
+│   │   │       ├── Channels.vue
+│   │   │       ├── Wheel.vue
+│   │   │       ├── WowUsers.vue
+│   │   │       ├── Referrals.vue
+│   │   │       └── Statistics.vue
+│   │   └── layouts/
+│   │       └── AdminLayout.vue
+│   └── views/
+│       ├── react.blade.php      # Точка входа для React
+│       └── admin.blade.php      # Точка входа для Vue админки
+├── routes/
+│   ├── web.php                  # Web маршруты
+│   ├── api.php                  # API маршруты
+│   └── console.php              # Cron расписание
+├── public/
+│   ├── frontend/                # React build
+│   └── build/                   # Vue admin build
+├── .cursorrules                 # Этот файл
+└── vite.config.js               # Vite для Vue админки
+
+```
+
+## Соглашения о коде
+
+### Backend (Laravel)
+
+#### Именование
+- **Контроллеры**: `PascalCase` с суффиксом `Controller` (например, `WheelController`)
+- **Модели**: `PascalCase` в единственном числе (например, `WheelSector`)
+- **Миграции**: snake_case (например, `create_wheel_sectors_table`)
+- **API endpoints**: kebab-case (например, `/api/check-subscription`)
+- **Переменные/методы**: camelCase (например, `$restoreInterval`, `getSettings()`)
+
+#### Структура контроллеров
+```php
+namespace App\Http\Controllers\Api;
+
+class WheelController extends Controller
+{
+    /**
+     * Краткое описание метода
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function methodName(Request $request): JsonResponse
+    {
+        // Валидация
+        // Бизнес-логика
+        // Возврат JSON
+    }
+}
+```
+
+#### Модели
+- Используйте `$fillable` для mass assignment
+- Используйте `$casts` для типизации полей
+- Добавляйте docblocks для отношений
+- Используйте статические методы для часто используемых запросов
+
+#### API Response формат
+```json
+{
+    "success": true,
+    "data": {},
+    "message": "Операция выполнена успешно"
+}
+```
+
+Для ошибок:
+```json
+{
+    "error": "Error message",
+    "message": "User-friendly message"
+}
+```
+
+### Frontend (React)
+
+#### Именование
+- **Компоненты**: PascalCase (например, `WheelComponent.tsx`)
+- **Хуки**: camelCase с префиксом `use` (например, `useChannelSubscription.ts`)
+- **Типы**: PascalCase с суффиксом `Type` или `Interface` (например, `UserType`)
+- **Константы**: UPPER_SNAKE_CASE (например, `CHANNEL_USERNAMES`)
+
+#### Структура компонентов
+```typescript
+import { useState, useEffect } from 'react';
+
+interface ComponentProps {
+    prop1: string;
+    prop2?: number;
+}
+
+const ComponentName: React.FC<ComponentProps> = ({ prop1, prop2 }) => {
+    const [state, setState] = useState(initialValue);
+
+    useEffect(() => {
+        // Side effects
+    }, [dependencies]);
+
+    const handleEvent = () => {
+        // Event handler logic
+    };
+
+    return (
+        <div>
+            {/* JSX */}
+        </div>
+    );
+};
+
+export default ComponentName;
+```
+
+#### Хуки
+- Всегда используйте хуки для повторно используемой логики
+- Возвращайте объект с явными именами свойств
+- Обрабатывайте ошибки внутри хуков
+
+### Frontend (Vue Admin)
+
+#### Именование
+- **Компоненты**: PascalCase (например, `Wheel.vue`)
+- **Методы**: camelCase (например, `fetchSectors`)
+- **Props/Data**: camelCase (например, `isLoading`)
+
+#### Структура компонентов (Composition API)
+```vue
+<template>
+    <!-- Template -->
+</template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import { apiGet, apiPost } from '@/utils/api';
+
+export default {
+    name: 'ComponentName',
+    setup() {
+        const data = ref(null);
+        const loading = ref(false);
+
+        const computedValue = computed(() => {
+            return data.value?.property;
+        });
+
+        const fetchData = async () => {
+            loading.value = true;
+            try {
+                const response = await apiGet('/endpoint');
+                data.value = await response.json();
+            } catch (error) {
+                console.error(error);
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        onMounted(() => {
+            fetchData();
+        });
+
+        return {
+            data,
+            loading,
+            computedValue,
+            fetchData,
+        };
+    },
+};
+</script>
+```
+
+## Важные архитектурные решения
+
+### 1. Аутентификация и безопасность
+
+#### Telegram Mini App
+- **initData** от Telegram WebApp SDK - основной метод аутентификации
+- Валидация через `TelegramService::validateInitData()`
+- Middleware `telegram.initdata` для защиты API endpoints
+- В dev режиме (`APP_DEBUG=true`) валидация отключена для тестирования
+
+#### Admin панель
+- Bearer token аутентификация
+- Roles и permissions через таблицы `roles`, `permissions`, `role_user`
+- Navigation guards в Vue Router
+
+### 2. Система билетов
+
+- **Максимум**: 3 билета у пользователя
+- **Восстановление**: настраивается в админ панели (1-24 часа), по умолчанию 3 часа
+- **Источники билетов**:
+  - `free` - автоматическое восстановление
+  - `star_exchange` - обмен Telegram Stars (50 звёзд = 20 билетов)
+- **Логика восстановления**:
+  - Проверка при каждом запросе `/api/user/tickets`
+  - Cron команда `wow:restore-tickets` каждые 3 часа
+  - Автоматическое уведомление через Telegram Bot
+
+### 3. Механика рулетки
+
+#### Определение результата
+1. Пользователь нажимает "Крутить"
+2. **Сервер** определяет выигрышный сектор на основе вероятностей (`WheelSector::getRandomSector()`)
+3. Сервер рассчитывает угол поворота для попадания на выбранный сектор
+4. Фронтенд получает `rotation` и анимирует колесо
+5. После завершения анимации фронтенд определяет сектор по формуле и показывает результат
+
+#### Формула определения сектора на фронтенде
+```typescript
+const segmentAngle = 360 / 12; // 30° на сектор
+const normalizedRotation = rotation % 360;
+const winningIndex = Math.floor(
+    (360 - normalizedRotation + segmentAngle / 2) / segmentAngle
+) % segments.length;
+```
+
+#### Синхронизация бэкенда и фронтенда
+**КРИТИЧЕСКИ ВАЖНО**: Формула расчета `rotation` на бэкенде должна соответствовать формуле определения сектора на фронтенде:
+```php
+// Backend: app/Http/Controllers/Api/WheelController.php
+$segmentAngle = 360 / 12; // 30 градусов
+$sectorIndex = $winningSector->sector_number - 1; // 0-11
+$normalizedRotation = 360 - ($sectorIndex * $segmentAngle + $segmentAngle / 2);
+$normalizedRotation = fmod($normalizedRotation + 360, 360);
+$targetRotation = (360 * 5) + $normalizedRotation; // минимум 5 оборотов
+```
+
+### 4. Настройки рулетки (WheelSetting)
+
+Таблица `wheel_settings` содержит одну запись (id=1) с глобальными настройками:
+- `always_empty_mode` (boolean) - режим "всегда пусто"
+- `ticket_restore_hours` (integer, 1-24) - период восстановления билета
+
+**Использование:**
+```php
+$settings = WheelSetting::getSettings();
+$restoreInterval = $settings->ticket_restore_hours * 3600;
+```
+
+### 5. Media Manager
+
+- **Папки**: иерархическая структура (родитель-потомок)
+- **User Scope**: модели с трейтом `HasUserScope` фильтруются по `user_id`
+- **Корзина**: папка с `is_trash = 1` (доступна всем пользователям)
+- **Системные папки**: `user_id = NULL` (например, "общая" для иконок рулетки)
+
+**ВАЖНО**: При работе с медиа в админ панели используйте:
+```php
+// Обход user scope для системных файлов
+Model::withoutUserScope()->...
+Model::allUsers()->...
+```
+
+### 6. Реферальная система
+
+- Пользователь получает реферальную ссылку: `{app_url}?ref={telegram_id}`
+- При регистрации по реферальной ссылке создается запись в `referrals`
+- Топ-3 по приглашениям за месяц получают призы (1500₽, 1000₽, 500₽)
+- Снимки лидерборда сохраняются в `leaderboard_snapshots`
+
+## API Endpoints
+
+### Публичные (требуют initData)
+
+```
+POST /api/user/init                    - Инициализация пользователя WOW
+GET  /api/check-subscription/{channel} - Проверка подписки на канал
+GET  /api/check-all-subscriptions      - Проверка всех подписок
+GET  /api/wheel-config                 - Конфигурация рулетки (публичный)
+POST /api/spin                         - Прокрут рулетки
+GET  /api/user/tickets                 - Получить количество билетов
+POST /api/stars/exchange/initiate      - Инициировать обмен звёзд
+POST /api/stars/exchange/confirm       - Подтвердить обмен
+GET  /api/referral/link                - Получить реферальную ссылку
+POST /api/referral/register            - Регистрация по реферальной ссылке
+GET  /api/leaderboard                  - Получить лидерборд
+```
+
+### Admin API (требуют Bearer token)
+
+```
+GET    /api/v1/wow/channels             - Список каналов
+POST   /api/v1/wow/channels             - Создать канал
+PUT    /api/v1/wow/channels/{id}        - Обновить канал
+DELETE /api/v1/wow/channels/{id}        - Удалить канал
+
+GET    /api/v1/wow/wheel                - Список секторов + настройки
+POST   /api/v1/wow/wheel/bulk-update    - Массовое обновление секторов
+POST   /api/v1/wow/wheel/settings       - Обновить настройки рулетки
+
+GET    /api/v1/wow/users                - Список пользователей WOW
+GET    /api/v1/wow/users/{id}           - Детали пользователя
+```
+
+## База данных
+
+### Ключевые таблицы
+
+#### users
+Расширенная таблица пользователей с полями для Telegram и WOW:
+- `telegram_id` (bigint, unique) - ID в Telegram
+- `tickets_available` (int) - доступные билеты (макс 3)
+- `last_spin_at` (timestamp) - время последнего прокрута
+- `invited_by` (FK) - кто пригласил
+- `total_spins`, `total_wins` - статистика
+
+#### wheel_sectors
+12 секторов рулетки:
+- `sector_number` (1-12) - номер сектора
+- `prize_type` (enum: money, ticket, secret_box, empty)
+- `prize_value` (int) - значение приза
+- `icon_url` (string) - URL иконки
+- `probability_percent` (decimal) - вероятность (0-100%)
+- `is_active` (boolean) - активен ли сектор
+
+**ВАЖНО**: Сумма `probability_percent` всех активных секторов должна быть = 100%
+
+#### wheel_settings
+Глобальные настройки (одна запись, id=1):
+- `always_empty_mode` (boolean) - режим "всегда пусто"
+- `ticket_restore_hours` (int, 1-24) - период восстановления билета
+
+#### spins
+История прокрутов:
+- `user_id`, `spin_time`, `prize_type`, `prize_value`, `sector_id`
+
+### Миграции и Seeders
+
+**Всегда используйте `updateOrCreate` для идемпотентных seeders:**
+```php
+WheelSector::updateOrCreate(
+    ['sector_number' => 1],
+    ['prize_type' => 'empty', ...]
+);
+```
+
+**Порядок выполнения после fresh migration:**
+```bash
+php artisan migrate:fresh
+php artisan db:seed                    # Основные seeders
+php artisan wow:import-wheel-icons     # Импорт иконок рулетки
+```
+
+## Команды и скрипты
+
+### Artisan команды
+
+```bash
+# Деплой
+php artisan deploy                      # Полный деплой с билдом и git push
+php artisan deploy --skip-build         # Без билда
+php artisan deploy --dry-run            # Проверка без выполнения
+
+# WOW Рулетка
+php artisan wow:restore-tickets         # Восстановление билетов
+php artisan wow:send-reminders          # Отправка напоминаний
+php artisan wow:import-wheel-icons      # Импорт иконок в media
+
+# Seeders
+php artisan db:seed --class=WheelSectorSeeder
+php artisan db:seed --class=ChannelSeeder
+php artisan server-seed --class=WheelSectorSeeder  # На удаленном сервере
+```
+
+### NPM скрипты
+
+```bash
+# Билд
+npm run build:admin                     # Vue админка
+npm run build:react                     # React Mini App (в папке frontend/)
+npm run build:all                       # Оба фронтенда
+
+# Dev режим
+npm run dev                             # Vue админка (Vite dev server)
+cd frontend && npm run dev              # React Mini App (порт 8080)
+```
+
+## Cron расписание (routes/console.php)
+
+```php
+Schedule::command('wow:restore-tickets')
+    ->everyThreeHours()                 # Или динамически на основе настройки
+    ->withoutOverlapping()
+    ->runInBackground();
+
+Schedule::command('wow:send-reminders')
+    ->dailyAt('10:00')
+    ->withoutOverlapping()
+    ->runInBackground();
+```
+
+**На сервере добавить в crontab:**
+```
+* * * * * cd /path-to-project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Telegram интеграция
+
+### Bot требования
+- Должен быть администратором всех обязательных каналов
+- Используется для:
+  1. Проверки подписки (`getChatMember`)
+  2. Отправки уведомлений (`sendMessage`)
+  3. Обработки Telegram Stars (webhook)
+
+### initData валидация
+```php
+// TelegramService::validateInitData()
+// Проверяет HMAC подпись от Telegram
+// В dev режиме (APP_DEBUG=true) пропускает валидацию
+```
+
+### WebApp SDK интеграция
+```typescript
+// Хук useTelegramWebApp
+const { isReady, initData, user } = useTelegramWebApp();
+
+// Передача в API
+fetch('/api/endpoint', {
+    headers: {
+        'X-Telegram-Init-Data': initData
+    }
+});
+```
+
+## Оптимизация и производительность
+
+### Backend
+1. **Индексы БД**: Всегда индексируйте внешние ключи и часто используемые поля для поиска
+2. **Eager loading**: Используйте `with()` для предзагрузки связей
+3. **Кэширование**: Используйте Laravel Cache для часто запрашиваемых данных (конфиг рулетки, каналы)
+4. **Queues**: Для тяжелых операций (отправка уведомлений) используйте очереди
+5. **Rate limiting**: Защитите критичные endpoints (spin, exchange) от злоупотреблений
+
+### Frontend
+1. **Code splitting**: React.lazy для страниц и больших компонентов
+2. **Image optimization**: Используйте WebP, lazy loading для изображений
+3. **Memoization**: useMemo, useCallback для тяжелых вычислений
+4. **Virtual scrolling**: Для длинных списков (лидерборд, список пользователей)
+
+### Build процесс
+1. **Билд React**: `cd frontend && npm run build` → `public/frontend/`
+2. **Билд Vue**: `npm run build:admin` → `public/build/`
+3. **Деплой**: `php artisan deploy` автоматизирует весь процесс
+
+## Отладка и тестирование
+
+### Dev режим (APP_DEBUG=true)
+- initData валидация отключена
+- Подробные логи ошибок
+- Источники карт для отладки
+
+### Логирование
+```php
+use Illuminate\Support\Facades\Log;
+
+Log::info('Message', ['context' => $data]);
+Log::error('Error message', ['exception' => $e]);
+```
+
+### Telegram Bot тестирование
+- Используйте `@BotFather` для создания тестового бота
+- Добавьте тестовый канал для проверки подписки
+- Проверьте уведомления через `php artisan wow:restore-tickets`
+
+## Git workflow
+
+1. **Не коммитим**:
+   - `.env`
+   - `node_modules/`
+   - `vendor/` (если не нужно)
+   - Личные IDE настройки
+
+2. **Коммитим**:
+   - `public/frontend/` - React build
+   - `public/build/` - Vue admin build
+   - Миграции, seeders, модели
+
+3. **Деплой**:
+   ```bash
+   php artisan deploy --message "Feature: добавлена настройка билетов"
+   ```
+
+## Обработка ошибок
+
+### Backend
+```php
+try {
+    // Операция
+    DB::commit();
+    return response()->json(['success' => true]);
+} catch (\Exception $e) {
+    DB::rollBack();
+    Log::error('Operation failed', ['error' => $e->getMessage()]);
+    return response()->json(['error' => 'Internal error'], 500);
+}
+```
+
+### Frontend (React)
+```typescript
+const [error, setError] = useState<string | null>(null);
+
+try {
+    const response = await fetch('/api/endpoint');
+    if (!response.ok) throw new Error('Request failed');
+    // Success
+} catch (err) {
+    setError((err as Error).message);
+    console.error('Error:', err);
+}
+```
+
+### Frontend (Vue)
+```javascript
+try {
+    const response = await apiPost('/endpoint', data);
+    if (!response.ok) throw new Error('Request failed');
+    // Success
+} catch (err) {
+    await Swal.fire({
+        title: 'Ошибка',
+        text: err.message,
+        icon: 'error'
+    });
+}
+```
+
+## Соглашения о комментариях
+
+### PHP
+```php
+/**
+ * Краткое описание метода
+ * 
+ * Подробное описание (если нужно)
+ * 
+ * @param Request $request Описание параметра
+ * @return JsonResponse Описание возвращаемого значения
+ * @throws ValidationException Если валидация не прошла
+ */
+public function methodName(Request $request): JsonResponse
+```
+
+### TypeScript/JavaScript
+```typescript
+/**
+ * Краткое описание функции/компонента
+ * 
+ * @param props - Свойства компонента
+ * @returns React component
+ */
+const ComponentName: React.FC<Props> = (props) => {
+    // Логика
+};
+```
+
+## Полезные ссылки и документация
+
+- **Laravel**: https://laravel.com/docs/11.x
+- **React**: https://react.dev/
+- **Vue 3**: https://vuejs.org/guide/introduction.html
+- **Telegram Bot API**: https://core.telegram.org/bots/api
+- **Telegram Mini Apps**: https://core.telegram.org/bots/webapps
+- **Tailwind CSS**: https://tailwindcss.com/docs
+
+## Частые проблемы и решения
+
+### 1. Колесо останавливается не на том секторе
+**Причина**: Несоответствие формул на бэкенде и фронтенде
+**Решение**: Проверить синхронизацию в `WheelController.php` (spin) и `WheelComponent.tsx`
+
+### 2. initData validation failed
+**Причина**: Неверный bot token или истекший initData
+**Решение**: Проверить `TELEGRAM_BOT_TOKEN` в `.env`, обновить Mini App
+
+### 3. Билеты не восстанавливаются
+**Причина**: Cron не настроен или команда не выполняется
+**Решение**: Проверить `crontab -l`, запустить вручную `php artisan wow:restore-tickets`
+
+### 4. Build зависает
+**Причина**: Недостаточно памяти или конфликт процессов
+**Решение**: Увеличить `NODE_OPTIONS=--max-old-space-size=4096`, закрыть другие процессы
+
+### 5. Media не отображается в админке
+**Причина**: User scope фильтрует системные файлы
+**Решение**: Использовать `Model::withoutUserScope()` для системных файлов
+
+## Приоритеты разработки
+
+1. **Безопасность**: Всегда валидировать входные данные, использовать prepared statements
+2. **Производительность**: Минимизировать запросы к БД, использовать кэширование
+3. **UX**: Понятные сообщения об ошибках, быстрая обратная связь
+4. **Масштабируемость**: Архитектура должна поддерживать рост числа пользователей
+5. **Поддерживаемость**: Чистый код, понятная структура, актуальная документация
+
+## Контрольный список перед деплоем
+
+- [ ] Все миграции выполнены
+- [ ] Seeders обновлены (если нужно)
+- [ ] React и Vue билды собраны (`npm run build:all`)
+- [ ] Протестированы критичные функции (spin, subscription check)
+- [ ] Проверены логи на ошибки
+- [ ] .env переменные настроены на проде
+- [ ] Cron задачи настроены
+- [ ] Telegram Bot имеет права администратора на каналах
+
+---
+
+**Последнее обновление**: 2025-12-06
+**Версия правил**: 1.0
+

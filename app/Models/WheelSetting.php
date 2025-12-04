@@ -11,10 +11,12 @@ class WheelSetting extends Model
 
     protected $fillable = [
         'always_empty_mode',
+        'ticket_restore_hours',
     ];
 
     protected $casts = [
         'always_empty_mode' => 'boolean',
+        'ticket_restore_hours' => 'integer',
     ];
 
     /**
@@ -24,7 +26,10 @@ class WheelSetting extends Model
     {
         return static::firstOrCreate(
             ['id' => 1],
-            ['always_empty_mode' => false]
+            [
+                'always_empty_mode' => false,
+                'ticket_restore_hours' => 3, // По умолчанию 3 часа
+            ]
         );
     }
 

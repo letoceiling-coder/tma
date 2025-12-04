@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Models\WheelSetting;
 use App\Services\TelegramNotificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -30,8 +31,9 @@ class RestoreTickets extends Command
     {
         $this->info('Восстановление билетов...');
 
-        // Интервал восстановления (по умолчанию 3 часа)
-        $restoreInterval = config('app.ticket_restore_hours', 3) * 3600;
+        // Интервал восстановления (настраивается в админ панели)
+        $settings = WheelSetting::getSettings();
+        $restoreInterval = ($settings->ticket_restore_hours ?? config('app.ticket_restore_hours', 3)) * 3600;
 
         $users = User::whereNotNull('telegram_id')
             ->where('tickets_available', '<', 3)

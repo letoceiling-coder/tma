@@ -87,8 +87,9 @@ class TicketController extends Controller
             return;
         }
 
-        // Время восстановления билета (2-4 часа, настраивается)
-        $restoreInterval = config('app.ticket_restore_hours', 3) * 3600; // По умолчанию 3 часа
+        // Время восстановления билета (настраивается в админ панели)
+        $settings = \App\Models\WheelSetting::getSettings();
+        $restoreInterval = ($settings->ticket_restore_hours ?? config('app.ticket_restore_hours', 3)) * 3600;
         
             // Если это первая проверка или прошло достаточно времени
             if (!$user->last_spin_at || 

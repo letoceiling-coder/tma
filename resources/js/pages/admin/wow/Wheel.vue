@@ -28,8 +28,10 @@
         </div>
 
         <!-- Настройки рулетки -->
-        <div v-if="!loading" class="bg-card rounded-lg border border-border p-6">
+        <div v-if="!loading" class="bg-card rounded-lg border border-border p-6 space-y-6">
             <h2 class="text-xl font-semibold mb-4">Настройки рулетки</h2>
+            
+            <!-- Режим "Всегда пусто" -->
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-base font-medium mb-1">Режим "Всегда пусто"</h3>
@@ -48,6 +50,28 @@
                         class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"
                     ></div>
                 </label>
+            </div>
+
+            <!-- Период восстановления билетов -->
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h3 class="text-base font-medium mb-1">Период восстановления билета</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Через сколько часов пользователь получает новый билет (от 1 до 24 часов)
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model.number="ticketRestoreHours"
+                        @change="saveSettings"
+                        type="number"
+                        min="1"
+                        max="24"
+                        step="1"
+                        class="w-24 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent text-center"
+                    />
+                    <span class="text-sm text-muted-foreground">часов</span>
+                </div>
             </div>
         </div>
 
@@ -206,6 +230,7 @@ export default {
         const error = ref(null)
         const sectors = ref([])
         const alwaysEmptyMode = ref(false)
+        const ticketRestoreHours = ref(3)
         const showMediaModal = ref(false)
         const currentSector = ref(null)
         const selectedMediaFile = ref(null)
@@ -238,6 +263,7 @@ export default {
                 // Загружаем настройки
                 if (data.settings) {
                     alwaysEmptyMode.value = data.settings.always_empty_mode || false
+                    ticketRestoreHours.value = data.settings.ticket_restore_hours || 3
                 }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки секторов'
@@ -339,6 +365,7 @@ export default {
             try {
                 const response = await apiPost('/wow/wheel/settings', {
                     always_empty_mode: alwaysEmptyMode.value,
+                    ticket_restore_hours: ticketRestoreHours.value,
                 })
 
                 if (!response.ok) {
@@ -379,6 +406,7 @@ export default {
             error,
             sectors,
             alwaysEmptyMode,
+            ticketRestoreHours,
             totalProbability,
             probabilityValid,
             saveAllSectors,

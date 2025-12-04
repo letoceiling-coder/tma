@@ -28,6 +28,7 @@ class WheelController extends Controller
             'total_probability' => (float) $totalProbability,
             'settings' => [
                 'always_empty_mode' => $settings->always_empty_mode,
+                'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
             ],
         ]);
     }
@@ -146,7 +147,8 @@ class WheelController extends Controller
     public function updateSettings(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'always_empty_mode' => 'required|boolean',
+            'always_empty_mode' => 'nullable|boolean',
+            'ticket_restore_hours' => 'nullable|integer|min:1|max:24',
         ]);
 
         if ($validator->fails()) {
@@ -156,14 +158,29 @@ class WheelController extends Controller
             ], 422);
         }
 
-        $settings = WheelSetting::updateSettings([
-            'always_empty_mode' => $request->always_empty_mode,
-        ]);
+        $updateData = [];
+        
+        if ($request->has('always_empty_mode')) {
+            $updateData['always_empty_mode'] = $request->always_empty_mode;
+        }
+        
+        if ($request->has('ticket_restore_hours')) {
+            $updateData['ticket_restore_hours'] = $request->ticket_restore_hours;
+        }
+
+        if (empty($updateData)) {
+            return response()->json([
+                'message' => 'Нет данных для обновления',
+            ], 422);
+        }
+
+        $settings = WheelSetting::updateSettings($updateData);
 
         return response()->json([
             'message' => 'Настройки успешно обновлены',
             'settings' => [
                 'always_empty_mode' => $settings->always_empty_mode,
+                'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
             ],
         ]);
     }

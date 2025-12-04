@@ -1,4 +1,4 @@
-import{_ as s,c as o,a as i,F as a,q as d,o as r,p as c,t as g}from"./admin-Nj-duey4.js";const u={name:"Documentation",data(){return{activeSection:"database",sections:[{id:"database",title:"База данных"},{id:"api",title:"API Endpoints"},{id:"admin",title:"Админ-панель"},{id:"frontend",title:"Frontend"},{id:"telegram",title:"Telegram интеграция"},{id:"notifications",title:"Уведомления"},{id:"commands",title:"Команды"}],documentation:{database:`
+import{_ as s,c as o,a as i,F as a,q as d,o as r,p as c,t as g}from"./admin-DA9nwcQ0.js";const u={name:"Documentation",data(){return{activeSection:"database",sections:[{id:"database",title:"База данных"},{id:"api",title:"API Endpoints"},{id:"admin",title:"Админ-панель"},{id:"frontend",title:"Frontend"},{id:"telegram",title:"Telegram интеграция"},{id:"notifications",title:"Уведомления"},{id:"commands",title:"Команды"}],documentation:{database:`
                     <h2>Структура базы данных</h2>
                     <h3>Таблица: users</h3>
                     <p>Расширенная таблица пользователей с поддержкой Telegram:</p>
@@ -34,6 +34,14 @@ import{_ as s,c as o,a as i,F as a,q as d,o as r,p as c,t as g}from"./admin-Nj-d
                         <li><strong>is_active</strong> (boolean, default: true) - Активен ли сектор</li>
                     </ul>
                     <p><strong>Важно:</strong> Сумма всех probability_percent должна быть равна 100%.</p>
+
+                    <h3>Таблица: wheel_settings</h3>
+                    <p>Глобальные настройки рулетки:</p>
+                    <ul>
+                        <li><strong>always_empty_mode</strong> (boolean, default: false) - Режим "всегда пусто" (колесо всегда останавливается на пустом секторе)</li>
+                        <li><strong>ticket_restore_hours</strong> (integer, default: 3) - Период восстановления билета в часах (от 1 до 24)</li>
+                    </ul>
+                    <p><strong>Примечание:</strong> В таблице всегда одна запись (id = 1). Настройки можно изменить через админ панель.</p>
 
                     <h3>Таблица: spins</h3>
                     <p>История прокрутов рулетки:</p>
@@ -535,7 +543,13 @@ Schedule::command('wow:send-reminders')
                     <p>Это запустит планировщик каждую минуту, который проверит, какие команды нужно выполнить.</p>
 
                     <h3>Конфигурация</h3>
-                    <p>Интервал восстановления билетов настраивается в <code>config/app.php</code> или <code>.env</code>:</p>
-                    <pre><code>TICKET_RESTORE_HOURS=3</code></pre>
-                    <p>По умолчанию: 3 часа.</p>
-                `}}},computed:{currentContent(){return this.documentation[this.activeSection]||"<p>Раздел в разработке</p>"}}},p={class:"documentation-page"},h={class:"space-y-6"},m={class:"bg-card rounded-lg border border-border p-4"},_={class:"flex flex-wrap gap-2"},b=["onClick"],T={class:"bg-card rounded-lg border border-border p-6"},f=["innerHTML"];function w(v,e,k,y,t,n){return r(),o("div",p,[e[1]||(e[1]=i("div",{class:"mb-6"},[i("h1",{class:"text-2xl font-bold text-foreground"},"Документация"),i("p",{class:"text-muted-foreground mt-1"},"Техническая документация по системе WOW Рулетка")],-1)),i("div",h,[i("div",m,[e[0]||(e[0]=i("h2",{class:"text-lg font-semibold mb-4"},"Разделы документации",-1)),i("nav",_,[(r(!0),o(a,null,d(t.sections,l=>(r(),o("button",{key:l.id,onClick:x=>t.activeSection=l.id,class:c(["px-4 py-2 rounded-lg text-sm font-medium transition-colors",t.activeSection===l.id?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground hover:bg-muted/80"])},g(l.title),11,b))),128))])]),i("div",T,[i("div",{innerHTML:n.currentContent,class:"prose prose-sm max-w-none dark:prose-invert"},null,8,f)])])])}const E=s(u,[["render",w],["__scopeId","data-v-e791032b"]]);export{E as default};
+                    <p>Интервал восстановления билетов настраивается в админ панели:</p>
+                    <ul>
+                        <li>Перейдите в раздел <strong>WOW Рулетка</strong> → <strong>Рулетка</strong></li>
+                        <li>В блоке "Настройки рулетки" найдите поле "Период восстановления билета"</li>
+                        <li>Установите значение от 1 до 24 часов</li>
+                        <li>Настройка сохраняется автоматически при изменении</li>
+                    </ul>
+                    <p><strong>По умолчанию:</strong> 3 часа.</p>
+                    <p><strong>Примечание:</strong> Настройка хранится в таблице <code>wheel_settings</code> в поле <code>ticket_restore_hours</code>.</p>
+                `}}},computed:{currentContent(){return this.documentation[this.activeSection]||"<p>Раздел в разработке</p>"}}},p={class:"documentation-page"},h={class:"space-y-6"},m={class:"bg-card rounded-lg border border-border p-4"},_={class:"flex flex-wrap gap-2"},b=["onClick"],f={class:"bg-card rounded-lg border border-border p-6"},T=["innerHTML"];function w(k,e,v,y,t,n){return r(),o("div",p,[e[1]||(e[1]=i("div",{class:"mb-6"},[i("h1",{class:"text-2xl font-bold text-foreground"},"Документация"),i("p",{class:"text-muted-foreground mt-1"},"Техническая документация по системе WOW Рулетка")],-1)),i("div",h,[i("div",m,[e[0]||(e[0]=i("h2",{class:"text-lg font-semibold mb-4"},"Разделы документации",-1)),i("nav",_,[(r(!0),o(a,null,d(t.sections,l=>(r(),o("button",{key:l.id,onClick:x=>t.activeSection=l.id,class:c(["px-4 py-2 rounded-lg text-sm font-medium transition-colors",t.activeSection===l.id?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground hover:bg-muted/80"])},g(l.title),11,b))),128))])]),i("div",f,[i("div",{innerHTML:n.currentContent,class:"prose prose-sm max-w-none dark:prose-invert"},null,8,T)])])])}const E=s(u,[["render",w],["__scopeId","data-v-8712bdf1"]]);export{E as default};
