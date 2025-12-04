@@ -32,7 +32,17 @@ if (typeof window !== 'undefined' && window.XMLHttpRequest) {
                     url = url.replace('http://', window.location.protocol + '//');
                 }
                 
-                // Если URL был изменен, логируем для отладки (можно убрать в продакшене)
+                // Логируем ВСЕ запросы к config/bot для отладки
+                if (url.includes('config/bot')) {
+                    console.log('[XHR Fix] config/bot запрос:', {
+                        original: originalUrl,
+                        fixed: url,
+                        method: method,
+                        changed: originalUrl !== url
+                    });
+                }
+                
+                // Если URL был изменен, логируем для отладки
                 if (originalUrl !== url && (originalUrl.includes('/public/') || originalUrl.startsWith('http://'))) {
                     console.log('[XHR Fix] URL исправлен:', originalUrl, '->', url);
                 }
@@ -83,6 +93,15 @@ if (typeof window !== 'undefined') {
             
             return fixed;
         };
+        
+        // Логируем запросы к config/bot для отладки
+        if (config.url && config.url.includes('config/bot')) {
+            console.log('[Axios Interceptor] config/bot запрос ДО исправления:', {
+                originalUrl: config.url,
+                baseURL: config.baseURL,
+                method: config.method
+            });
+        }
         
         // Сохраняем оригинальные значения для отладки
         const originalBaseURL = config.baseURL;
