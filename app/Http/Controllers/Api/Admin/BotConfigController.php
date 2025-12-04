@@ -15,7 +15,6 @@ class BotConfigController extends Controller
     {
         return response()->json([
             'bot_token' => config('telegram.bot_token'),
-            'webhook_url' => config('telegram.webhook_url'),
             'mini_app_url' => config('telegram.mini_app_url'),
             'welcome_message' => config('telegram.welcome_message'),
         ]);
@@ -28,7 +27,6 @@ class BotConfigController extends Controller
     {
         $validated = $request->validate([
             'bot_token' => 'nullable|string',
-            'webhook_url' => 'nullable|url',
             'mini_app_url' => 'nullable|url',
             'welcome_message.enabled' => 'boolean',
             'welcome_message.text' => 'nullable|string',
@@ -50,14 +48,6 @@ class BotConfigController extends Controller
             if (!preg_match('/^TELEGRAM_BOT_TOKEN=/m', $envContent)) {
                 $envContent .= "\nTELEGRAM_BOT_TOKEN=" . $validated['bot_token'];
             }
-        }
-
-        if (isset($validated['webhook_url'])) {
-            $envContent = preg_replace(
-                '/^TELEGRAM_WEBHOOK_URL=.*/m',
-                'TELEGRAM_WEBHOOK_URL=' . $validated['webhook_url'],
-                $envContent
-            );
         }
 
         if (isset($validated['mini_app_url'])) {
@@ -108,11 +98,20 @@ class BotConfigController extends Controller
                 }
 
                 if (isset($btn['url'])) {
-                    $envContent = preg_replace(
-                        '/^TELEGRAM_WELCOME_MINI_APP_BUTTON_URL=.*/m',
-                        'TELEGRAM_WELCOME_MINI_APP_BUTTON_URL=' . $btn['url'],
-                        $envContent
-                    );
+                    // Если URL пустой, не сохраняем его (будет использоваться из основных настроек)
+                    if (!empty($btn['url'])) {
+                        $envContent = preg_replace(
+                            '/^TELEGRAM_WELCOME_MINI_APP_BUTTON_URL=.*/m',
+                            'TELEGRAM_WELCOME_MINI_APP_BUTTON_URL=' . $btn['url'],
+                            $envContent
+                        );
+                        if (!preg_match('/^TELEGRAM_WELCOME_MINI_APP_BUTTON_URL=/m', $envContent)) {
+                            $envContent .= "\nTELEGRAM_WELCOME_MINI_APP_BUTTON_URL=" . $btn['url'];
+                        }
+                    } else {
+                        // Удаляем пустой URL из .env, чтобы использовался из основных настроек
+                        $envContent = preg_replace('/^TELEGRAM_WELCOME_MINI_APP_BUTTON_URL=.*\n?/m', '', $envContent);
+                    }
                 }
             }
         }
@@ -121,6 +120,44 @@ class BotConfigController extends Controller
 
         // Очищаем кеш конфигурации
         \Artisan::call('config:clear');
+
+        // Автоматически устанавливаем webhook при сохранении токена
+        if (isset($validated['bot_token']) && !empty($validated['bot_token'])) {
+            try {
+                // Формируем webhook URL по умолчанию
+                $appUrl = rtrim(config('app.url', ''), '/');
+                $webhookUrl = $appUrl . '/api/telegram/webhook';
+                
+                $token = $validated['bot_token'];
+                $secretToken = config('telegram.webhook.secret_token');
+
+                $params = [
+                    'url' => $webhookUrl,
+                ];
+
+                if ($secretToken) {
+                    $params['secret_token'] = $secretToken;
+                }
+
+                $response = \Http::post("https://api.telegram.org/bot{$token}/setWebhook", $params);
+                $result = $response->json();
+                
+                if (!($result['ok'] ?? false)) {
+                    \Log::warning('Failed to set webhook automatically', [
+                        'response' => $result,
+                        'webhook_url' => $webhookUrl,
+                    ]);
+                } else {
+                    \Log::info('Webhook set automatically', [
+                        'webhook_url' => $webhookUrl,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error setting webhook automatically', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return response()->json(['message' => 'Настройки сохранены']);
     }
@@ -179,6 +216,14 @@ class BotConfigController extends Controller
             }
 
             $webhookUrl = $request->input('url', config('telegram.webhook_url'));
+            // Если URL не задан, формируем из APP_URL
+            if (!$webhookUrl) {
+                $appUrl = rtrim(config('app.url', ''), '/');
+                $webhookUrl = $appUrl . '/api/telegram/webhook';
+            }
+            // Исправляем двойные слеши в URL
+            $webhookUrl = preg_replace('#([^:])//+#', '$1/', $webhookUrl);
+            
             $secretToken = config('telegram.webhook.secret_token');
 
             $params = [

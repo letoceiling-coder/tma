@@ -33,16 +33,6 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium mb-2">Webhook URL</label>
-                        <input
-                            v-model="form.webhook_url"
-                            type="url"
-                            class="w-full px-4 py-2 border border-border rounded-lg bg-background"
-                            placeholder="https://example.com/api/telegram/webhook"
-                        />
-                    </div>
-
-                    <div>
                         <label class="block text-sm font-medium mb-2">Mini App URL</label>
                         <input
                             v-model="form.mini_app_url"
@@ -117,21 +107,21 @@
             <div class="flex gap-4">
                 <button
                     type="submit"
-                    class="px-6 py-2 bg-accent text-white rounded-lg hover:bg-accent/90"
+                    class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
                 >
                     Сохранить
                 </button>
                 <button
                     type="button"
                     @click="testConnection"
-                    class="px-6 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
+                    class="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                     Проверить подключение
                 </button>
                 <button
                     type="button"
                     @click="getWebhookInfo"
-                    class="px-6 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/80"
+                    class="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
                     Информация о webhook
                 </button>
@@ -171,7 +161,6 @@ const fetchConfig = async () => {
         if (response.data) {
             form.value = {
                 bot_token: response.data.bot_token || '',
-                webhook_url: response.data.webhook_url || '',
                 mini_app_url: response.data.mini_app_url || '',
                 welcome_message: response.data.welcome_message || form.value.welcome_message,
             }
@@ -191,16 +180,7 @@ const saveConfig = async () => {
         await axios.post('/api/v1/settings/bot', form.value)
         successMessage.value = 'Настройки сохранены'
         
-        // Автоматически устанавливаем webhook при сохранении токена
-        if (form.value.bot_token) {
-            try {
-                await axios.post('/api/v1/settings/bot/set-webhook', {
-                    url: form.value.webhook_url || undefined,
-                })
-            } catch (err) {
-                console.error('Ошибка установки webhook:', err)
-            }
-        }
+        // Webhook устанавливается автоматически на сервере при сохранении токена
     } catch (err) {
         error.value = err.response?.data?.message || 'Ошибка сохранения настроек'
     } finally {

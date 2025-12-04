@@ -1,4 +1,4 @@
-import{_ as s,c as o,a as i,F as a,q as d,o as r,p as c,t as g}from"./admin-BRyfBNbs.js";const u={name:"Documentation",data(){return{activeSection:"database",sections:[{id:"database",title:"База данных"},{id:"api",title:"API Endpoints"},{id:"admin",title:"Админ-панель"},{id:"frontend",title:"Frontend"},{id:"telegram",title:"Telegram интеграция"},{id:"notifications",title:"Уведомления"},{id:"commands",title:"Команды"}],documentation:{database:`
+import{_ as s,c as o,a as i,F as a,q as d,o as r,p as c,t as g}from"./admin-D831b1AY.js";const u={name:"Documentation",data(){return{activeSection:"database",sections:[{id:"database",title:"База данных"},{id:"api",title:"API Endpoints"},{id:"admin",title:"Админ-панель"},{id:"frontend",title:"Frontend"},{id:"telegram",title:"Telegram интеграция"},{id:"notifications",title:"Уведомления"},{id:"commands",title:"Команды"}],documentation:{database:`
                     <h2>Структура базы данных</h2>
                     <h3>Таблица: users</h3>
                     <p>Расширенная таблица пользователей с поддержкой Telegram:</p>

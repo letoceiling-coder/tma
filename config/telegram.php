@@ -22,7 +22,7 @@ return [
     |
     */
 
-    'webhook_url' => env('TELEGRAM_WEBHOOK_URL', env('APP_URL') . '/api/telegram/webhook'),
+    'webhook_url' => env('TELEGRAM_WEBHOOK_URL', null),
 
     /*
     |--------------------------------------------------------------------------

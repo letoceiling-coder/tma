@@ -112,12 +112,21 @@ class TelegramWebhookController extends Controller
 
             // Добавляем кнопку Mini App, если включена
             if (!empty($miniAppButton['enabled'])) {
-                // Используем URL из настроек кнопки или из общих настроек
-                $buttonUrl = $miniAppButton['url'] ?? config('telegram.mini_app_url');
+                // Используем URL из настроек кнопки, если он задан, иначе из общих настроек
+                $buttonUrl = !empty($miniAppButton['url']) 
+                    ? $miniAppButton['url'] 
+                    : config('telegram.mini_app_url');
+                
+                // Если URL все еще пустой, пробуем использовать APP_URL
+                if (empty($buttonUrl)) {
+                    $buttonUrl = rtrim(config('app.url', ''), '/');
+                }
                 
                 Log::info('Mini App button enabled', [
                     'button_url' => $buttonUrl,
                     'button_text' => $miniAppButton['text'] ?? '🚀 Открыть приложение',
+                    'mini_app_url_config' => config('telegram.mini_app_url'),
+                    'app_url' => config('app.url'),
                 ]);
                 
                 if (!empty($buttonUrl)) {
@@ -132,7 +141,7 @@ class TelegramWebhookController extends Controller
                     
                     Log::info('Keyboard created', ['keyboard' => $params['reply_markup']]);
                 } else {
-                    Log::warning('Mini App button enabled but URL is empty');
+                    Log::warning('Mini App button enabled but URL is empty - no URL available from config');
                 }
             }
 
