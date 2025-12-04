@@ -14,8 +14,20 @@ class BotConfigController extends Controller
     /**
      * Получить текущие настройки бота
      */
-    public function index()
+    public function index(Request $request)
     {
+        // Логируем информацию о запросе
+        Log::info('BotConfigController@index - Request received', [
+            'path' => $request->path(),
+            'full_url' => $request->fullUrl(),
+            'url' => $request->url(),
+            'app_url' => config('app.url'),
+            'request_uri' => $request->getRequestUri(),
+            'scheme' => $request->getScheme(),
+            'secure' => $request->secure(),
+            'host' => $request->getHost(),
+        ]);
+        
         $config = config('telegram');
         
         return response()->json([

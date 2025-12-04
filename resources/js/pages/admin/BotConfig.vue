@@ -558,7 +558,12 @@ export default {
             loading.value = true
             error.value = null
             try {
-                const response = await axios.get('/api/v1/settings/bot/')
+                const url = '/api/v1/settings/bot/';
+                console.log('BotConfig - Loading config, URL:', url);
+                console.log('BotConfig - axios.defaults.baseURL:', axios.defaults?.baseURL);
+                console.log('BotConfig - window.location:', window.location.href);
+                console.log('BotConfig - Full URL will be:', axios.defaults?.baseURL ? axios.defaults.baseURL + url : url);
+                const response = await axios.get(url)
                 if (response.data) {
                     form.value = {
                         ...response.data,
@@ -591,7 +596,10 @@ export default {
             successMessage.value = null
 
             try {
-                const response = await axios.post('/api/v1/settings/bot/', form.value)
+                const url = '/api/v1/settings/bot/';
+                console.log('BotConfig - Saving config, URL:', url);
+                console.log('BotConfig - Full URL will be:', axios.defaults?.baseURL ? axios.defaults.baseURL + url : url);
+                const response = await axios.post(url, form.value)
                 
                 if (response.data.error) {
                     Swal.fire({
@@ -622,7 +630,10 @@ export default {
         const testConnection = async () => {
             testing.value = true
             try {
-                const response = await axios.post('/api/v1/settings/bot/test-connection')
+                const url = '/api/v1/settings/bot/test-connection';
+                console.log('BotConfig - Testing connection, URL:', url);
+                console.log('BotConfig - Full URL will be:', axios.defaults?.baseURL ? axios.defaults.baseURL + url : url);
+                const response = await axios.post(url)
                 
                 if (response.data.success) {
                     Swal.fire({
@@ -658,7 +669,10 @@ export default {
             webhookInfo.value = null
 
             try {
-                const response = await axios.get('/api/v1/settings/bot/webhook-info')
+                const url = '/api/v1/settings/bot/webhook-info';
+                console.log('BotConfig - Getting webhook info, URL:', url);
+                console.log('BotConfig - Full URL will be:', axios.defaults?.baseURL ? axios.defaults.baseURL + url : url);
+                const response = await axios.get(url)
                 
                 if (response.data.success) {
                     webhookInfo.value = response.data.data
