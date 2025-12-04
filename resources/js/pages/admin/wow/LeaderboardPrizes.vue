@@ -49,6 +49,14 @@
             </div>
         </div>
 
+        <!-- Empty State for Prizes -->
+        <div v-if="!loading && prizes.length === 0" class="bg-card rounded-lg border border-border p-12 text-center">
+            <p class="text-muted-foreground mb-4">Призы за места не настроены</p>
+            <p class="text-sm text-muted-foreground">
+                Выполните команду: <code class="bg-muted px-2 py-1 rounded">php artisan db:seed --class=LeaderboardPrizeSeeder</code>
+            </p>
+        </div>
+
         <!-- Prizes List -->
         <div v-if="!loading && prizes.length > 0" class="space-y-4">
             <div v-for="prize in prizes" :key="prize.id" class="bg-card rounded-lg border border-border p-6">
@@ -138,19 +146,21 @@ export default {
         const savePrizes = async () => {
             saving.value = true
             try {
-                // Сохраняем призы
-                const prizesResponse = await apiPost('/wow/leaderboard-prizes/bulk-update', {
-                    prizes: prizes.value.map(p => ({
-                        id: p.id,
-                        prize_amount: p.prize_amount,
-                        prize_description: p.prize_description,
-                        is_active: p.is_active,
-                    }))
-                })
+                // Сохраняем призы только если они есть
+                if (prizes.value.length > 0) {
+                    const prizesResponse = await apiPost('/wow/leaderboard-prizes/bulk-update', {
+                        prizes: prizes.value.map(p => ({
+                            id: p.id,
+                            prize_amount: p.prize_amount,
+                            prize_description: p.prize_description,
+                            is_active: p.is_active,
+                        }))
+                    })
 
-                if (!prizesResponse.ok) {
-                    const errorData = await prizesResponse.json()
-                    throw new Error(errorData.message || 'Ошибка сохранения призов')
+                    if (!prizesResponse.ok) {
+                        const errorData = await prizesResponse.json()
+                        throw new Error(errorData.message || 'Ошибка сохранения призов')
+                    }
                 }
 
                 // Сохраняем период лидерборда

@@ -63,7 +63,7 @@ class LeaderboardPrizeController extends Controller
     public function bulkUpdate(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'prizes' => 'required|array',
+            'prizes' => 'required|array|min:1',
             'prizes.*.id' => 'required|exists:leaderboard_prizes,id',
             'prizes.*.prize_amount' => 'required|integer|min:0|max:1000000',
             'prizes.*.prize_description' => 'nullable|string|max:255',
