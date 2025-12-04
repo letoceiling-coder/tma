@@ -140,12 +140,13 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNum
         @keyframes pulse {
           0%, 100% {
             opacity: 1;
-            filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
           }
           50% {
-            opacity: 0.7;
-            filter: drop-shadow(0 0 16px rgba(255, 215, 0, 1));
+            opacity: 0.8;
           }
+        }
+        .winning-sector {
+          animation: pulse 1.5s ease-in-out infinite;
         }
       `}</style>
       {/* Soft shadow underlay - fixed, doesn't rotate */}
@@ -353,39 +354,31 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNum
           {/* Gradient для подсветки выигрышного сектора */}
           <defs>
             <radialGradient id="winningGlow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="rgba(255, 215, 0, 0.6)" />
-              <stop offset="50%" stopColor="rgba(255, 215, 0, 0.3)" />
-              <stop offset="100%" stopColor="rgba(255, 215, 0, 0)" />
+              <stop offset="0%" stopColor="rgba(255, 215, 0, 0.8)" />
+              <stop offset="50%" stopColor="rgba(255, 215, 0, 0.5)" />
+              <stop offset="100%" stopColor="rgba(255, 215, 0, 0.2)" />
             </radialGradient>
           </defs>
           
           {/* Draw 12 sectors */}
-          {Array.from({ length: 12 }).map((_, index) => (
-            <path
-              key={`sector-${index}`}
-              d={createSectorPath(index)}
-              fill={sectorColors[index % 2]}
-              stroke="#F6A974"
-              strokeWidth="1"
-              style={{
-                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
-              }}
-            />
-          ))}
-          
-          {/* Подсветка выигрышного сектора */}
-          {winningIndex !== null && (
-            <path
-              d={createSectorPath(winningIndex)}
-              fill="url(#winningGlow)"
-              stroke="#FFD700"
-              strokeWidth="3"
-              style={{
-                animation: 'pulse 1.5s ease-in-out infinite',
-                filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.8))',
-              }}
-            />
-          )}
+          {Array.from({ length: 12 }).map((_, index) => {
+            const isWinning = winningIndex === index;
+            return (
+              <path
+                key={`sector-${index}`}
+                d={createSectorPath(index)}
+                fill={isWinning ? "#FFE5B4" : sectorColors[index % 2]}
+                stroke={isWinning ? "#FFD700" : "#F6A974"}
+                strokeWidth={isWinning ? "4" : "1"}
+                className={isWinning ? "winning-sector" : ""}
+                style={{
+                  filter: isWinning 
+                    ? 'drop-shadow(0 0 12px rgba(255, 215, 0, 1))'
+                    : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                }}
+              />
+            );
+          })}
           
           {/* Center circle */}
           <circle
@@ -428,17 +421,17 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNum
               key={index}
               src={iconSrc}
               alt={segment.text || `Prize ${index + 1}`}
-              className="prize absolute"
+              className={`prize absolute ${isWinning ? 'winning-sector' : ''}`}
               style={{
                 width: `${iconSize}px`,
                 height: 'auto',
                 left: `${x}px`,
                 top: `${y}px`,
-                transform: `translate(-50%, -50%) rotate(${sectorAngle}deg)${isWinning ? ' scale(1.15)' : ''}`,
+                transform: `translate(-50%, -50%) rotate(${sectorAngle}deg)${isWinning ? ' scale(1.3)' : ''}`,
                 transformOrigin: 'center center',
-                zIndex: isWinning ? 5 : 4,
+                zIndex: isWinning ? 10 : 4,
                 pointerEvents: 'none',
-                filter: isWinning ? 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.8))' : 'none',
+                filter: isWinning ? 'drop-shadow(0 0 16px rgba(255, 215, 0, 1)) brightness(1.2)' : 'none',
                 transition: 'all 0.3s ease-in-out',
               }}
               draggable={false}
