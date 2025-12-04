@@ -156,7 +156,8 @@ export default {
         
         // Отслеживаем изменения меню для отладки
         watch(() => menu.value, (newMenu) => {
-            console.log('Menu updated in Sidebar:', newMenu);
+            // Используем JSON для правильного логирования реактивных объектов
+            console.log('Menu updated in Sidebar:', JSON.parse(JSON.stringify(newMenu)));
         }, { immediate: true });
         const userInitials = computed(() => {
             if (!user.value?.name) return 'U';

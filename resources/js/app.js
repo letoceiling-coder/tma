@@ -108,7 +108,8 @@ const store = createStore({
             if (!state.token) return;
             try {
                 const response = await axios.get('/api/admin/menu');
-                console.log('Menu loaded:', response.data.menu);
+                // Используем JSON для правильного логирования реактивных объектов
+                console.log('Menu loaded:', JSON.parse(JSON.stringify(response.data.menu)));
                 commit('SET_MENU', response.data.menu);
             } catch (error) {
                 console.error('Menu fetch error:', error);
