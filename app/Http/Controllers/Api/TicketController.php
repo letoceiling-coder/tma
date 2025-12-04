@@ -85,7 +85,8 @@ class TicketController extends Controller
             // Таймер показывается только если билетов нет (0)
             if ($user->tickets_available === 0 && $user->tickets_depleted_at) {
                 $restoreTime = $user->tickets_depleted_at->copy()->addSeconds($restoreIntervalSeconds);
-                $secondsUntilNextTicket = max(0, (int) $restoreTime->diffInSeconds(now()));
+                // Используем разницу timestamp для правильного расчета (если restore_time в будущем - положительное, если в прошлом - 0)
+                $secondsUntilNextTicket = max(0, $restoreTime->timestamp - now()->timestamp);
                 $nextTicketAt = $restoreTime->toIso8601String();
                 
                 Log::debug('Ticket timer calculated', [
