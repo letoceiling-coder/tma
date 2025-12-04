@@ -120,7 +120,7 @@ export default {
                         <li><strong>user_id</strong> (foreign key to users) - Пользователь</li>
                         <li><strong>tickets_count</strong> (integer, default: 1) - Количество билетов</li>
                         <li><strong>restored_at</strong> (timestamp, nullable) - Время восстановления</li>
-                        <li><strong>source</strong> (enum: free, star_exchange) - Источник билета</li>
+                        <li><strong>source</strong> (enum: free, star_exchange, admin_grant) - Источник билета</li>
                     </ul>
 
                     <h3>Таблица: star_exchanges</h3>
