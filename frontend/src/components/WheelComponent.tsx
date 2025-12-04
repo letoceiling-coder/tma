@@ -66,11 +66,13 @@ const sectorColors = [
 const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentProps) => {
   const [currentRotation, setCurrentRotation] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [winningIndex, setWinningIndex] = useState<number | null>(null);
   const segmentAngle = 360 / segments.length;
 
   useEffect(() => {
     if (rotation !== currentRotation && rotation > currentRotation) {
       setIsAnimating(true);
+      setWinningIndex(null); // Сбрасываем подсветку при новом вращении
       
       // Use requestAnimationFrame for smoother animation start
       requestAnimationFrame(() => {
@@ -80,18 +82,19 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
       const timer = setTimeout(() => {
         setIsAnimating(false);
         const normalizedRotation = rotation % 360;
-        const winningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
+        const calculatedWinningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
         
         // Отладочная информация
         console.log('=== WHEEL STOPPED ===');
         console.log('Total rotation:', rotation);
         console.log('Normalized rotation:', normalizedRotation);
-        console.log('Calculated winningIndex:', winningIndex);
-        console.log('Winning segment:', segments[winningIndex]);
-        console.log('Sector number:', winningIndex + 1); // sector_number = index + 1
+        console.log('Calculated winningIndex:', calculatedWinningIndex);
+        console.log('Winning segment:', segments[calculatedWinningIndex]);
+        console.log('Sector number:', calculatedWinningIndex + 1); // sector_number = index + 1
         console.log('==================');
         
-        onSpinComplete?.(winningIndex);
+        setWinningIndex(calculatedWinningIndex); // Устанавливаем выигрышный сектор для подсветки
+        onSpinComplete?.(calculatedWinningIndex);
       }, 4000);
 
       return () => clearTimeout(timer);
@@ -127,6 +130,19 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
         paddingTop: '50px',
       }}
     >
+      {/* CSS анимация для подсветки */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+          }
+          50% {
+            opacity: 0.7;
+            filter: drop-shadow(0 0 16px rgba(255, 215, 0, 1));
+          }
+        }
+      `}</style>
       {/* Soft shadow underlay - fixed, doesn't rotate */}
       <div
         className="absolute"
@@ -329,6 +345,15 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
           viewBox={`0 0 ${wheelSize} ${wheelSize}`}
           className="absolute inset-0"
         >
+          {/* Gradient для подсветки выигрышного сектора */}
+          <defs>
+            <radialGradient id="winningGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="rgba(255, 215, 0, 0.6)" />
+              <stop offset="50%" stopColor="rgba(255, 215, 0, 0.3)" />
+              <stop offset="100%" stopColor="rgba(255, 215, 0, 0)" />
+            </radialGradient>
+          </defs>
+          
           {/* Draw 12 sectors */}
           {Array.from({ length: 12 }).map((_, index) => (
             <path
@@ -342,6 +367,20 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
               }}
             />
           ))}
+          
+          {/* Подсветка выигрышного сектора */}
+          {winningIndex !== null && (
+            <path
+              d={createSectorPath(winningIndex)}
+              fill="url(#winningGlow)"
+              stroke="#FFD700"
+              strokeWidth="3"
+              style={{
+                animation: 'pulse 1.5s ease-in-out infinite',
+                filter: 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.8))',
+              }}
+            />
+          )}
           
           {/* Center circle */}
           <circle
@@ -377,6 +416,8 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
           
           const iconSize = segment.prizeType === 'secret_box' ? 40 : 45;
           
+          const isWinning = winningIndex === index;
+          
           return (
             <img
               key={index}
@@ -388,10 +429,12 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
                 height: 'auto',
                 left: `${x}px`,
                 top: `${y}px`,
-                transform: `translate(-50%, -50%) rotate(${sectorAngle}deg)`,
+                transform: `translate(-50%, -50%) rotate(${sectorAngle}deg)${isWinning ? ' scale(1.15)' : ''}`,
                 transformOrigin: 'center center',
-                zIndex: 4,
+                zIndex: isWinning ? 5 : 4,
                 pointerEvents: 'none',
+                filter: isWinning ? 'drop-shadow(0 0 8px rgba(255, 215, 0, 0.8))' : 'none',
+                transition: 'all 0.3s ease-in-out',
               }}
               draggable={false}
               onError={(e) => {
