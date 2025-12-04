@@ -21,13 +21,10 @@ export const useUserInit = () => {
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const initUser = useCallback(async (): Promise<UserInitResult | null> => {
+  const initUser = useCallback(async (initData?: string): Promise<UserInitResult | null> => {
+    // Получаем initData из параметра или из Telegram WebApp
     const tg = window.Telegram?.WebApp;
-
-    if (!tg?.initData) {
-      console.warn("Telegram initData not available - cannot initialize user");
-      return null;
-    }
+    const telegramInitData = initData || tg?.initData || 'mock_init_data_for_development';
 
     setIsInitializing(true);
     setError(null);
@@ -39,7 +36,7 @@ export const useUserInit = () => {
       const response = await fetch(apiPath, {
         method: "POST",
         headers: {
-          "X-Telegram-Init-Data": tg.initData || "",
+          "X-Telegram-Init-Data": telegramInitData,
           "Content-Type": "application/json",
           "Accept": "application/json",
         },

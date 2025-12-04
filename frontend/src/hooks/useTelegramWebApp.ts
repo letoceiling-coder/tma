@@ -92,7 +92,20 @@ export const useTelegramWebApp = () => {
       
       setIsReady(true);
     } else {
-      // Not in Telegram, still mark as ready
+      // Not in Telegram - use mock data for development
+      console.log('🔧 Development mode: using mock Telegram user');
+      setIsTelegram(false);
+      
+      // Mock user for testing outside Telegram
+      const mockUser: TelegramUser = {
+        id: 999999999,
+        first_name: 'Dev',
+        last_name: 'User',
+        username: 'devuser',
+        language_code: 'ru',
+      };
+      
+      setUser(mockUser);
       setIsReady(true);
     }
   }, []);
@@ -147,12 +160,25 @@ export const useTelegramWebApp = () => {
     }
   }, []);
 
+  // Get initData - real or mock
+  const getInitData = useCallback(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.initData) {
+      return tg.initData;
+    }
+    
+    // Mock initData for development (outside Telegram)
+    // В продакшене backend проверяет APP_DEBUG и пропускает валидацию
+    return 'mock_init_data_for_development';
+  }, []);
+
   return {
     isReady,
     isTelegram,
     user,
     userName: user?.first_name || user?.username || "Гость",
     userPhoto: user?.photo_url,
+    initData: getInitData(),
     close,
     expand,
     share,

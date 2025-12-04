@@ -27,7 +27,7 @@ interface WheelSegment {
 
 const MainWheel = () => {
   const navigate = useNavigate();
-  const { userName, isReady: tgReady } = useTelegramWebApp();
+  const { userName, isReady: tgReady, initData: telegramInitData } = useTelegramWebApp();
   const [tickets, setTickets] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0); // Накопленный rotation для анимации
@@ -110,22 +110,13 @@ const MainWheel = () => {
   const loadTickets = useCallback(async () => {
     try {
       setLoadingTickets(true);
-      const tg = window.Telegram?.WebApp;
-      
-      if (!tg?.initData) {
-        // Если нет Telegram, используем локальное состояние
-        setTickets(3);
-        setLoadingTickets(false);
-        return;
-      }
-
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const apiPath = apiUrl ? `${apiUrl}/api/user/tickets` : `/api/user/tickets`;
       
       const response = await fetch(apiPath, {
         method: 'GET',
         headers: {
-          'X-Telegram-Init-Data': tg.initData || '',
+          'X-Telegram-Init-Data': telegramInitData,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -230,11 +221,6 @@ const MainWheel = () => {
     if (isSpinning) return;
 
     const tg = window.Telegram?.WebApp;
-    
-    if (!tg?.initData) {
-      toast.error('Ошибка: требуется Telegram WebApp');
-      return;
-    }
 
     // Heavy haptic feedback for spin start
     haptic.heavyTap();
@@ -248,7 +234,7 @@ const MainWheel = () => {
       const response = await fetch(apiPath, {
         method: 'POST',
         headers: {
-          'X-Telegram-Init-Data': tg.initData || '',
+          'X-Telegram-Init-Data': telegramInitData,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -335,7 +321,7 @@ const MainWheel = () => {
           await fetch(notifyPath, {
             method: 'POST',
             headers: {
-              'X-Telegram-Init-Data': tg.initData || '',
+              'X-Telegram-Init-Data': telegramInitData,
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
