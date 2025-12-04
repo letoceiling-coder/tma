@@ -18,12 +18,36 @@ function fixUrl(url) {
     return fixed;
 }
 
-// Исправляем document.baseURI если он содержит /public/
-// Это критично для Vue Router, который использует baseURI для разрешения путей
-if (document.baseURI && document.baseURI.includes('/public/')) {
-    const fixedBaseURI = fixUrl(document.baseURI);
-    console.log('🔧 Fixing document.baseURI:', { original: document.baseURI, fixed: fixedBaseURI });
-    // К сожалению, document.baseURI только для чтения, но мы можем перехватить его через Object.defineProperty
+// КРИТИЧНО: Исправляем document.baseURI
+// document.baseURI может содержать полный путь к странице, а не базовый URL
+// Нужно установить правильный базовый URL для разрешения относительных путей
+(function() {
+    const currentBaseURI = document.baseURI;
+    const locationOrigin = window.location.origin;
+    const locationPathname = window.location.pathname;
+    
+    // Определяем правильный базовый URL
+    // Если мы на странице /admin/*, базовый URL должен быть /admin/
+    // Иначе базовый URL должен быть /
+    let basePath = '/';
+    if (locationPathname.startsWith('/admin')) {
+        basePath = '/admin/';
+    }
+    
+    const baseURI = locationOrigin + basePath;
+    
+    // Убираем /public/ если есть
+    const fixedBaseURI = fixUrl(baseURI);
+    
+    console.log('🔧 Fixing document.baseURI:', { 
+        original: currentBaseURI, 
+        fixed: fixedBaseURI,
+        locationOrigin: locationOrigin,
+        locationPathname: locationPathname,
+        basePath: basePath,
+    });
+    
+    // Пытаемся переопределить document.baseURI
     try {
         Object.defineProperty(document, 'baseURI', {
             get: function() {
@@ -34,28 +58,20 @@ if (document.baseURI && document.baseURI.includes('/public/')) {
         console.log('✅ Successfully overridden document.baseURI');
     } catch (e) {
         console.warn('⚠️ Cannot override document.baseURI:', e);
-        // Если не удалось переопределить, попробуем исправить через <base> тег
-        const baseTag = document.querySelector('base');
+        // Если не удалось переопределить, создаем/исправляем <base> тег
+        let baseTag = document.querySelector('base');
         if (baseTag) {
             baseTag.href = fixedBaseURI;
             console.log('✅ Fixed <base> tag href:', fixedBaseURI);
         } else {
             // Создаем <base> тег если его нет
-            const base = document.createElement('base');
-            base.href = fixedBaseURI;
-            document.head.insertBefore(base, document.head.firstChild);
+            baseTag = document.createElement('base');
+            baseTag.href = fixedBaseURI;
+            document.head.insertBefore(baseTag, document.head.firstChild);
             console.log('✅ Created <base> tag with href:', fixedBaseURI);
         }
     }
-} else {
-    // Проверяем, есть ли <base> тег с неправильным href
-    const baseTag = document.querySelector('base');
-    if (baseTag && baseTag.href && baseTag.href.includes('/public/')) {
-        const fixedHref = fixUrl(baseTag.href);
-        baseTag.href = fixedHref;
-        console.log('🔧 Fixed <base> tag href:', { original: baseTag.href, fixed: fixedHref });
-    }
-}
+})();
 
 // Interceptor для исправления URL (удаление /public/ и замена http:// на https://)
 window.axios.interceptors.request.use(
@@ -114,7 +130,20 @@ const originalXHROpen = XMLHttpRequest.prototype.open;
 const xhrUrlMap = new WeakMap();
 
 XMLHttpRequest.prototype.open = function(method, url, ...args) {
-    const fixedUrl = fixUrl(url);
+    let fixedUrl = url;
+    
+    // Если URL абсолютный и содержит /public/ или http://, исправляем его
+    if (typeof url === 'string') {
+        // Проверяем, является ли URL абсолютным
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            // Абсолютный URL - исправляем его
+            fixedUrl = fixUrl(url);
+        } else {
+            // Относительный URL - исправляем на всякий случай
+            fixedUrl = fixUrl(url);
+        }
+    }
+    
     // Сохраняем оригинальный и исправленный URL для логирования в send
     xhrUrlMap.set(this, { original: url, fixed: fixedUrl, method });
     
@@ -143,6 +172,11 @@ XMLHttpRequest.prototype.send = function(...args) {
             responseURL: this.responseURL,
             currentUrl: currentUrl,
         });
+        
+        // Если responseURL содержит /public/ или http://, это проблема
+        if (this.responseURL && (this.responseURL.includes('/public/') || this.responseURL.startsWith('http://'))) {
+            console.error('❌ XMLHttpRequest.send - URL still contains /public/ or http://:', this.responseURL);
+        }
     }
     return originalXHRSend.apply(this, args);
 };
