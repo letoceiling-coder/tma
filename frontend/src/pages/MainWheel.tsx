@@ -42,6 +42,7 @@ const MainWheel = () => {
   const [loadingSectors, setLoadingSectors] = useState(true);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [restoreIntervalSeconds, setRestoreIntervalSeconds] = useState(10800); // 3 часа по умолчанию
+  const [restoreIntervalHours, setRestoreIntervalHours] = useState(3); // Часы для отображения
 
   // Загрузка секторов с сервера
   const loadWheelConfig = useCallback(async () => {
@@ -131,6 +132,9 @@ const MainWheel = () => {
       if (data.restore_interval_seconds) {
         setRestoreIntervalSeconds(data.restore_interval_seconds);
       }
+      if (data.restore_interval_hours) {
+        setRestoreIntervalHours(data.restore_interval_hours);
+      }
       
       // Устанавливаем время до следующего билета (округляем до целого)
       if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
@@ -185,6 +189,13 @@ const MainWheel = () => {
     if (count === 1) return 'билет';
     if (count >= 2 && count <= 4) return 'билета';
     return 'билетов';
+  };
+
+  // Get hour word form
+  const getHourWord = (count: number) => {
+    if (count === 1) return 'час';
+    if (count >= 2 && count <= 4) return 'часа';
+    return 'часов';
   };
 
   // Timer effect
@@ -566,22 +577,41 @@ const MainWheel = () => {
             margin: 0
           }}
         >
-          <span style={{ 
-            fontSize: '15px', 
-            fontWeight: 600, 
-            color: '#FFFFFF', 
-            whiteSpace: 'nowrap',
-            textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-            textAlign: 'center'
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '2px'
           }}>
-            {loadingTickets ? (
-              'Загрузка...'
-            ) : tickets > 0 ? (
-              `У вас ${tickets} ${getTicketWord(tickets)}`
-            ) : (
-              `Новый билет через ${formatTime(timeLeft)}`
+            <span style={{ 
+              fontSize: '15px', 
+              fontWeight: 600, 
+              color: '#FFFFFF', 
+              whiteSpace: 'nowrap',
+              textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+              textAlign: 'center'
+            }}>
+              {loadingTickets ? (
+                'Загрузка...'
+              ) : tickets > 0 ? (
+                `У вас ${tickets} ${getTicketWord(tickets)}`
+              ) : (
+                `Новый билет через ${formatTime(timeLeft)}`
+              )}
+            </span>
+            {!loadingTickets && tickets === 0 && (
+              <span style={{ 
+                fontSize: '11px', 
+                fontWeight: 400, 
+                color: 'rgba(255, 255, 255, 0.7)', 
+                whiteSpace: 'nowrap',
+                textShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                textAlign: 'center'
+              }}>
+                {`(восстановление каждые ${restoreIntervalHours} ${getHourWord(restoreIntervalHours)})`}
+              </span>
             )}
-          </span>
+          </div>
         </div>
 
         {/* Spin Button */}
