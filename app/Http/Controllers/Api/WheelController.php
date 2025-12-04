@@ -120,10 +120,12 @@ class WheelController extends Controller
                 $user->last_spin_at = now();
                 $user->total_spins++;
                 
+                // Получаем интервал восстановления билетов из настроек
+                $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
+                
                 // ВАЖНО: Фиксируем точку восстановления билета
                 // Когда билеты закончились (стали 0) - устанавливаем время восстановления = now() + период
                 if ($user->tickets_available === 0) {
-                    $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
                     $user->tickets_depleted_at = now()->addSeconds($restoreIntervalSeconds);
                 }
                 
