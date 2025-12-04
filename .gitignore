@@ -27,3 +27,17 @@ Thumbs.db
 *.zip
 *.7z
 *.tar.gz
+
+# Max и VK пакеты (вынесены в отдельные composer пакеты)
+/app/Max/
+/app/VK/
+/app/Providers/MaxServiceProvider.php
+/app/Providers/VKServiceProvider.php
+/app/Console/Commands/Max/
+/app/Console/Commands/VK/
+/app/Http/Middleware/Max*.php
+/app/Http/Middleware/VK*.php
+/app/Jobs/Max/
+/app/Jobs/VK/
+/config/max.php
+/config/vk.php
