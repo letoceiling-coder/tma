@@ -18,6 +18,23 @@ function fixUrl(url) {
     return fixed;
 }
 
+// Исправляем document.baseURI если он содержит /public/
+if (document.baseURI && document.baseURI.includes('/public/')) {
+    const fixedBaseURI = fixUrl(document.baseURI);
+    console.log('🔧 Fixing document.baseURI:', { original: document.baseURI, fixed: fixedBaseURI });
+    // К сожалению, document.baseURI только для чтения, но мы можем перехватить его через Object.defineProperty
+    try {
+        Object.defineProperty(document, 'baseURI', {
+            get: function() {
+                return fixedBaseURI;
+            },
+            configurable: true
+        });
+    } catch (e) {
+        console.warn('⚠️ Cannot override document.baseURI:', e);
+    }
+}
+
 // Interceptor для исправления URL (удаление /public/ и замена http:// на https://)
 window.axios.interceptors.request.use(
     function (config) {
@@ -29,6 +46,8 @@ window.axios.interceptors.request.use(
             url: originalUrl,
             baseURL: originalBaseURL,
             fullURL: (originalBaseURL || '') + (originalUrl || ''),
+            documentBaseURI: document.baseURI,
+            locationHref: window.location.href,
         });
         
         // Исправляем baseURL если он задан
@@ -39,6 +58,19 @@ window.axios.interceptors.request.use(
         // Исправляем URL
         if (config.url) {
             config.url = fixUrl(config.url);
+        }
+        
+        // Убеждаемся, что URL не содержит /public/ и использует https://
+        // Если URL все еще содержит /public/, исправляем его еще раз
+        if (config.url && config.url.includes('/public/')) {
+            console.warn('⚠️ URL still contains /public/ after fixUrl, fixing again:', config.url);
+            config.url = fixUrl(config.url);
+        }
+        
+        // Если baseURL содержит /public/, исправляем его еще раз
+        if (config.baseURL && config.baseURL.includes('/public/')) {
+            console.warn('⚠️ baseURL still contains /public/ after fixUrl, fixing again:', config.baseURL);
+            config.baseURL = fixUrl(config.baseURL);
         }
         
         console.log('✅ Axios Request Interceptor - AFTER:', {
@@ -57,17 +89,40 @@ window.axios.interceptors.request.use(
 
 // Перехватываем XMLHttpRequest для исправления URL
 const originalXHROpen = XMLHttpRequest.prototype.open;
+const xhrUrlMap = new WeakMap();
+
 XMLHttpRequest.prototype.open = function(method, url, ...args) {
     const fixedUrl = fixUrl(url);
+    // Сохраняем оригинальный и исправленный URL для логирования в send
+    xhrUrlMap.set(this, { original: url, fixed: fixedUrl, method });
+    
     if (fixedUrl !== url) {
-        console.log('🔧 XMLHttpRequest - Fixed URL:', { original: url, fixed: fixedUrl, method });
+        console.log('🔧 XMLHttpRequest.open - Fixed URL:', { original: url, fixed: fixedUrl, method });
     } else {
         // Логируем все запросы к API для отладки
         if (typeof url === 'string' && url.includes('/api/')) {
-            console.log('🔍 XMLHttpRequest - API Request:', { method, url, fixedUrl });
+            console.log('🔍 XMLHttpRequest.open - API Request:', { method, url, fixedUrl });
         }
     }
     return originalXHROpen.call(this, method, fixedUrl, ...args);
+};
+
+// Перехватываем send для проверки финального URL
+const originalXHRSend = XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.send = function(...args) {
+    const urlInfo = xhrUrlMap.get(this);
+    if (urlInfo && urlInfo.fixed.includes('/api/')) {
+        // Проверяем, какой URL будет использован
+        const currentUrl = this.responseURL || urlInfo.fixed;
+        console.log('📤 XMLHttpRequest.send - Sending request:', {
+            method: urlInfo.method,
+            originalUrl: urlInfo.original,
+            fixedUrl: urlInfo.fixed,
+            responseURL: this.responseURL,
+            currentUrl: currentUrl,
+        });
+    }
+    return originalXHRSend.apply(this, args);
 };
 
 // Перехватываем Fetch API для исправления URL
