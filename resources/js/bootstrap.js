@@ -10,21 +10,51 @@ if (typeof window !== 'undefined') {
     
     // Добавляем interceptor для исправления URL, если они содержат /public/ или используют HTTP
     window.axios.interceptors.request.use((config) => {
-        if (config.url) {
-            // Убираем /public/ из URL, если он там есть
-            if (config.url.includes('/public/')) {
-                config.url = config.url.replace('/public/', '/');
+        // Функция для исправления URL
+        const fixUrl = (url) => {
+            if (!url || typeof url !== 'string') return url;
+            
+            let fixed = url;
+            
+            // Убираем /public/ из URL (все вхождения, включая в начале)
+            fixed = fixed.replace(/\/public\//g, '/');
+            fixed = fixed.replace(/^\/public\//, '/');
+            fixed = fixed.replace(/\/public$/, '');
+            
+            // Заменяем HTTP на текущий протокол (HTTPS)
+            if (fixed.startsWith('http://')) {
+                fixed = fixed.replace('http://', window.location.protocol + '//');
             }
-            // Убеждаемся, что используется текущий протокол (HTTPS)
-            if (config.url.startsWith('http://')) {
-                config.url = config.url.replace('http://', window.location.protocol + '//');
-            }
+            
             // Если URL абсолютный, но без протокола, добавляем текущий протокол
-            if (config.url.startsWith('//')) {
-                config.url = window.location.protocol + config.url;
+            if (fixed.startsWith('//')) {
+                fixed = window.location.protocol + fixed;
+            }
+            
+            return fixed;
+        };
+        
+        // Исправляем baseURL
+        if (config.baseURL) {
+            config.baseURL = fixUrl(config.baseURL);
+        }
+        
+        // Исправляем URL
+        if (config.url) {
+            const originalUrl = config.url;
+            config.url = fixUrl(config.url);
+            
+            // Если URL был абсолютным (содержит домен), убеждаемся что он правильный
+            if (originalUrl.includes('://') || originalUrl.startsWith('//')) {
+                // Это абсолютный URL - baseURL не нужен
+                config.baseURL = '';
             }
         }
+        
         return config;
+    }, (error) => {
+        // Обработка ошибок в interceptor
+        return Promise.reject(error);
     });
 }
 
