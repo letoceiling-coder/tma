@@ -37,8 +37,6 @@ const MainWheel = () => {
   const [showGiftPopup, setShowGiftPopup] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const [lastResult, setLastResult] = useState(0);
-  const [showDebugPopup, setShowDebugPopup] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [wheelSegments, setWheelSegments] = useState<WheelSegment[]>([]);
   const [loadingSectors, setLoadingSectors] = useState(true);
@@ -263,12 +261,10 @@ const MainWheel = () => {
         setRestoreIntervalSeconds(data.restore_interval_seconds);
       }
 
-      // Устанавливаем ротацию, полученную с сервера
-      // Backend возвращает абсолютное значение rotation для каждого спина
-      // Мы накапливаем для непрерывной анимации, но сохраняем последний rotation отдельно
+      // Устанавливаем ротацию от сервера
       if (data.rotation !== undefined) {
-        setLastSpinRotation(data.rotation); // Сохраняем для определения сектора
-        setRotation((prev) => prev + data.rotation); // Накапливаем для анимации
+        setLastSpinRotation(data.rotation);
+        setRotation(data.rotation);
       }
       
       // Сохраняем номер выигрышного сектора от сервера
@@ -523,17 +519,7 @@ const MainWheel = () => {
           lastSpinRotation={lastSpinRotation}
           winningSectorNumber={winningSectorNumber}
           onSpinComplete={(winningIndex) => {
-            // Показываем отладочную информацию
-            const debugData = {
-              winningIndexCalculated: winningIndex,
-              winningSectorNumber: winningSectorNumber,
-              sectorNumberFromIndex: winningIndex + 1,
-              lastSpinRotation: lastSpinRotation,
-              rotation: rotation,
-              segmentData: wheelSegments[winningIndex],
-            };
-            setDebugInfo(debugData);
-            setShowDebugPopup(true);
+            // Анимация завершена
           }}
         />
       </div>
@@ -654,62 +640,6 @@ const MainWheel = () => {
         result={lastResult}
         hasMoreTickets={tickets > 0}
       />
-      
-      {/* Debug Popup */}
-      {showDebugPopup && debugInfo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{
-            background: "rgba(0, 0, 0, 0.7)",
-          }}
-          onClick={() => setShowDebugPopup(false)}
-        >
-          <div
-            className="bg-white rounded-lg p-6 max-w-md mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-xl font-bold mb-4 text-gray-800">
-              🔍 Отладка колеса
-            </h3>
-            <div className="space-y-2 text-sm">
-              <div className="border-b pb-2">
-                <strong>От сервера:</strong>
-                <div className="ml-4 mt-1">
-                  <div>Сектор #: {debugInfo.winningSectorNumber}</div>
-                  <div>Rotation: {debugInfo.lastSpinRotation}°</div>
-                </div>
-              </div>
-              <div className="border-b pb-2">
-                <strong>Вычислено на фронтенде:</strong>
-                <div className="ml-4 mt-1">
-                  <div>Index: {debugInfo.winningIndexCalculated}</div>
-                  <div>Сектор #: {debugInfo.sectorNumberFromIndex}</div>
-                </div>
-              </div>
-              <div className="border-b pb-2">
-                <strong>Данные сектора:</strong>
-                <div className="ml-4 mt-1">
-                  <div>Тип: {debugInfo.segmentData?.prizeType}</div>
-                  <div>Значение: {debugInfo.segmentData?.value}</div>
-                </div>
-              </div>
-              <div className={`p-2 rounded ${debugInfo.winningSectorNumber === debugInfo.sectorNumberFromIndex ? 'bg-green-100' : 'bg-red-100'}`}>
-                {debugInfo.winningSectorNumber === debugInfo.sectorNumberFromIndex ? (
-                  <span className="text-green-700">✓ Совпадает</span>
-                ) : (
-                  <span className="text-red-700">✗ Не совпадает!</span>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => setShowDebugPopup(false)}
-              className="mt-4 w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-            >
-              Закрыть
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

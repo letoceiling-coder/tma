@@ -30,15 +30,22 @@ class WowAuthController extends Controller
                 ], 401);
             }
 
-            // Валидация initData
+            // Валидация initData (пропускаем в режиме разработки)
             $botToken = config('services.telegram.bot_token');
+            $isDebug = config('app.debug');
+            
             if ($botToken && !TelegramService::validateInitData($initData, $botToken)) {
-                Log::warning('Invalid initData signature', [
-                    'initData' => substr($initData, 0, 50) . '...',
-                ]);
-                return response()->json([
-                    'error' => 'Invalid init data'
-                ], 401);
+                if (!$isDebug) {
+                    Log::warning('Invalid initData signature', [
+                        'initData' => substr($initData, 0, 50) . '...',
+                    ]);
+                    return response()->json([
+                        'error' => 'Invalid init data'
+                    ], 401);
+                }
+                
+                // В режиме разработки разрешаем запрос с невалидным initData
+                Log::info('Development mode: skipping initData validation');
             }
 
             // Парсим данные пользователя из initData

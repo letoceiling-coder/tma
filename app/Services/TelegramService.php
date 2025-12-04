@@ -63,6 +63,20 @@ class TelegramService
     public static function parseInitData(string $initData): ?array
     {
         try {
+            // В режиме разработки поддерживаем mock initData
+            if (config('app.debug') && $initData === 'mock_init_data_for_development') {
+                return [
+                    'user' => [
+                        'id' => 999999999,
+                        'first_name' => 'Dev',
+                        'last_name' => 'User',
+                        'username' => 'devuser',
+                        'language_code' => 'ru',
+                    ],
+                    'auth_date' => time(),
+                ];
+            }
+            
             $data = [];
             parse_str($initData, $data);
 

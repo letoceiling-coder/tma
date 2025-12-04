@@ -93,7 +93,6 @@ export const useTelegramWebApp = () => {
       setIsReady(true);
     } else {
       // Not in Telegram - use mock data for development
-      console.log('🔧 Development mode: using mock Telegram user');
       setIsTelegram(false);
       
       // Mock user for testing outside Telegram

@@ -59,15 +59,11 @@ const AppContent = () => {
         
         if (channels.length === 0) {
           // Если каналов нет, пропускаем проверку подписки
-          console.log('Каналов для проверки нет, пропускаем проверку подписки');
           setIsSubscribed(true);
           
           // Инициализируем пользователя
           try {
-            const result = await initUser();
-            if (result?.success) {
-              console.log("Пользователь инициализирован:", result.is_new_user ? "новый" : "существующий");
-            }
+            await initUser();
           } catch (error) {
             console.error("Ошибка при инициализации пользователя:", error);
           }
@@ -97,16 +93,9 @@ const AppContent = () => {
 
     // Инициализируем пользователя после успешной проверки подписки
     try {
-      const result = await initUser();
-      if (result?.success) {
-        console.log("Пользователь инициализирован:", result.is_new_user ? "новый" : "существующий");
-      } else if (result?.error) {
-        console.warn("Ошибка инициализации пользователя:", result.error);
-        // Не блокируем запуск приложения при ошибке инициализации
-      }
+      await initUser();
     } catch (error) {
       console.error("Ошибка при инициализации пользователя:", error);
-      // Не блокируем запуск приложения при ошибке инициализации
     }
   };
 

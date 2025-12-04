@@ -84,21 +84,12 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNum
       const timer = setTimeout(() => {
         setIsAnimating(false);
         
-        let calculatedWinningIndex: number;
+        // Используем winningSectorNumber от сервера для точности
+        const calculatedWinningIndex = winningSectorNumber !== undefined && winningSectorNumber !== null
+          ? winningSectorNumber - 1
+          : 0;
         
-        // Используем winningSectorNumber от сервера, если доступен (самый надежный способ)
-        if (winningSectorNumber !== undefined && winningSectorNumber !== null) {
-          // sector_number (1-12) -> index (0-11)
-          calculatedWinningIndex = winningSectorNumber - 1;
-        } else {
-          // Fallback: используем lastSpinRotation для определения сектора, если доступно и не равно 0
-          // Иначе используем накопленный rotation
-          const rotationForCalculation = (lastSpinRotation !== undefined && lastSpinRotation > 0) ? lastSpinRotation : rotation;
-          const normalizedRotation = rotationForCalculation % 360;
-          calculatedWinningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
-        }
-        
-        setWinningIndex(calculatedWinningIndex); // Устанавливаем выигрышный сектор для подсветки
+        setWinningIndex(calculatedWinningIndex);
         onSpinComplete?.(calculatedWinningIndex);
       }, 4000);
 
@@ -391,36 +382,6 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNum
                   />
                 )}
               </g>
-            );
-          })}
-          
-          {/* Текст с призами на секторах */}
-          {segments.map((segment, index) => {
-            const midAngle = (index * 30 + 15 - 90) * (Math.PI / 180);
-            const textRadius = radius * 0.75;
-            const x = centerX + textRadius * Math.cos(midAngle);
-            const y = centerY + textRadius * Math.sin(midAngle);
-            
-            const isWinning = winningIndex === index;
-            let displayText = segment.value > 0 ? segment.value.toString() : "0";
-            
-            return (
-              <text
-                key={`text-${index}`}
-                x={x}
-                y={y}
-                fill={isWinning ? "#FFD700" : "#333"}
-                fontSize={isWinning ? "18" : "16"}
-                fontWeight="bold"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                style={{
-                  pointerEvents: 'none',
-                  filter: isWinning ? 'drop-shadow(0 0 4px rgba(255, 215, 0, 1))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))',
-                }}
-              >
-                {displayText}
-              </text>
             );
           })}
           

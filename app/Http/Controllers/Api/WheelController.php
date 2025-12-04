@@ -153,29 +153,31 @@ class WheelController extends Controller
 
                 DB::commit();
 
-                // Рассчитываем угол поворота для анимации
-                // Формула на фронтенде: winningIndex = floor((360 - normalizedRotation + 15) / 30) % 12
-                // Решаем обратную задачу: для выбранного sectorIndex находим normalizedRotation
+                // ============================================
+                // НОВАЯ ЛОГИКА: Точная остановка по центру сектора
+                // ============================================
+                //
+                // Структура колеса:
+                // - Сектор i (index 0-11) начинается с угла: -90° + i*30°
+                // - Центр сектора i: -90° + i*30° + 15° = -75° + i*30°
+                // - Указатель (pointer) находится строго сверху на -90°
+                //
+                // Цель: Повернуть колесо так, чтобы центр сектора i совпал с указателем
+                // Уравнение: (центр_сектора_i + rotation) = угол_указателя
+                // (-75° + i*30° + R) = -90°
+                // R = -90° - (-75° + i*30°) = -90° + 75° - i*30° = -15° - i*30°
                 // 
-                // winningIndex = floor((360 - normalizedRotation + 15) / 30) % 12
-                // Для точного попадания в центр сектора:
-                // winningIndex = (360 - normalizedRotation + 15) / 30
-                // winningIndex * 30 = 360 - normalizedRotation + 15
-                // normalizedRotation = 360 + 15 - winningIndex * 30
-                // normalizedRotation = 375 - winningIndex * 30
+                // Для положительных углов: R = 360° - 15° - i*30° = 345° - i*30°
+                //
+                // Новая формула: normalizedRotation = 345 - (sectorIndex * 30)
                 
                 $segmentAngle = 360 / 12; // 30 градусов на сектор
-                
-                // Генерируем случайное количество оборотов (5-10) для каждого прокрута
-                // Это гарантирует, что каждый прокрут уникален и rotation постоянно увеличивается
-                $randomSpins = rand(5, 10);
-                $baseRotation = 360 * $randomSpins;
                 
                 // Преобразуем sector_number (1-12) в индекс (0-11)
                 $sectorIndex = $winningSector->sector_number - 1;
                 
-                // Применяем обратную формулу
-                $normalizedRotation = 375 - ($sectorIndex * $segmentAngle);
+                // ФОРМУЛА для точного попадания в центр сектора
+                $normalizedRotation = 345 - ($sectorIndex * $segmentAngle);
                 
                 // Нормализуем к диапазону 0-360
                 $normalizedRotation = fmod($normalizedRotation, 360);
@@ -183,9 +185,17 @@ class WheelController extends Controller
                     $normalizedRotation += 360;
                 }
                 
-                // ВАЖНО: Возвращаем ДЕЛЬТУ (относительное значение), а не абсолютное
-                // Фронтенд накапливает rotation: setRotation((prev) => prev + data.rotation)
-                // Случайное количество оборотов гарантирует уникальность каждого прокрута
+                // Генерируем УНИКАЛЬНЫЙ большой rotation на основе:
+                // 1. Количества спинов пользователя (для уникальности)
+                // 2. Случайного числа оборотов (5-10)
+                // 3. Normalized rotation для попадания в нужный сектор
+                $userSpins = $user->total_spins; // Уже увеличен выше
+                $randomSpins = rand(5, 10);
+                
+                // Базовый rotation = (номер_спина × 360 × 20) + (случайные_обороты × 360)
+                // Это гарантирует что каждый rotation ВСЕГДА больше предыдущего
+                $baseRotation = ($userSpins * 360 * 20) + ($randomSpins * 360);
+                
                 $targetRotation = $baseRotation + $normalizedRotation;
                 
                 // Логирование для отладки
