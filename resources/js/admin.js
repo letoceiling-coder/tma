@@ -273,7 +273,6 @@ const routes = [
                 component: () => import('./pages/admin/wow/LeaderboardPrizes.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
-            // Конфигурации
             {
                 path: 'settings/bot',
                 name: 'admin.settings.bot',
