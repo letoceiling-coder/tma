@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\LeaderboardPrize;
+use App\Models\WheelSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -11,14 +12,16 @@ use Illuminate\Support\Facades\Validator;
 class LeaderboardPrizeController extends Controller
 {
     /**
-     * Получить все призы лидерборда
+     * Получить все призы лидерборда и настройки
      */
     public function index(): JsonResponse
     {
         $prizes = LeaderboardPrize::orderBy('rank')->get();
+        $settings = WheelSetting::getSettings();
         
         return response()->json([
             'data' => $prizes,
+            'leaderboard_period_months' => $settings->leaderboard_period_months ?? 1,
         ]);
     }
 
@@ -87,6 +90,32 @@ class LeaderboardPrizeController extends Controller
         return response()->json([
             'message' => 'Призы успешно обновлены',
             'data' => $updatedPrizes,
+        ]);
+    }
+
+    /**
+     * Обновить период отображения лидерборда
+     */
+    public function updatePeriod(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'leaderboard_period_months' => 'required|integer|in:1,2,3,4,5,6,12',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $settings = WheelSetting::updateSettings([
+            'leaderboard_period_months' => $request->leaderboard_period_months,
+        ]);
+
+        return response()->json([
+            'message' => 'Период лидерборда успешно обновлен',
+            'leaderboard_period_months' => $settings->leaderboard_period_months,
         ]);
     }
 }

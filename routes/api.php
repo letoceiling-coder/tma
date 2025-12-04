@@ -131,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('leaderboard-prizes', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'index']);
                 Route::put('leaderboard-prizes/{id}', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'update']);
                 Route::post('leaderboard-prizes/bulk-update', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'bulkUpdate']);
+                Route::post('leaderboard-prizes/update-period', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'updatePeriod']);
             });
         });
     });

@@ -12,11 +12,13 @@ class WheelSetting extends Model
     protected $fillable = [
         'always_empty_mode',
         'ticket_restore_hours',
+        'leaderboard_period_months',
     ];
 
     protected $casts = [
         'always_empty_mode' => 'boolean',
         'ticket_restore_hours' => 'integer',
+        'leaderboard_period_months' => 'integer',
     ];
 
     /**
@@ -29,6 +31,7 @@ class WheelSetting extends Model
             [
                 'always_empty_mode' => false,
                 'ticket_restore_hours' => 3, // По умолчанию 3 часа
+                'leaderboard_period_months' => 1, // По умолчанию 1 месяц
             ]
         );
     }

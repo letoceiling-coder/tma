@@ -24,6 +24,31 @@
             <p class="text-destructive">{{ error }}</p>
         </div>
 
+        <!-- Leaderboard Period Setting -->
+        <div v-if="!loading" class="bg-card rounded-lg border border-border p-6">
+            <h2 class="text-xl font-semibold mb-4">Настройки лидерборда</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="text-sm font-medium mb-2 block">Период отображения</label>
+                    <select
+                        v-model.number="leaderboardPeriodMonths"
+                        class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                    >
+                        <option :value="1">1 месяц</option>
+                        <option :value="2">2 месяца</option>
+                        <option :value="3">3 месяца</option>
+                        <option :value="4">4 месяца</option>
+                        <option :value="5">5 месяцев</option>
+                        <option :value="6">6 месяцев</option>
+                        <option :value="12">12 месяцев</option>
+                    </select>
+                    <p class="text-xs text-muted-foreground mt-2">
+                        Выберите период, за который будут учитываться рефералы в лидерборде
+                    </p>
+                </div>
+            </div>
+        </div>
+
         <!-- Prizes List -->
         <div v-if="!loading && prizes.length > 0" class="space-y-4">
             <div v-for="prize in prizes" :key="prize.id" class="bg-card rounded-lg border border-border p-6">
@@ -90,6 +115,7 @@ export default {
         const saving = ref(false)
         const error = ref(null)
         const prizes = ref([])
+        const leaderboardPeriodMonths = ref(1)
 
         const fetchPrizes = async () => {
             loading.value = true
@@ -101,6 +127,7 @@ export default {
                 }
                 const data = await response.json()
                 prizes.value = data.data || []
+                leaderboardPeriodMonths.value = data.leaderboard_period_months || 1
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки призов'
             } finally {
@@ -111,7 +138,8 @@ export default {
         const savePrizes = async () => {
             saving.value = true
             try {
-                const response = await apiPost('/wow/leaderboard-prizes/bulk-update', {
+                // Сохраняем призы
+                const prizesResponse = await apiPost('/wow/leaderboard-prizes/bulk-update', {
                     prizes: prizes.value.map(p => ({
                         id: p.id,
                         prize_amount: p.prize_amount,
@@ -120,14 +148,24 @@ export default {
                     }))
                 })
 
-                if (!response.ok) {
-                    const errorData = await response.json()
+                if (!prizesResponse.ok) {
+                    const errorData = await prizesResponse.json()
                     throw new Error(errorData.message || 'Ошибка сохранения призов')
+                }
+
+                // Сохраняем период лидерборда
+                const periodResponse = await apiPost('/wow/leaderboard-prizes/update-period', {
+                    leaderboard_period_months: leaderboardPeriodMonths.value
+                })
+
+                if (!periodResponse.ok) {
+                    const errorData = await periodResponse.json()
+                    throw new Error(errorData.message || 'Ошибка сохранения периода')
                 }
 
                 await Swal.fire({
                     title: 'Успешно!',
-                    text: 'Призы сохранены',
+                    text: 'Настройки сохранены',
                     icon: 'success',
                     confirmButtonText: 'OK'
                 })
@@ -136,7 +174,7 @@ export default {
             } catch (err) {
                 await Swal.fire({
                     title: 'Ошибка',
-                    text: err.message || 'Не удалось сохранить призы',
+                    text: err.message || 'Не удалось сохранить настройки',
                     icon: 'error',
                     confirmButtonText: 'OK'
                 })
@@ -154,6 +192,7 @@ export default {
             saving,
             error,
             prizes,
+            leaderboardPeriodMonths,
             fetchPrizes,
             savePrizes,
         }
