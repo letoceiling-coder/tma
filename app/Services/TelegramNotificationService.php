@@ -123,5 +123,27 @@ class TelegramNotificationService
 
         return self::sendNotification($user->telegram_id, $message);
     }
+
+    /**
+     * Уведомление о новом реферале
+     * 
+     * @param User $referrer Пользователь, который пригласил
+     * @param User $invitedUser Новый пользователь, который зарегистрировался
+     * @return bool
+     */
+    public static function notifyNewReferral(User $referrer, User $invitedUser): bool
+    {
+        if (!$referrer->telegram_id) {
+            return false;
+        }
+
+        $message = "🎉 <b>Новый реферал!</b>\n\n";
+        $message .= "По вашей реферальной ссылке зарегистрировался новый пользователь!\n\n";
+        $message .= "🎫 <b>Вам начислен 1 билет</b> за приглашение.\n";
+        $message .= "Теперь у вас <b>{$referrer->tickets_available} билет(ов)</b>.\n\n";
+        $message .= "Продолжайте приглашать друзей и получайте больше билетов! 🚀";
+
+        return self::sendNotification($referrer->telegram_id, $message);
+    }
 }
 

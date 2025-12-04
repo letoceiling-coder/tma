@@ -7,6 +7,7 @@ use App\Telegram\Bot;
 use App\Telegram\Keyboard;
 use App\Models\User;
 use App\Models\Referral;
+use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -324,6 +325,20 @@ class TelegramWebhookController extends Controller
                 'referrer_telegram_id' => $referrerTelegramId,
                 'referrer_tickets_after' => $referrer->tickets_available,
             ]);
+
+            // Отправляем уведомление рефереру о новом реферале
+            try {
+                TelegramNotificationService::notifyNewReferral($referrer, $user);
+                Log::info('Referral notification sent', [
+                    'referrer_telegram_id' => $referrerTelegramId,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to send referral notification', [
+                    'referrer_telegram_id' => $referrerTelegramId,
+                    'error' => $e->getMessage(),
+                ]);
+                // Не прерываем выполнение, если уведомление не отправилось
+            }
 
         } catch (\Exception $e) {
             DB::rollBack();
