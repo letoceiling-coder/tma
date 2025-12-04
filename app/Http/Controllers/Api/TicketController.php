@@ -64,19 +64,11 @@ class TicketController extends Controller
             $nextTicketAt = null;
             $secondsUntilNextTicket = null;
             
-            // Используем tickets_depleted_at - точку когда билеты закончились
+            // tickets_depleted_at хранит момент восстановления билета (будущее время)
+            // Таймер показывает сколько осталось до этой точки
             if ($user->tickets_available < 3 && $user->tickets_depleted_at) {
-                // Рассчитываем сколько полных интервалов прошло с момента окончания билетов
-                $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
-                $completedIntervals = floor($secondsSinceDepletion / $restoreIntervalSeconds);
-                
-                // Рассчитываем время следующего восстановления
-                // Это будет tickets_depleted_at + (completedIntervals + 1) * interval
-                $nextRestoreTime = $user->tickets_depleted_at->copy()->addSeconds(($completedIntervals + 1) * $restoreIntervalSeconds);
-                
-                // Время до следующего билета (округляем до целого числа секунд)
-                $secondsUntilNextTicket = max(0, (int) $nextRestoreTime->diffInSeconds(now()));
-                $nextTicketAt = $nextRestoreTime->toIso8601String();
+                $secondsUntilNextTicket = max(0, (int) $user->tickets_depleted_at->diffInSeconds(now()));
+                $nextTicketAt = $user->tickets_depleted_at->toIso8601String();
             }
 
             return response()->json([
@@ -114,40 +106,32 @@ class TicketController extends Controller
             return;
         }
 
-        // Если нет точки отсчета (билеты никогда не заканчивались), не восстанавливаем
+        // Если нет точки восстановления, не восстанавливаем
         if (!$user->tickets_depleted_at) {
             return;
         }
 
-        // Время восстановления билета (настраивается в админ панели)
-        $settings = \App\Models\WheelSetting::getSettings();
-        $restoreInterval = ($settings->ticket_restore_hours ?? config('app.ticket_restore_hours', 3)) * 3600;
-        
-        // Рассчитываем сколько билетов должно быть восстановлено с момента окончания билетов
-        $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
-        
-        if ($secondsSinceDepletion >= $restoreInterval) {
-            // Рассчитываем количество билетов для восстановления
-            $ticketsToRestore = min(
-                floor($secondsSinceDepletion / $restoreInterval),
-                3 - $user->tickets_available
-            );
+        // tickets_depleted_at хранит момент восстановления билета
+        // Если текущее время >= момента восстановления → билет готов
+        if (now() >= $user->tickets_depleted_at) {
+            $oldTickets = $user->tickets_available;
+            $user->tickets_available = min($user->tickets_available + 1, 3);
             
-            if ($ticketsToRestore > 0) {
-                $oldTickets = $user->tickets_available;
-                $user->tickets_available = min($user->tickets_available + $ticketsToRestore, 3);
-                
-                // Сбрасываем точку отсчета, так как билеты восстановились
-                if ($user->tickets_available > 0) {
-                    $user->tickets_depleted_at = null;
-                }
-                
-                $user->save();
-                
-                // Отправляем уведомление о восстановлении билетов
-                if ($oldTickets < 3 && $user->tickets_available > $oldTickets) {
-                    TelegramNotificationService::notifyNewTicket($user);
-                }
+            // Если билетов все еще меньше 3, устанавливаем новую точку восстановления для следующего билета
+            if ($user->tickets_available < 3) {
+                $settings = \App\Models\WheelSetting::getSettings();
+                $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
+                $user->tickets_depleted_at = now()->addSeconds($restoreIntervalSeconds);
+            } else {
+                // Билетов стало 3, сбрасываем точку
+                $user->tickets_depleted_at = null;
+            }
+            
+            $user->save();
+            
+            // Отправляем уведомление о восстановлении билета
+            if ($oldTickets < 3 && $user->tickets_available > $oldTickets) {
+                TelegramNotificationService::notifyNewTicket($user);
             }
         }
     }

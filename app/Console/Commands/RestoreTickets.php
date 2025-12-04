@@ -36,7 +36,7 @@ class RestoreTickets extends Command
         $restoreInterval = ($settings->ticket_restore_hours ?? config('app.ticket_restore_hours', 3)) * 3600;
 
         $users = User::whereNotNull('telegram_id')
-            ->whereNotNull('tickets_depleted_at') // Только пользователи с установленной точкой отсчета
+            ->whereNotNull('tickets_depleted_at') // Только пользователи с установленной точкой восстановления
             ->where('tickets_available', '<', 3)
             ->get();
 
@@ -44,39 +44,33 @@ class RestoreTickets extends Command
         $notified = 0;
 
         foreach ($users as $user) {
-            // Рассчитываем сколько билетов должно быть восстановлено с момента окончания билетов
-            $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
-            
-            if ($secondsSinceDepletion >= $restoreInterval) {
+            // tickets_depleted_at хранит момент восстановления билета
+            // Если текущее время >= момента восстановления → билет готов
+            if (now() >= $user->tickets_depleted_at) {
                 DB::beginTransaction();
                 try {
-                    // Рассчитываем количество билетов для восстановления
-                    $ticketsToRestore = min(
-                        floor($secondsSinceDepletion / $restoreInterval),
-                        3 - $user->tickets_available
-                    );
+                    $oldTickets = $user->tickets_available;
+                    $user->tickets_available = min($user->tickets_available + 1, 3);
                     
-                    if ($ticketsToRestore > 0) {
-                        $oldTickets = $user->tickets_available;
-                        $user->tickets_available = min($user->tickets_available + $ticketsToRestore, 3);
-                        
-                        // Сбрасываем точку отсчета, так как билеты восстановились
-                        if ($user->tickets_available > 0) {
-                            $user->tickets_depleted_at = null;
-                        }
-                        
-                        $user->save();
-
-                        // Отправляем уведомление о восстановлении билетов
-                        if ($oldTickets < 3 && $user->tickets_available > $oldTickets) {
-                            TelegramNotificationService::notifyNewTicket($user);
-                            $notified++;
-                        }
-
-                        DB::commit();
-                        $restored++;
-                        $this->line("✓ Восстановлено {$ticketsToRestore} билет(а/ов) пользователю {$user->telegram_id} ({$oldTickets} → {$user->tickets_available})");
+                    // Если билетов все еще меньше 3, устанавливаем новую точку восстановления для следующего билета
+                    if ($user->tickets_available < 3) {
+                        $user->tickets_depleted_at = now()->addSeconds($restoreInterval);
+                    } else {
+                        // Билетов стало 3, сбрасываем точку
+                        $user->tickets_depleted_at = null;
                     }
+                    
+                    $user->save();
+
+                    // Отправляем уведомление о восстановлении билета
+                    if ($oldTickets < 3 && $user->tickets_available > $oldTickets) {
+                        TelegramNotificationService::notifyNewTicket($user);
+                        $notified++;
+                    }
+
+                    DB::commit();
+                    $restored++;
+                    $this->line("✓ Восстановлен 1 билет пользователю {$user->telegram_id} ({$oldTickets} → {$user->tickets_available})");
                 } catch (\Exception $e) {
                     DB::rollBack();
                     $this->error("✗ Ошибка для пользователя {$user->telegram_id}: {$e->getMessage()}");

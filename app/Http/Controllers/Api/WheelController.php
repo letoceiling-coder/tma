@@ -120,10 +120,11 @@ class WheelController extends Controller
                 $user->last_spin_at = now();
                 $user->total_spins++;
                 
-                // ВАЖНО: Фиксируем точку начала отсчета восстановления билетов
-                // Когда билеты закончились (стали 0) - запоминаем это время
+                // ВАЖНО: Фиксируем точку восстановления билета
+                // Когда билеты закончились (стали 0) - устанавливаем время восстановления = now() + период
                 if ($user->tickets_available === 0) {
-                    $user->tickets_depleted_at = now();
+                    $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
+                    $user->tickets_depleted_at = now()->addSeconds($restoreIntervalSeconds);
                 }
                 
                 $user->save();
@@ -165,18 +166,14 @@ class WheelController extends Controller
                 DB::commit();
 
                 // Рассчитываем время до следующего билета
-                $settings = WheelSetting::getSettings();
-                $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
                 $secondsUntilNextTicket = null;
                 $nextTicketAt = null;
 
-                // Используем tickets_depleted_at (точка когда билеты закончились) для расчета таймера
+                // tickets_depleted_at хранит момент восстановления билета (будущее время)
+                // Таймер показывает сколько осталось до этой точки
                 if ($user->tickets_available < 3 && $user->tickets_depleted_at) {
-                    $secondsSinceDepletion = now()->diffInSeconds($user->tickets_depleted_at);
-                    $completedIntervals = floor($secondsSinceDepletion / $restoreIntervalSeconds);
-                    $nextRestoreTime = $user->tickets_depleted_at->copy()->addSeconds(($completedIntervals + 1) * $restoreIntervalSeconds);
-                    $secondsUntilNextTicket = max(0, (int) $nextRestoreTime->diffInSeconds(now()));
-                    $nextTicketAt = $nextRestoreTime->toIso8601String();
+                    $secondsUntilNextTicket = max(0, (int) $user->tickets_depleted_at->diffInSeconds(now()));
+                    $nextTicketAt = $user->tickets_depleted_at->toIso8601String();
                 }
 
                 // ============================================
