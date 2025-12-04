@@ -104,12 +104,22 @@
 
                 <div>
                     <label class="text-sm font-medium mb-1 block">URL иконки</label>
-                    <input
-                        v-model="sector.icon_url"
-                        type="text"
-                        placeholder="https://..."
-                        class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
-                    />
+                    <div class="flex gap-2">
+                        <input
+                            v-model="sector.icon_url"
+                            type="text"
+                            placeholder="https://..."
+                            class="flex-1 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                        />
+                        <button
+                            @click="openMediaSelector(sector)"
+                            type="button"
+                            class="h-10 px-4 bg-accent/10 text-accent border border-accent/40 hover:bg-accent/20 rounded-lg inline-flex items-center justify-center gap-2 transition-colors"
+                            title="Выбрать из медиатеки"
+                        >
+                            📁
+                        </button>
+                    </div>
                     <div v-if="sector.icon_url" class="mt-2">
                         <img
                             :src="sector.icon_url"
@@ -121,6 +131,36 @@
                 </div>
             </div>
         </div>
+
+        <!-- Media Selector Modal -->
+        <div
+            v-if="showMediaModal"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            @click.self="closeMediaModal"
+        >
+            <div
+                class="bg-background border border-border rounded-lg shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col"
+                @click.stop
+            >
+                <div class="flex items-center justify-between p-4 border-b border-border">
+                    <h3 class="text-lg font-semibold">Выберите иконку</h3>
+                    <button
+                        @click="closeMediaModal"
+                        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+                    >
+                        ✕
+                    </button>
+                </div>
+                <div class="flex-1 overflow-hidden">
+                    <Media
+                        :selectionMode="true"
+                        :countFile="1"
+                        :selectedFiles="selectedMediaFile ? [selectedMediaFile] : []"
+                        @file-selected="handleMediaFileSelected"
+                    />
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -128,14 +168,21 @@
 import { ref, onMounted, computed } from 'vue'
 import { apiGet, apiPost } from '../../../utils/api'
 import Swal from 'sweetalert2'
+import Media from '../Media.vue'
 
 export default {
     name: 'Wheel',
+    components: {
+        Media,
+    },
     setup() {
         const loading = ref(false)
         const saving = ref(false)
         const error = ref(null)
         const sectors = ref([])
+        const showMediaModal = ref(false)
+        const currentSector = ref(null)
+        const selectedMediaFile = ref(null)
 
         const totalProbability = computed(() => {
             return sectors.value.reduce((sum, sector) => {
@@ -229,6 +276,33 @@ export default {
             event.target.style.display = 'none'
         }
 
+        const openMediaSelector = (sector) => {
+            currentSector.value = sector
+            selectedMediaFile.value = null
+            showMediaModal.value = true
+        }
+
+        const closeMediaModal = () => {
+            showMediaModal.value = false
+            currentSector.value = null
+            selectedMediaFile.value = null
+        }
+
+        const handleMediaFileSelected = (file) => {
+            if (currentSector.value && file) {
+                // Устанавливаем URL выбранного файла
+                // MediaResource возвращает url в формате '/upload/obshhaia/filename.png'
+                const url = file.url || (file.metadata?.path ? '/' + file.metadata.path : '')
+                currentSector.value.icon_url = url || ''
+                selectedMediaFile.value = file
+                
+                // Закрываем модальное окно после выбора
+                setTimeout(() => {
+                    closeMediaModal()
+                }, 300)
+            }
+        }
+
         onMounted(() => {
             fetchSectors()
         })
@@ -242,6 +316,12 @@ export default {
             probabilityValid,
             saveAllSectors,
             handleImageError,
+            showMediaModal,
+            currentSector,
+            selectedMediaFile,
+            openMediaSelector,
+            closeMediaModal,
+            handleMediaFileSelected,
         }
     },
 }

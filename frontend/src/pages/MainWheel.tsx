@@ -9,10 +9,26 @@ import { toast } from "sonner";
 import { haptic } from "@/lib/haptic";
 import useTelegramWebApp from "@/hooks/useTelegramWebApp";
 
+interface WheelSector {
+  id: number;
+  sector_number: number;
+  prize_type: 'money' | 'ticket' | 'secret_box' | 'empty';
+  prize_value: number;
+  icon_url: string | null;
+  probability_percent: number;
+}
+
+interface WheelSegment {
+  value: number;
+  text: string;
+  prizeType?: string;
+  iconUrl?: string | null;
+}
+
 const MainWheel = () => {
   const navigate = useNavigate();
   const { userName, isReady: tgReady } = useTelegramWebApp();
-  const [tickets, setTickets] = useState(3);
+  const [tickets, setTickets] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -20,16 +36,124 @@ const MainWheel = () => {
   const [showResultPopup, setShowResultPopup] = useState(false);
   const [lastResult, setLastResult] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [wheelSegments, setWheelSegments] = useState<WheelSegment[]>([]);
+  const [loadingSectors, setLoadingSectors] = useState(true);
+  const [loadingTickets, setLoadingTickets] = useState(true);
+
+  // Загрузка секторов с сервера
+  const loadWheelConfig = useCallback(async () => {
+    try {
+      setLoadingSectors(true);
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiPath = apiUrl ? `${apiUrl}/api/wheel-config` : `/api/wheel-config`;
+      
+      const response = await fetch(apiPath, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки конфигурации рулетки');
+      }
+
+      const data = await response.json();
+      
+      // Сортируем секторы по sector_number (1-12)
+      const sortedSectors = (data.sectors || []).sort((a: WheelSector, b: WheelSector) => 
+        a.sector_number - b.sector_number
+      );
+
+      // Преобразуем секторы в формат для WheelComponent
+      const segments: WheelSegment[] = sortedSectors.map((sector: WheelSector) => {
+        let value = 0;
+        let text = "0";
+        
+        if (sector.prize_type === 'money') {
+          value = sector.prize_value;
+          text = sector.prize_value.toString();
+        } else if (sector.prize_type === 'ticket') {
+          value = sector.prize_value || 1;
+          text = `+${sector.prize_value || 1} билет`;
+        } else if (sector.prize_type === 'secret_box') {
+          value = -1; // Специальное значение для секретного бокса
+          text = "??";
+        }
+
+        return {
+          value,
+          text,
+          prizeType: sector.prize_type,
+          iconUrl: sector.icon_url,
+        };
+      });
+
+      setWheelSegments(segments);
+    } catch (error) {
+      console.error('Ошибка загрузки секторов:', error);
+      toast.error('Ошибка загрузки конфигурации рулетки');
+      // Используем пустой массив в случае ошибки
+      setWheelSegments([]);
+    } finally {
+      setLoadingSectors(false);
+    }
+  }, []);
+
+  // Загрузка билетов с сервера
+  const loadTickets = useCallback(async () => {
+    try {
+      setLoadingTickets(true);
+      const tg = window.Telegram?.WebApp;
+      
+      if (!tg?.initData) {
+        // Если нет Telegram, используем локальное состояние
+        setTickets(3);
+        setLoadingTickets(false);
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiPath = apiUrl ? `${apiUrl}/api/user/tickets` : `/api/user/tickets`;
+      
+      const response = await fetch(apiPath, {
+        method: 'GET',
+        headers: {
+          'X-Telegram-Init-Data': tg.initData || '',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Ошибка загрузки билетов');
+      }
+
+      const data = await response.json();
+      setTickets(data.tickets_available || 0);
+    } catch (error) {
+      console.error('Ошибка загрузки билетов:', error);
+      // В случае ошибки используем локальное состояние
+      setTickets(3);
+    } finally {
+      setLoadingTickets(false);
+    }
+  }, []);
 
   // Animate on mount after Telegram is ready
   useEffect(() => {
     if (tgReady) {
+      // Загружаем конфигурацию рулетки и билеты
+      loadWheelConfig();
+      loadTickets();
+      
       // Small delay to ensure smooth animation
       requestAnimationFrame(() => {
         setIsLoaded(true);
       });
     }
-  }, [tgReady]);
+  }, [tgReady, loadWheelConfig, loadTickets]);
 
   // Format seconds to MM:SS
   const formatTime = (seconds: number) => {
@@ -47,10 +171,12 @@ const MainWheel = () => {
 
   // Timer effect
   useEffect(() => {
+    if (tickets >= 3) return; // Не запускаем таймер если билетов уже максимум
+    
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          setTickets((t) => t + 1);
+          loadTickets(); // Обновляем билеты с сервера
           return 60;
         }
         return prev - 1;
@@ -58,24 +184,9 @@ const MainWheel = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [tickets, loadTickets]);
 
-  const wheelSegments = [
-    { value: 0, text: "0" },
-    { value: 2000, text: "2000" },
-    { value: 0, text: "0" },
-    { value: 300, text: "300" },
-    { value: 500, text: "500" },
-    { value: 0, text: "0" },
-    { value: 0, text: "0" },
-    { value: 300, text: "300" },
-    { value: 300, text: "300" },
-    { value: 0, text: "0" },
-    { value: 1000, text: "1000" },
-    { value: 0, text: "0" },
-  ];
-
-  const handleSpin = () => {
+  const handleSpin = async () => {
     if (tickets <= 0) {
       haptic.warning();
       navigate("/friends");
@@ -84,42 +195,99 @@ const MainWheel = () => {
 
     if (isSpinning) return;
 
+    const tg = window.Telegram?.WebApp;
+    
+    if (!tg?.initData) {
+      toast.error('Ошибка: требуется Telegram WebApp');
+      return;
+    }
+
     // Heavy haptic feedback for spin start
     haptic.heavyTap();
-
     setIsSpinning(true);
-    setTickets(tickets - 1);
 
-    const zeroIndices = wheelSegments.map((s, i) => s.value === 0 ? i : -1).filter(i => i !== -1);
-    const prizeIndices = wheelSegments.map((s, i) => s.value > 0 ? i : -1).filter(i => i !== -1);
-    
-    const winningIndex = Math.random() < 0.8 
-      ? zeroIndices[Math.floor(Math.random() * zeroIndices.length)]
-      : prizeIndices[Math.floor(Math.random() * prizeIndices.length)];
-    
-    const result = wheelSegments[winningIndex];
-    
-    const segmentAngle = 360 / wheelSegments.length;
-    const baseRotation = 360 * 5;
-    const targetRotation = baseRotation + (360 - (winningIndex * segmentAngle + segmentAngle / 2));
-    
-    setRotation(prev => prev + targetRotation);
-
-    setTimeout(() => {
-      setIsSpinning(false);
-      setLastResult(result.value);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiPath = apiUrl ? `${apiUrl}/api/spin` : `/api/spin`;
       
-      // Different haptic feedback based on result
-      if (result.value > 0) {
-        // Win - success notification
-        haptic.success();
-      } else {
-        // No win - soft tap
-        haptic.softTap();
+      const response = await fetch(apiPath, {
+        method: 'POST',
+        headers: {
+          'X-Telegram-Init-Data': tg.initData || '',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Ошибка прокрута рулетки');
       }
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.message || 'Ошибка прокрута рулетки');
+      }
+
+      // Обновляем билеты
+      setTickets(data.tickets_available || 0);
+
+      // Устанавливаем ротацию, полученную с сервера
+      if (data.rotation !== undefined) {
+        setRotation((prev) => prev + data.rotation);
+      }
+
+      // Определяем значение приза для отображения
+      const prizeValue = data.sector?.prize_value || 0;
+      const prizeType = data.sector?.prize_type;
       
-      setShowResultPopup(true);
-    }, 4100);
+      let resultValue = 0;
+      if (prizeType === 'money') {
+        resultValue = prizeValue;
+      } else if (prizeType === 'ticket') {
+        resultValue = prizeValue;
+      } else if (prizeType === 'secret_box') {
+        resultValue = -1; // Специальное значение для секретного бокса
+      }
+
+      // Ждем завершения анимации (4 секунды)
+      setTimeout(() => {
+        setIsSpinning(false);
+        setLastResult(resultValue);
+        
+        // Different haptic feedback based on result
+        if (resultValue > 0 || resultValue === -1) {
+          // Win - success notification
+          haptic.success();
+        } else {
+          // No win - soft tap
+          haptic.softTap();
+        }
+        
+        setShowResultPopup(true);
+        
+        // Показываем сообщение о призе, если он был начислен
+        if (data.prize_awarded) {
+          if (prizeType === 'money') {
+            toast.success(`Выиграно ${prizeValue}₽!`, { duration: 3000 });
+          } else if (prizeType === 'ticket') {
+            toast.success(`Получено ${prizeValue} билет(а)!`, { duration: 3000 });
+          }
+        }
+      }, 4100);
+
+    } catch (error: any) {
+      console.error('Ошибка прокрута:', error);
+      setIsSpinning(false);
+      
+      if (error.message?.includes('No tickets available')) {
+        toast.error('У вас нет доступных билетов');
+        navigate("/friends");
+      } else {
+        toast.error(error.message || 'Ошибка при прокруте рулетки');
+      }
+    }
   };
 
   const handleGiftExchange = () => {
@@ -135,6 +303,21 @@ const MainWheel = () => {
     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     WebkitTapHighlightColor: 'transparent',
   };
+
+  // Показываем загрузку пока данные не загружены
+  if (loadingSectors || wheelSegments.length === 0) {
+    return (
+      <div 
+        className="relative w-full overflow-hidden flex items-center justify-center"
+        style={{ 
+          height: '100vh',
+          background: 'linear-gradient(180deg, #F8A575 0%, #FDB083 100%)',
+        }}
+      >
+        <p style={{ color: '#FFFFFF', fontSize: '16px' }}>Загрузка рулетки...</p>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -337,17 +520,20 @@ const MainWheel = () => {
             textShadow: '0 1px 2px rgba(0,0,0,0.1)',
             textAlign: 'center'
           }}>
-            {tickets > 0 
-              ? `У вас ${tickets} ${getTicketWord(tickets)}`
-              : `Новый билет через ${formatTime(timeLeft)}`
-            }
+            {loadingTickets ? (
+              'Загрузка...'
+            ) : tickets > 0 ? (
+              `У вас ${tickets} ${getTicketWord(tickets)}`
+            ) : (
+              `Новый билет через ${formatTime(timeLeft)}`
+            )}
           </span>
         </div>
 
         {/* Spin Button */}
         <button
           onClick={handleSpin}
-          disabled={isSpinning}
+          disabled={isSpinning || loadingTickets || tickets <= 0}
           style={{
             ...buttonBaseStyle,
             width: 'auto',
@@ -363,8 +549,8 @@ const MainWheel = () => {
             fontWeight: 700,
             color: '#FFFFFF',
             border: 'none',
-            cursor: isSpinning ? 'not-allowed' : 'pointer',
-            opacity: isSpinning ? 0.85 : 1,
+            cursor: (isSpinning || loadingTickets || tickets <= 0) ? 'not-allowed' : 'pointer',
+            opacity: (isSpinning || loadingTickets || tickets <= 0) ? 0.85 : 1,
             letterSpacing: '0.3px',
             textShadow: '0 2px 3px rgba(0,0,0,0.2)',
             textAlign: 'center',
@@ -377,11 +563,11 @@ const MainWheel = () => {
             boxSizing: 'border-box',
             margin: 0
           }}
-          onMouseDown={(e) => !isSpinning && (e.currentTarget.style.transform = 'scale(0.95)')}
-          onMouseUp={(e) => !isSpinning && (e.currentTarget.style.transform = 'scale(1)')}
-          onMouseLeave={(e) => !isSpinning && (e.currentTarget.style.transform = 'scale(1)')}
+          onMouseDown={(e) => !isSpinning && !loadingTickets && tickets > 0 && (e.currentTarget.style.transform = 'scale(0.95)')}
+          onMouseUp={(e) => !isSpinning && !loadingTickets && tickets > 0 && (e.currentTarget.style.transform = 'scale(1)')}
+          onMouseLeave={(e) => !isSpinning && !loadingTickets && tickets > 0 && (e.currentTarget.style.transform = 'scale(1)')}
         >
-          {isSpinning ? "Вращаем..." : "Вращать колесо"}
+          {isSpinning ? "Вращаем..." : loadingTickets ? "Загрузка..." : tickets <= 0 ? "Нет билетов" : "Вращать колесо"}
         </button>
       </div>
 

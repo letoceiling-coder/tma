@@ -152,9 +152,48 @@ class WheelController extends Controller
                 DB::commit();
 
                 // Рассчитываем угол поворота для анимации
+                // sector_number от 1 до 12, нужно преобразовать в индекс 0-11
+                // Указатель находится вверху (0°), секторы идут по часовой стрелке
                 $segmentAngle = 360 / 12; // 30 градусов на сектор
                 $baseRotation = 360 * 5; // Минимум 5 полных оборотов
-                $targetRotation = $baseRotation + (360 - ($winningSector->sector_number * $segmentAngle + $segmentAngle / 2));
+                
+                // Преобразуем sector_number (1-12) в индекс (0-11)
+                $sectorIndex = $winningSector->sector_number - 1;
+                
+                // На фронтенде используется формула для определения выигрышного сектора:
+                // winningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length
+                // 
+                // Чтобы сектор с индексом sectorIndex оказался под указателем, нужно решить обратную задачу.
+                // Формула на фронтенде: sectorIndex = floor((360 - normalizedRotation + 15) / 30) % 12
+                // 
+                // Для точного попадания в сектор sectorIndex, центр сектора должен быть под указателем.
+                // Центр сектора sectorIndex находится на угле: sectorIndex * 30 + 15 градусов от начала сектора.
+                // 
+                // Чтобы этот центр оказался под указателем (0°), колесо должно повернуться так,
+                // чтобы normalizedRotation привело к правильному результату формулы.
+                // 
+                // Проверяем: для sectorIndex = 0, normalizedRotation должно быть близко к 0 или 360
+                // для sectorIndex = 1, normalizedRotation должно быть около 330
+                // 
+                // Используем прямую формулу: normalizedRotation = 360 - (sectorIndex * segmentAngle)
+                // Это обеспечит попадание начала сектора под указатель
+                // Но формула на фронтенде учитывает центр сектора (+segmentAngle/2), поэтому:
+                // normalizedRotation = 360 - (sectorIndex * segmentAngle + segmentAngle / 2)
+                
+                $normalizedRotation = 360 - ($sectorIndex * $segmentAngle + $segmentAngle / 2);
+                
+                // Нормализуем к диапазону 0-360
+                $normalizedRotation = fmod($normalizedRotation + 360, 360);
+                
+                $targetRotation = $baseRotation + $normalizedRotation;
+                
+                // Логирование для отладки
+                Log::debug('Wheel spin calculation', [
+                    'sector_number' => $winningSector->sector_number,
+                    'sector_index' => $sectorIndex,
+                    'normalized_rotation' => $normalizedRotation,
+                    'target_rotation' => $targetRotation,
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -168,6 +207,11 @@ class WheelController extends Controller
                     'rotation' => $targetRotation,
                     'tickets_available' => $user->tickets_available,
                     'prize_awarded' => $prizeAwarded,
+                    // Добавляем отладочную информацию для проверки
+                    '_debug' => [
+                        'sector_index' => $sectorIndex,
+                        'normalized_rotation' => round($normalizedRotation, 2),
+                    ],
                 ]);
 
             } catch (\Exception $e) {

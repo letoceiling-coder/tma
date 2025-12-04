@@ -4,9 +4,10 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "build:admin": "vite build",
+        "build:admin": "vite build --mode production",
         "build:react": "cd frontend && npm run build",
         "build:all": "npm run build:admin && npm run build:react",
+        "build:admin:safe": "node scripts/check-before-build.js && vite build --mode production",
         "dev": "vite"
     },
     "devDependencies": {

@@ -9,6 +9,8 @@ import prizeWow from "@/assets/wheel/prize-wow.png";
 interface WheelSegment {
   value: number;
   text: string;
+  prizeType?: string;
+  iconUrl?: string | null;
 }
 
 interface WheelComponentProps {
@@ -17,22 +19,43 @@ interface WheelComponentProps {
   rotation: number;
 }
 
-// Prize configuration for 12 segments (30° each)
-// Sequence: wow, ticket, 300, 0, 500, secret, wow, ticket, 300, 500, 0, secret
-const prizeConfig = [
-  { src: prizeWow, size: 45 },      // 0° - top
-  { src: prizeTicket, size: 45 },   // 30° - +1 билет
-  { src: prize300, size: 45 },      // 60°
-  { src: prize0, size: 45 },        // 90°
-  { src: prize500, size: 45 },      // 120°
-  { src: prizeSecret, size: 40 },   // 150°
-  { src: prizeWow, size: 45 },      // 180°
-  { src: prizeTicket, size: 45 },   // 210° - +1 билет
-  { src: prize300, size: 45 },      // 240°
-  { src: prize500, size: 45 },      // 270°
-  { src: prize0, size: 45 },        // 300°
-  { src: prizeSecret, size: 40 },   // 330°
-];
+// Функция для получения иконки по типу приза (fallback)
+const getFallbackIcon = (prizeType?: string, value?: number): string => {
+  if (!prizeType) return prize0;
+  
+  switch (prizeType) {
+    case 'money':
+      if (value === 300) return prize300;
+      if (value === 500) return prize500;
+      if (value === 1000) return prize500; // Можно использовать другую иконку для 1000
+      if (value === 2000) return prizeWow;
+      return prize0;
+    case 'ticket':
+      return prizeTicket;
+    case 'secret_box':
+      return prizeSecret;
+    default:
+      return prize0;
+  }
+};
+
+// Функция для получения полного URL иконки
+const getIconUrl = (iconUrl: string | null | undefined, prizeType?: string, value?: number): string => {
+  if (iconUrl) {
+    // Если URL начинается с /, добавляем базовый путь
+    if (iconUrl.startsWith('/')) {
+      return iconUrl;
+    }
+    // Если это полный URL, возвращаем как есть
+    if (iconUrl.startsWith('http')) {
+      return iconUrl;
+    }
+    // Иначе предполагаем, что это относительный путь
+    return `/${iconUrl}`;
+  }
+  // Fallback на иконки по типу приза
+  return getFallbackIcon(prizeType, value);
+};
 
 // Alternating sector colors - peach tones
 const sectorColors = [
@@ -333,20 +356,25 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
         </svg>
         
         {/* Prize icons positioned in sectors */}
-        {prizeConfig.map((prize, index) => {
+        {segments.map((segment, index) => {
           const sectorAngle = index * 30 + 15; // center of each 30° sector
           const angleRad = ((sectorAngle - 90) * Math.PI) / 180; // -90 to start from top
           const x = centerX + prizeDistance * Math.cos(angleRad);
           const y = centerY + prizeDistance * Math.sin(angleRad);
           
+          // Используем iconUrl из базы данных, если есть, иначе fallback
+          const iconSrc = getIconUrl(segment.iconUrl, segment.prizeType, segment.value);
+          
+          const iconSize = segment.prizeType === 'secret_box' ? 40 : 45;
+          
           return (
             <img
               key={index}
-              src={prize.src}
-              alt={`Prize ${index + 1}`}
+              src={iconSrc}
+              alt={segment.text || `Prize ${index + 1}`}
               className="prize absolute"
               style={{
-                width: `${prize.size}px`,
+                width: `${iconSize}px`,
                 height: 'auto',
                 left: `${x}px`,
                 top: `${y}px`,
@@ -356,6 +384,13 @@ const WheelComponent = ({ segments, rotation, onSpinComplete }: WheelComponentPr
                 pointerEvents: 'none',
               }}
               draggable={false}
+              onError={(e) => {
+                // Если загрузка иконки из базы данных не удалась, используем fallback
+                const fallbackSrc = getFallbackIcon(segment.prizeType, segment.value);
+                if (e.currentTarget.src !== fallbackSrc) {
+                  e.currentTarget.src = fallbackSrc;
+                }
+              }}
             />
           );
         })}
