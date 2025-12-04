@@ -44,6 +44,19 @@ class ForceHttps
                          str_starts_with($host, '127.0.0.1') ||
                          str_starts_with($host, '192.168.');
         
+        // КРИТИЧНО: Исправляем URI, если он содержит /public/ - это должно быть ПЕРВЫМ
+        $requestUri = $request->getRequestUri();
+        if (str_contains($requestUri, '/public/')) {
+            $fixedUri = str_replace('/public/', '/', $requestUri);
+            $fixedUri = str_replace('/public', '', $fixedUri);
+            \Log::info('ForceHttps Middleware - Fixing URI with /public/', [
+                'original' => $requestUri,
+                'fixed' => $fixedUri,
+            ]);
+            // Редиректим на исправленный URI
+            return redirect($fixedUri, 301);
+        }
+        
         if (!$request->secure() && config('app.env') === 'production' && !$isLocalDomain) {
             $uri = $request->getRequestUri();
             // Убираем /public/ из URI, если он там есть
@@ -111,10 +124,36 @@ class ForceHttps
 
         $response = $next($request);
 
+        // КРИТИЧНО: Исправляем URL в ответе, если они содержат /public/
+        // Это нужно для HTML ответов, где могут быть ссылки с /public/
+        if ($response->headers->get('Content-Type') && str_contains($response->headers->get('Content-Type'), 'text/html')) {
+            $content = $response->getContent();
+            if ($content && str_contains($content, '/public/')) {
+                // Убираем /public/ из всех URL в HTML
+                $fixedContent = str_replace('/public/', '/', $content);
+                $fixedContent = str_replace('"/public', '"/', $fixedContent);
+                $fixedContent = str_replace("'/public", "'/", $fixedContent);
+                $fixedContent = str_replace('href="/public', 'href="/', $fixedContent);
+                $fixedContent = str_replace("href='/public", "href='/", $fixedContent);
+                $fixedContent = str_replace('src="/public', 'src="/', $fixedContent);
+                $fixedContent = str_replace("src='/public", "src='/", $fixedContent);
+                $fixedContent = str_replace('url("/public', 'url("/', $fixedContent);
+                $fixedContent = str_replace("url('/public", "url('/", $fixedContent);
+                
+                // Исправляем baseURI в скриптах
+                $fixedContent = preg_replace('/document\.baseURI\s*=\s*["\']([^"\']*\/public\/[^"\']*)["\']/', 'document.baseURI = "' . str_replace('/public/', '/', '$1') . '"', $fixedContent);
+                
+                $response->setContent($fixedContent);
+                \Log::info('ForceHttps Middleware - Fixed /public/ in HTML response');
+            }
+        }
+
         // Логируем после обработки
         \Log::info('ForceHttps Middleware - After processing', [
             'app_url' => config('app.url'),
             'response_status' => $response->getStatusCode(),
+            'request_uri' => $request->getRequestUri(),
+            'path' => $request->path(),
         ]);
 
         return $response;

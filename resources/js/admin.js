@@ -367,19 +367,35 @@ router.beforeEach((to, from, next) => {
             ? to.meta.requiresRole 
             : [to.meta.requiresRole];
         
+        const userRoles = store.state.user?.roles?.map(r => r.slug) || [];
         const hasRole = store.getters.hasAnyRole(requiredRoles);
+        
         console.log('🔍 Router Guard - Role check:', {
+            route: to.path,
+            routeName: to.name,
             requiredRoles,
             hasRole,
-            userRoles: store.state.user?.roles?.map(r => r.slug) || [],
+            userRoles,
+            user: store.state.user,
+            userRolesFull: store.state.user?.roles,
         });
         
         if (!hasRole) {
             // Пользователь не имеет нужной роли
-            console.log('❌ Router Guard - No required role, redirecting to /');
+            console.log('❌ Router Guard - No required role, redirecting to /', {
+                route: to.path,
+                requiredRoles,
+                userRoles,
+                userHasRoles: !!store.state.user?.roles,
+                userRolesCount: store.state.user?.roles?.length || 0,
+            });
             next('/');
         } else {
-            console.log('✅ Router Guard - Role check passed');
+            console.log('✅ Router Guard - Role check passed', {
+                route: to.path,
+                requiredRoles,
+                userRoles,
+            });
             next();
         }
     } else {
