@@ -233,11 +233,16 @@ const routes = [
                 name: 'admin.wow.referrals',
                 component: () => import('./pages/admin/wow/Referrals.vue'),
             },
-            {
-                path: 'wow/statistics',
-                name: 'admin.wow.statistics',
-                component: () => import('./pages/admin/wow/Statistics.vue'),
-            },
+                   {
+                       path: 'wow/statistics',
+                       name: 'admin.wow.statistics',
+                       component: () => import('./pages/admin/wow/Statistics.vue'),
+                   },
+                   {
+                       path: 'wow/leaderboard-prizes',
+                       name: 'admin.wow.leaderboard',
+                       component: () => import('./pages/admin/wow/LeaderboardPrizes.vue'),
+                   },
             // Документация
             {
                 path: 'documentation',

@@ -97,6 +97,13 @@
                             <td class="px-6 py-4 text-sm text-foreground">{{ user.invites_count || 0 }}</td>
                             <td class="px-6 py-4 text-sm text-right">
                                 <button
+                                    @click="openAddTicketsModal(user)"
+                                    class="mr-2 px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                                    title="Начислить билеты"
+                                >
+                                    +
+                                </button>
+                                <button
                                     @click="viewUser(user)"
                                     class="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                                 >
@@ -135,6 +142,57 @@
         <!-- Empty State -->
         <div v-if="!loading && users.length === 0" class="bg-card rounded-lg border border-border p-12 text-center">
             <p class="text-muted-foreground">Пользователи не найдены</p>
+        </div>
+
+        <!-- Add Tickets Modal -->
+        <div v-if="showAddTicketsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div class="bg-background border border-border rounded-lg shadow-2xl w-full max-w-md">
+                <div class="p-6 border-b border-border">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold">Начислить билеты</h3>
+                        <button
+                            @click="showAddTicketsModal = false"
+                            class="text-muted-foreground hover:text-foreground"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div v-if="addTicketsUser">
+                        <p class="text-sm text-muted-foreground mb-2">Пользователь:</p>
+                        <p class="text-sm font-medium">{{ addTicketsUser.username || `Telegram ID: ${addTicketsUser.telegram_id}` }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium mb-1 block">Количество билетов</label>
+                        <input
+                            v-model.number="ticketsToAdd"
+                            type="number"
+                            min="1"
+                            max="100"
+                            class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                        />
+                    </div>
+                    
+                    <div class="flex items-center gap-3 pt-4">
+                        <button
+                            @click="addTickets"
+                            :disabled="isAddingTickets || ticketsToAdd < 1"
+                            class="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {{ isAddingTickets ? 'Начисление...' : 'Начислить' }}
+                        </button>
+                        <button
+                            @click="showAddTicketsModal = false"
+                            :disabled="isAddingTickets"
+                            class="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-muted/10 transition-colors disabled:opacity-50"
+                        >
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- User Detail Modal -->
@@ -187,7 +245,8 @@
 
 <script>
 import { ref, onMounted } from 'vue'
-import { apiGet } from '../../../utils/api'
+import { apiGet, apiPost } from '../../../utils/api'
+import Swal from 'sweetalert2'
 
 export default {
     name: 'WowUsers',
@@ -277,6 +336,54 @@ export default {
             }
         }
 
+        const showAddTicketsModal = ref(false)
+        const addTicketsUser = ref(null)
+        const ticketsToAdd = ref(1)
+        const isAddingTickets = ref(false)
+
+        const openAddTicketsModal = (user) => {
+            addTicketsUser.value = user
+            ticketsToAdd.value = 1
+            showAddTicketsModal.value = true
+        }
+
+        const addTickets = async () => {
+            if (!addTicketsUser.value || ticketsToAdd.value < 1) return
+
+            isAddingTickets.value = true
+            try {
+                const response = await apiPost(`/wow/users/${addTicketsUser.value.id}/add-tickets`, {
+                    tickets: ticketsToAdd.value
+                })
+
+                if (!response.ok) {
+                    const errorData = await response.json()
+                    throw new Error(errorData.message || 'Ошибка начисления билетов')
+                }
+
+                const result = await response.json()
+                
+                await Swal.fire({
+                    title: 'Успешно!',
+                    text: result.message || 'Билеты начислены',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                })
+
+                showAddTicketsModal.value = false
+                fetchUsers(pagination.value.current) // Обновляем список
+            } catch (err) {
+                await Swal.fire({
+                    title: 'Ошибка',
+                    text: err.message || 'Не удалось начислить билеты',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                })
+            } finally {
+                isAddingTickets.value = false
+            }
+        }
+
         onMounted(() => {
             fetchUsers()
         })
@@ -293,6 +400,12 @@ export default {
             handleSearch,
             changePage,
             viewUser,
+            showAddTicketsModal,
+            addTicketsUser,
+            ticketsToAdd,
+            isAddingTickets,
+            openAddTicketsModal,
+            addTickets,
         }
     },
 }

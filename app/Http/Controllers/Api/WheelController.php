@@ -139,71 +139,45 @@ class WheelController extends Controller
                     $user->save();
                     $prizeAwarded = true;
                     
-                    // Отправляем уведомление о выигрыше
-                    TelegramNotificationService::notifyWin(
-                        $user,
-                        $winningSector->prize_value,
-                        'money'
-                    );
+                    // ПРИМЕЧАНИЕ: Уведомления о выигрыше отправляются отдельным endpoint
+                    // после завершения анимации на фронтенде (4 секунды)
                 } elseif ($winningSector->prize_type === 'ticket') {
                     // Начисляем билет
                     $user->tickets_available++;
                     $user->save();
                     $prizeAwarded = true;
-                    
-                    // Отправляем уведомление о выигрыше
-                    TelegramNotificationService::notifyWin(
-                        $user,
-                        $winningSector->prize_value,
-                        'ticket'
-                    );
                 } elseif ($winningSector->prize_type === 'secret_box') {
                     // Секретный бокс - обрабатывается отдельно
                     $prizeAwarded = true;
-                    
-                    // Отправляем уведомление о выигрыше
-                    TelegramNotificationService::notifyWin(
-                        $user,
-                        0,
-                        'secret_box'
-                    );
                 }
 
                 DB::commit();
 
                 // Рассчитываем угол поворота для анимации
-                // sector_number от 1 до 12, нужно преобразовать в индекс 0-11
-                // Указатель находится вверху (0°), секторы идут по часовой стрелке
+                // Формула на фронтенде: winningIndex = floor((360 - normalizedRotation + 15) / 30) % 12
+                // Решаем обратную задачу: для выбранного sectorIndex находим normalizedRotation
+                // 
+                // winningIndex = floor((360 - normalizedRotation + 15) / 30) % 12
+                // Для точного попадания в центр сектора:
+                // winningIndex = (360 - normalizedRotation + 15) / 30
+                // winningIndex * 30 = 360 - normalizedRotation + 15
+                // normalizedRotation = 360 + 15 - winningIndex * 30
+                // normalizedRotation = 375 - winningIndex * 30
+                
                 $segmentAngle = 360 / 12; // 30 градусов на сектор
                 $baseRotation = 360 * 5; // Минимум 5 полных оборотов
                 
                 // Преобразуем sector_number (1-12) в индекс (0-11)
                 $sectorIndex = $winningSector->sector_number - 1;
                 
-                // На фронтенде используется формула для определения выигрышного сектора:
-                // winningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length
-                // 
-                // Чтобы сектор с индексом sectorIndex оказался под указателем, нужно решить обратную задачу.
-                // Формула на фронтенде: sectorIndex = floor((360 - normalizedRotation + 15) / 30) % 12
-                // 
-                // Для точного попадания в сектор sectorIndex, центр сектора должен быть под указателем.
-                // Центр сектора sectorIndex находится на угле: sectorIndex * 30 + 15 градусов от начала сектора.
-                // 
-                // Чтобы этот центр оказался под указателем (0°), колесо должно повернуться так,
-                // чтобы normalizedRotation привело к правильному результату формулы.
-                // 
-                // Проверяем: для sectorIndex = 0, normalizedRotation должно быть близко к 0 или 360
-                // для sectorIndex = 1, normalizedRotation должно быть около 330
-                // 
-                // Используем прямую формулу: normalizedRotation = 360 - (sectorIndex * segmentAngle)
-                // Это обеспечит попадание начала сектора под указатель
-                // Но формула на фронтенде учитывает центр сектора (+segmentAngle/2), поэтому:
-                // normalizedRotation = 360 - (sectorIndex * segmentAngle + segmentAngle / 2)
-                
-                $normalizedRotation = 360 - ($sectorIndex * $segmentAngle + $segmentAngle / 2);
+                // Применяем обратную формулу
+                $normalizedRotation = 375 - ($sectorIndex * $segmentAngle);
                 
                 // Нормализуем к диапазону 0-360
-                $normalizedRotation = fmod($normalizedRotation + 360, 360);
+                $normalizedRotation = fmod($normalizedRotation, 360);
+                if ($normalizedRotation < 0) {
+                    $normalizedRotation += 360;
+                }
                 
                 $targetRotation = $baseRotation + $normalizedRotation;
                 
@@ -213,6 +187,7 @@ class WheelController extends Controller
                     'sector_index' => $sectorIndex,
                     'normalized_rotation' => $normalizedRotation,
                     'target_rotation' => $targetRotation,
+                    'verification' => floor((360 - $normalizedRotation + 15) / 30) % 12, // Должно быть равно $sectorIndex
                 ]);
 
                 return response()->json([

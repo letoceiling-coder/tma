@@ -32,6 +32,7 @@ Route::middleware(['telegram.initdata'])->group(function () {
     
     // Рулетка
     Route::post('/spin', [WheelController::class, 'spin']);
+    Route::post('/spin/notify', [\App\Http\Controllers\Api\SpinNotificationController::class, 'notify']);
     
     // Билеты
     Route::get('/user/tickets', [TicketController::class, 'getTickets']);
@@ -107,6 +108,12 @@ Route::middleware('auth:sanctum')->group(function () {
                 // Пользователи WOW
                 Route::get('users', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'index']);
                 Route::get('users/{id}', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'show']);
+                Route::post('users/{id}/add-tickets', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'addTickets']);
+                
+                // Призы лидерборда
+                Route::get('leaderboard-prizes', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'index']);
+                Route::put('leaderboard-prizes/{id}', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'update']);
+                Route::post('leaderboard-prizes/bulk-update', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'bulkUpdate']);
             });
         });
     });

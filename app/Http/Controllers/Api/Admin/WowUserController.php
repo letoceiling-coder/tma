@@ -86,5 +86,40 @@ class WowUserController extends Controller
             'recent_spins' => $recentSpins,
         ]);
     }
+
+    /**
+     * Начислить билеты пользователю вручную
+     */
+    public function addTickets(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'tickets' => 'required|integer|min:1|max:100',
+        ]);
+
+        $user = User::whereNotNull('telegram_id')->findOrFail($id);
+
+        $ticketsToAdd = $request->input('tickets');
+        $oldTickets = $user->tickets_available;
+        
+        // Начисляем билеты (не превышая максимум 3 для использования, но храним историю)
+        $user->tickets_available = min($user->tickets_available + $ticketsToAdd, 3);
+        $user->save();
+
+        // Создаем запись в истории билетов
+        \App\Models\UserTicket::create([
+            'user_id' => $user->id,
+            'tickets_count' => $ticketsToAdd,
+            'source' => 'admin_grant', // Новый источник для админских начислений
+            'restored_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Начислено {$ticketsToAdd} билет(ов)",
+            'old_tickets' => $oldTickets,
+            'new_tickets' => $user->tickets_available,
+            'data' => $user,
+        ]);
+    }
 }
 

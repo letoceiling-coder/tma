@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->integer('tickets_count')->default(1); // Количество билетов в этой записи
             $table->timestamp('restored_at')->nullable(); // Время восстановления билета
-            $table->enum('source', ['free', 'star_exchange'])->default('free'); // Источник билета
+            $table->enum('source', ['free', 'star_exchange', 'admin_grant'])->default('free'); // Источник билета
             $table->timestamps();
             
             $table->index('user_id');

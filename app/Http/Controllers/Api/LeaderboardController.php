@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Referral;
 use App\Models\User;
+use App\Models\LeaderboardPrize;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -76,19 +77,15 @@ class LeaderboardController extends Controller
     }
 
     /**
-     * Получить размер приза по рангу
+     * Получить размер приза по рангу (из настроек БД)
      * 
      * @param int $rank
      * @return int
      */
     private function getPrizeAmount(int $rank): int
     {
-        return match($rank) {
-            1 => 1500, // 1 место - 1500₽
-            2 => 1000, // 2 место - 1000₽
-            3 => 500,  // 3 место - 500₽
-            default => 0, // Остальные без приза
-        };
+        $prize = LeaderboardPrize::getPrizeForRank($rank);
+        return $prize ? $prize->prize_amount : 0;
     }
 }
 

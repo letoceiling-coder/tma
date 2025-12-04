@@ -10,29 +10,58 @@ import useTelegramWebApp from "@/hooks/useTelegramWebApp";
 
 interface LeaderEntry {
   rank: number;
-  name: string;
-  referrals: number;
-  prize: string;
+  telegram_id: number;
+  username: string;
+  avatar_url: string | null;
+  invites_count: number;
+  prize_amount: number;
 }
 
 const Leaderboard = () => {
   const navigate = useNavigate();
-  const { userName, share } = useTelegramWebApp();
+  const { userName, share, isReady: tgReady, initData } = useTelegramWebApp();
   const [isCopied, setIsCopied] = useState(false);
+  const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [topPrize, setTopPrize] = useState(1500); // По умолчанию
   const referralLink = "https://t.me/wow_roulette_bot?start=ref123456";
 
-  const leaders: LeaderEntry[] = [
-    { rank: 1, name: "Александр", referrals: 145, prize: "5000 ₽" },
-    { rank: 2, name: "Мария", referrals: 132, prize: "3000 ₽" },
-    { rank: 3, name: "Дмитрий", referrals: 118, prize: "2000 ₽" },
-    { rank: 4, name: "Анна", referrals: 98, prize: "1000 ₽" },
-    { rank: 5, name: "Сергей", referrals: 87, prize: "500 ₽" },
-    { rank: 6, name: "Елена", referrals: 76, prize: "500 ₽" },
-    { rank: 7, name: "Иван", referrals: 65, prize: "300 ₽" },
-    { rank: 8, name: "Ольга", referrals: 54, prize: "300 ₽" },
-    { rank: 9, name: "Михаил", referrals: 43, prize: "300 ₽" },
-    { rank: 10, name: "Татьяна", referrals: 32, prize: "300 ₽" },
-  ];
+  // Загрузка лидерборда с сервера
+  useEffect(() => {
+    const loadLeaderboard = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const apiPath = apiUrl ? `${apiUrl}/api/leaderboard` : `/api/leaderboard`;
+
+        const response = await fetch(apiPath, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Ошибка загрузки лидерборда');
+        }
+
+        const data = await response.json();
+        setLeaders(data.leaderboard || []);
+        
+        // Устанавливаем приз за 1 место для баннера
+        if (data.leaderboard && data.leaderboard.length > 0) {
+          setTopPrize(data.leaderboard[0].prize_amount || 1500);
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки лидерборда:', error);
+        toast.error('Не удалось загрузить лидерборд');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLeaderboard();
+  }, []);
 
   const handleInvite = async () => {
     haptic.mediumTap();
@@ -180,7 +209,7 @@ const Leaderboard = () => {
                   fontFamily: "'Nunito', sans-serif"
                 }}
               >
-                ПОЛУЧАЙ 1500 ₽
+                ПОЛУЧАЙ {topPrize} ₽
               </span>
             </div>
             
@@ -242,7 +271,20 @@ const Leaderboard = () => {
           WebkitOverflowScrolling: 'touch'
         }}
       >
-        {leaders.map((leader, index) => (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <p style={{ color: '#FFFFFF', fontSize: '14px', fontFamily: "'Nunito', sans-serif" }}>
+              Загрузка...
+            </p>
+          </div>
+        ) : leaders.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <p style={{ color: '#FFFFFF', fontSize: '14px', fontFamily: "'Nunito', sans-serif" }}>
+              Пока нет участников
+            </p>
+          </div>
+        ) : (
+          leaders.map((leader, index) => (
           <div 
             key={leader.rank}
             className="flex items-center gap-3 mb-3 px-4 py-3 rounded-xl animate-fade-in"
@@ -259,14 +301,18 @@ const Leaderboard = () => {
                 className="w-12 h-12 rounded-full overflow-hidden"
                 style={{ 
                   border: '2px solid #E8A68A',
-                  background: '#A8D5BA'
+                  background: leader.avatar_url ? 'transparent' : '#A8D5BA'
                 }}
               >
-                <img 
-                  src={`https://i.pravatar.cc/80?img=${leader.rank}`} 
-                  alt={leader.name}
-                  className="w-full h-full object-cover"
-                />
+                {leader.avatar_url ? (
+                  <img 
+                    src={leader.avatar_url} 
+                    alt={leader.username}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span style={{ fontSize: '24px' }}>👤</span>
+                )}
               </div>
               <div 
                 className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center"
@@ -293,7 +339,7 @@ const Leaderboard = () => {
                   fontFamily: "'Nunito', sans-serif"
                 }}
               >
-                {leader.name}
+                {leader.username || `User ${leader.telegram_id}`}
               </span>
             </div>
 
@@ -313,26 +359,29 @@ const Leaderboard = () => {
                   fontFamily: "'Nunito', sans-serif"
                 }}
               >
-                {leader.referrals}
+                {leader.invites_count}
               </span>
             </div>
 
             {/* Prize */}
-            <div 
-              className="px-4 py-2 rounded-xl flex-shrink-0"
-              style={{
-                background: 'linear-gradient(135deg, #E88B72 0%, #D87C68 100%)',
-                color: 'white',
-                fontSize: '13px',
-                fontWeight: 700,
-                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                fontFamily: "'Nunito', sans-serif"
-              }}
-            >
-              {leader.prize}
-            </div>
+            {leader.prize_amount > 0 && (
+              <div 
+                className="px-4 py-2 rounded-xl flex-shrink-0"
+                style={{
+                  background: 'linear-gradient(135deg, #E88B72 0%, #D87C68 100%)',
+                  color: 'white',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  fontFamily: "'Nunito', sans-serif"
+                }}
+              >
+                {leader.prize_amount} ₽
+              </div>
+            )}
           </div>
-        ))}
+          ))
+        )}
       </div>
 
       <BottomNav />

@@ -69,12 +69,18 @@ class AdminMenu
                         'icon' => 'user-plus',
                         'roles' => ['admin', 'manager'],
                     ],
-                    [
-                        'title' => 'Статистика',
-                        'route' => 'admin.wow.statistics',
-                        'icon' => 'bar-chart',
-                        'roles' => ['admin', 'manager'],
-                    ],
+                           [
+                               'title' => 'Статистика',
+                               'route' => 'admin.wow.statistics',
+                               'icon' => 'bar-chart',
+                               'roles' => ['admin', 'manager'],
+                           ],
+                           [
+                               'title' => 'Призы лидерборда',
+                               'route' => 'admin.wow.leaderboard',
+                               'icon' => 'trophy',
+                               'roles' => ['admin', 'manager'],
+                           ],
                 ],
             ],
             [

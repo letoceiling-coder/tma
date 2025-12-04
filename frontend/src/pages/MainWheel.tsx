@@ -280,6 +280,7 @@ const MainWheel = () => {
       // Определяем значение приза для отображения
       const prizeValue = data.sector?.prize_value || 0;
       const prizeType = data.sector?.prize_type;
+      const spinId = data.spin_id;
       
       let resultValue = 0;
       if (prizeType === 'money') {
@@ -291,7 +292,7 @@ const MainWheel = () => {
       }
 
       // Ждем завершения анимации (4 секунды)
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsSpinning(false);
         setLastResult(resultValue);
       
@@ -313,6 +314,23 @@ const MainWheel = () => {
           } else if (prizeType === 'ticket') {
             toast.success(`Получено ${prizeValue} билет(а)!`, { duration: 3000 });
           }
+        }
+        
+        // Отправляем уведомление после завершения анимации
+        try {
+          const notifyPath = apiUrl ? `${apiUrl}/api/spin/notify` : `/api/spin/notify`;
+          await fetch(notifyPath, {
+            method: 'POST',
+            headers: {
+              'X-Telegram-Init-Data': tg.initData || '',
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: JSON.stringify({ spin_id: spinId }),
+          });
+        } catch (notifyError) {
+          console.error('Ошибка отправки уведомления:', notifyError);
+          // Не блокируем работу приложения при ошибке уведомления
         }
     }, 4100);
 
