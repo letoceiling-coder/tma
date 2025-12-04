@@ -90,7 +90,7 @@ class AdminMenu
                 'children' => [
                     [
                         'title' => 'Бот',
-                        'route' => 'admin.config.bot',
+                        'route' => 'admin.settings.bot',
                         'icon' => 'bot',
                         'roles' => ['admin'],
                     ],

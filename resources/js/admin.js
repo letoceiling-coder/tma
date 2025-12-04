@@ -2,8 +2,7 @@ import './bootstrap';
 import { createApp } from 'vue';
 import { createStore } from 'vuex';
 import { createRouter, createWebHistory } from 'vue-router';
-// Используем axios из window, чтобы гарантировать использование правильного экземпляра с interceptor
-const axios = window.axios;
+import axios from 'axios';
 
 // Store
 const store = createStore({
@@ -247,8 +246,8 @@ const routes = [
                    },
             // Конфигурации
             {
-                path: 'config/bot',
-                name: 'admin.config.bot',
+                path: 'settings/bot',
+                name: 'admin.settings.bot',
                 component: () => import('./pages/admin/BotConfig.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },

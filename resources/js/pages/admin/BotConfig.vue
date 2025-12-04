@@ -21,7 +21,7 @@
         </div>
 
         <!-- Form -->
-        <div v-if="!loading" class="space-y-6">
+        <form v-if="!loading" @submit.prevent="saveConfig" class="space-y-6">
             <!-- Основные настройки -->
             <div class="bg-card rounded-lg border border-border p-6">
                 <h2 class="text-xl font-semibold mb-4">Основные настройки</h2>
@@ -337,8 +337,7 @@
             <!-- Действия -->
             <div class="flex gap-4">
                 <button
-                    type="button"
-                    @click="saveConfig"
+                    type="submit"
                     :disabled="saving"
                     class="h-11 px-6 bg-accent/10 backdrop-blur-xl text-accent border border-accent/40 hover:bg-accent/20 rounded-2xl shadow-lg shadow-accent/10 inline-flex items-center justify-center gap-2 disabled:opacity-50"
                 >
@@ -363,12 +362,7 @@
                     {{ loadingWebhook ? 'Загрузка...' : 'Информация о webhook' }}
                 </button>
             </div>
-            
-            <!-- Форма для сохранения -->
-            <form @submit.prevent="saveConfig" class="hidden">
-                <button type="submit" ref="submitButtonRef"></button>
-            </form>
-        </div>
+        </form>
 
         <!-- Webhook Info Modal -->
         <div v-if="showWebhookInfo" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -564,8 +558,7 @@ export default {
             loading.value = true
             error.value = null
             try {
-                // Используем относительный путь для избежания Mixed Content
-                const response = await axios.get('/api/v1/config/bot/')
+                const response = await axios.get('/api/v1/settings/bot/')
                 if (response.data) {
                     form.value = {
                         ...response.data,
@@ -598,8 +591,7 @@ export default {
             successMessage.value = null
 
             try {
-                // Используем относительный путь для избежания Mixed Content
-                const response = await axios.post('/api/v1/config/bot/', form.value)
+                const response = await axios.post('/api/v1/settings/bot/', form.value)
                 
                 if (response.data.error) {
                     Swal.fire({
@@ -630,8 +622,7 @@ export default {
         const testConnection = async () => {
             testing.value = true
             try {
-                // Используем относительный путь для избежания Mixed Content
-                const response = await axios.post('/api/v1/config/bot/test-connection')
+                const response = await axios.post('/api/v1/settings/bot/test-connection')
                 
                 if (response.data.success) {
                     Swal.fire({
@@ -667,8 +658,7 @@ export default {
             webhookInfo.value = null
 
             try {
-                // Используем относительный путь для избежания Mixed Content
-                const response = await axios.get('/api/v1/config/bot/webhook-info')
+                const response = await axios.get('/api/v1/settings/bot/webhook-info')
                 
                 if (response.data.success) {
                     webhookInfo.value = response.data.data

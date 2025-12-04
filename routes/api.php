@@ -101,7 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::apiResource('users', UserController::class);
             
             // Конфигурация бота
-            Route::prefix('config/bot')->group(function () {
+            Route::prefix('settings/bot')->group(function () {
                 Route::get('/', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'index']);
                 Route::post('/', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'store']);
                 Route::get('/webhook-info', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'getWebhookInfo']);
