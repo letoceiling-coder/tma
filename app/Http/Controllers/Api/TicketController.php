@@ -73,8 +73,8 @@ class TicketController extends Controller
                 // Это будет last_spin_at + (completedIntervals + 1) * interval
                 $nextRestoreTime = $user->last_spin_at->copy()->addSeconds(($completedIntervals + 1) * $restoreIntervalSeconds);
                 
-                // Время до следующего билета
-                $secondsUntilNextTicket = max(0, $nextRestoreTime->diffInSeconds(now()));
+                // Время до следующего билета (округляем до целого числа секунд)
+                $secondsUntilNextTicket = max(0, (int) $nextRestoreTime->diffInSeconds(now()));
                 $nextTicketAt = $nextRestoreTime->toIso8601String();
             }
 

@@ -139,9 +139,9 @@ const MainWheel = () => {
         setRestoreIntervalSeconds(data.restore_interval_seconds);
       }
       
-      // Устанавливаем время до следующего билета
+      // Устанавливаем время до следующего билета (округляем до целого)
       if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
-        setTimeLeft(Math.max(0, data.seconds_until_next_ticket));
+        setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
       } else {
         setTimeLeft(0);
       }
@@ -171,14 +171,20 @@ const MainWheel = () => {
 
   // Format seconds to HH:MM:SS or MM:SS
   const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    // Убеждаемся что это число и округляем до целого
+    const totalSeconds = Math.floor(Math.max(0, Number(seconds) || 0));
     
+    // Рассчитываем часы, минуты и секунды
+    const hours = Math.floor(totalSeconds / 3600);
+    const remainingAfterHours = totalSeconds % 3600;
+    const mins = Math.floor(remainingAfterHours / 60);
+    const secs = remainingAfterHours % 60;
+    
+    // Всегда показываем формат ЧЧ:ММ:СС если есть часы, иначе ММ:СС
     if (hours > 0) {
-      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      return `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
   // Get ticket word form
@@ -197,12 +203,13 @@ const MainWheel = () => {
     
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 1) {
+        const current = Math.floor(prev); // Убеждаемся что работаем с целыми числами
+        if (current <= 1) {
           // Обновляем билеты с сервера когда таймер достигает 0
           loadTickets();
           return 0;
         }
-        return prev - 1;
+        return current - 1;
       });
     }, 1000);
 
@@ -256,9 +263,9 @@ const MainWheel = () => {
       // Обновляем билеты и таймер
       setTickets(data.tickets_available || 0);
       
-      // Обновляем данные о времени до следующего билета
+      // Обновляем данные о времени до следующего билета (округляем до целого)
       if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
-        setTimeLeft(Math.max(0, data.seconds_until_next_ticket));
+        setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
       }
       
       if (data.restore_interval_seconds) {
