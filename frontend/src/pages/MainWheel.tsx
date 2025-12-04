@@ -144,6 +144,18 @@ const MainWheel = () => {
         // Это предотвращает постоянные перезапуски таймера
         if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
           const newTimeLeft = Math.max(0, Math.floor(data.seconds_until_next_ticket));
+          
+          // Если время равно 0, это означает, что время восстановления уже прошло
+          // Загружаем билеты с сервера через небольшую задержку, чтобы проверить восстановление
+          if (newTimeLeft === 0) {
+            console.log('Ticket restore time has passed, reloading tickets...');
+            setTimeout(() => {
+              if (loadTicketsRef.current) {
+                loadTicketsRef.current();
+              }
+            }, 1000);
+          }
+          
           setTimeLeft((prev) => {
             // Обновляем только если разница больше 2 секунд или если prev был 0
             if (Math.abs(prev - newTimeLeft) > 2 || prev === 0) {

@@ -70,7 +70,11 @@ class TicketController extends Controller
             }
 
             // Проверяем, нужно ли восстановить билеты
+            // ВАЖНО: Вызываем ДО расчета времени, чтобы билеты были восстановлены, если время пришло
             $this->checkTicketRestore($user);
+            
+            // Обновляем данные пользователя после возможного восстановления
+            $user->refresh();
 
             // Рассчитываем время до следующего билета
             $nextTicketAt = null;
@@ -86,10 +90,19 @@ class TicketController extends Controller
                 
                 Log::debug('Ticket timer calculated', [
                     'user_id' => $user->id,
+                    'tickets_available' => $user->tickets_available,
                     'tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
                     'restore_interval_seconds' => $restoreIntervalSeconds,
                     'restore_time' => $restoreTime->toIso8601String(),
                     'seconds_until_next_ticket' => $secondsUntilNextTicket,
+                    'now' => now()->toIso8601String(),
+                ]);
+            } elseif ($user->tickets_available === 0 && !$user->tickets_depleted_at) {
+                // Если билетов 0, но tickets_depleted_at не установлен, это не должно происходить
+                // но на всякий случай логируем
+                Log::warning('User has 0 tickets but tickets_depleted_at is not set', [
+                    'user_id' => $user->id,
+                    'tickets_available' => $user->tickets_available,
                 ]);
             }
 
@@ -151,10 +164,26 @@ class TicketController extends Controller
         // Вычисляем момент восстановления: tickets_depleted_at + интервал
         $restoreTime = $user->tickets_depleted_at->copy()->addSeconds($restoreIntervalSeconds);
         
+        Log::debug('Checking ticket restore', [
+            'user_id' => $user->id,
+            'tickets_available' => $user->tickets_available,
+            'tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
+            'restore_interval_seconds' => $restoreIntervalSeconds,
+            'restore_time' => $restoreTime->toIso8601String(),
+            'now' => now()->toIso8601String(),
+            'should_restore' => now() >= $restoreTime,
+        ]);
+        
         // Если текущее время >= момента восстановления → билет готов
         if (now() >= $restoreTime) {
             $oldTickets = $user->tickets_available;
             $user->tickets_available = min($user->tickets_available + 1, 3);
+            
+            Log::info('Restoring ticket', [
+                'user_id' => $user->id,
+                'old_tickets' => $oldTickets,
+                'new_tickets' => $user->tickets_available,
+            ]);
             
             // Если билетов стало 3, сбрасываем точку восстановления
             if ($user->tickets_available >= 3) {
@@ -165,6 +194,10 @@ class TicketController extends Controller
                 // Но только если билеты сейчас 0 (иначе точка отсчета не нужна, пока билеты не закончатся)
                 if ($user->tickets_available === 0) {
                     $user->tickets_depleted_at = now();
+                    Log::info('Ticket restored but still 0, resetting tickets_depleted_at', [
+                        'user_id' => $user->id,
+                        'new_tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
+                    ]);
                 } else {
                     // Если билеты > 0, но < 3, сбрасываем точку отсчета
                     // Новая точка отсчета установится только когда билеты снова станут 0
