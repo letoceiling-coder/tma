@@ -539,13 +539,53 @@ class DeployController extends Controller
     /**
      * Выполнить seeders
      */
-    protected function runSeeders(): array
+    protected function runSeeders(?string $specificSeeder = null, bool $all = false): array
     {
         try {
-            // Seeders для текущего проекта
-            $seeders = [
-                'RoleSeeder',
-            ];
+            // Убеждаемся, что phpPath установлен
+            if (!$this->phpPath) {
+                $this->phpPath = $this->getPhpPath();
+            }
+
+            $seeders = [];
+            
+            if ($specificSeeder) {
+                // Выполняем конкретный seeder
+                $seeders = [$specificSeeder];
+            } elseif ($all) {
+                // Выполняем все seeders (через db:seed без указания класса)
+                // В этом случае Laravel выполнит DatabaseSeeder
+                $process = Process::path($this->basePath)
+                    ->timeout(600) // 10 минут для всех seeders
+                    ->run("{$this->phpPath} artisan db:seed --force");
+
+                if ($process->successful()) {
+                    Log::info("✅ Все seeders выполнены успешно");
+                    return [
+                        'status' => 'success',
+                        'total' => 1,
+                        'success' => 1,
+                        'failed' => 0,
+                        'results' => ['all' => 'success'],
+                        'message' => 'Все seeders выполнены успешно',
+                    ];
+                } else {
+                    $error = $process->errorOutput() ?: $process->output();
+                    Log::error("❌ Ошибка выполнения всех seeders", [
+                        'error' => $error,
+                    ]);
+                    return [
+                        'status' => 'error',
+                        'error' => substr($error, 0, 500),
+                    ];
+                }
+            } else {
+                // По умолчанию - список seeders для текущего проекта
+                $seeders = [
+                    'RoleSeeder',
+                    'WheelSectorSeeder',
+                ];
+            }
 
             $results = [];
             $totalSuccess = 0;
@@ -556,7 +596,7 @@ class DeployController extends Controller
                     Log::info("Выполнение seeder: {$seeder}");
                     $process = Process::path($this->basePath)
                         ->timeout(300) // 5 минут на каждый seeder
-                        ->run("{$this->phpPath} artisan db:seed --class={$seeder}");
+                        ->run("{$this->phpPath} artisan db:seed --class={$seeder} --force");
 
                     if ($process->successful()) {
                         $results[$seeder] = 'success';
@@ -595,6 +635,68 @@ class DeployController extends Controller
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Выполнить seeders через API запрос
+     */
+    public function seed(Request $request)
+    {
+        $startTime = microtime(true);
+        Log::info('🌱 Начало выполнения seeders', [
+            'ip' => $request->ip(),
+            'timestamp' => now()->toDateTimeString(),
+        ]);
+
+        $result = [
+            'success' => false,
+            'message' => '',
+            'data' => [],
+        ];
+
+        try {
+            // Определяем PHP путь
+            $this->phpPath = $this->getPhpPath();
+            $this->phpVersion = $this->getPhpVersion();
+
+            Log::info("Используется PHP: {$this->phpPath} (версия: {$this->phpVersion})");
+
+            $class = $request->input('class');
+            $all = $request->input('all', false);
+
+            // Выполняем seeders (phpPath уже установлен)
+            $seedersResult = $this->runSeeders($class, $all);
+
+            // Формируем ответ
+            $result['success'] = $seedersResult['status'] === 'success';
+            $result['message'] = $seedersResult['message'] ?? ($seedersResult['error'] ?? 'Unknown error');
+            $result['data'] = array_merge($seedersResult, [
+                'php_version' => $this->phpVersion,
+                'php_path' => $this->phpPath,
+                'executed_at' => now()->toDateTimeString(),
+                'duration_seconds' => round(microtime(true) - $startTime, 2),
+            ]);
+
+            if ($result['success']) {
+                Log::info('✅ Seeders успешно выполнены', $result['data']);
+            } else {
+                Log::warning('⚠️ Seeders выполнены с ошибками', $result['data']);
+            }
+
+        } catch (\Exception $e) {
+            $result['message'] = $e->getMessage();
+            $result['data']['error'] = $e->getMessage();
+            $result['data']['trace'] = config('app.debug') ? $e->getTraceAsString() : null;
+            $result['data']['executed_at'] = now()->toDateTimeString();
+            $result['data']['duration_seconds'] = round(microtime(true) - $startTime, 2);
+
+            Log::error('❌ Ошибка выполнения seeders', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return response()->json($result, $result['success'] ? 200 : 500);
     }
 
     /**

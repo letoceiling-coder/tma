@@ -111,3 +111,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::post('/deploy', [DeployController::class, 'deploy'])
     ->middleware('deploy.token');
 
+// Маршрут для выполнения seeders (защищен токеном)
+Route::post('/seed', [DeployController::class, 'seed'])
+    ->middleware('deploy.token');
+
