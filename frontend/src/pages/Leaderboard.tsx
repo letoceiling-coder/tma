@@ -19,12 +19,16 @@ interface LeaderEntry {
 
 const Leaderboard = () => {
   const navigate = useNavigate();
-  const { userName, share, isReady: tgReady, initData } = useTelegramWebApp();
+  const { userName, share, isReady: tgReady, initData, user } = useTelegramWebApp();
   const [isCopied, setIsCopied] = useState(false);
   const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [topPrize, setTopPrize] = useState(1500); // По умолчанию
-  const referralLink = "https://t.me/wow_roulette_bot?start=ref123456";
+  
+  // Формируем реферальную ссылку с реальным telegram_id пользователя
+  const referralLink = user?.id 
+    ? `https://t.me/wow_roulette_bot?start=ref${user.id}`
+    : "https://t.me/wow_roulette_bot";
 
   // Загрузка лидерборда с сервера
   useEffect(() => {

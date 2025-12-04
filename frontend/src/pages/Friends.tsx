@@ -10,10 +10,14 @@ import useTelegramWebApp from "@/hooks/useTelegramWebApp";
 
 const Friends = () => {
   const navigate = useNavigate();
-  const { userName, share, isReady: tgReady } = useTelegramWebApp();
+  const { userName, share, isReady: tgReady, user } = useTelegramWebApp();
   const [isCopied, setIsCopied] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const referralLink = "https://t.me/wow_roulette_bot?start=ref123456";
+  
+  // Формируем реферальную ссылку с реальным telegram_id пользователя
+  const referralLink = user?.id 
+    ? `https://t.me/wow_roulette_bot?start=ref${user.id}`
+    : "https://t.me/wow_roulette_bot";
 
   useEffect(() => {
     if (tgReady) {

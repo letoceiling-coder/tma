@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Telegram\Bot;
 use App\Telegram\Keyboard;
+use App\Models\User;
+use App\Models\Referral;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class TelegramWebhookController extends Controller
 {
@@ -60,7 +63,7 @@ class TelegramWebhookController extends Controller
 
         // Обработка команды /start
         if ($text === '/start' || str_starts_with($text, '/start ')) {
-            Log::info('Start command detected', ['chat_id' => $chatId]);
+            Log::info('Start command detected', ['chat_id' => $chatId, 'text' => $text]);
             $this->handleStartCommand($chatId, $message);
         } else {
             Log::info('Message is not /start command', ['text' => $text]);
@@ -73,6 +76,28 @@ class TelegramWebhookController extends Controller
     protected function handleStartCommand(int|string $chatId, array $message): void
     {
         Log::info('handleStartCommand called', ['chat_id' => $chatId]);
+        
+        // Извлекаем параметр из команды /start ref{TELEGRAM_ID}
+        $text = $message['text'] ?? '';
+        $referrerTelegramId = null;
+        
+        if (str_starts_with($text, '/start ref')) {
+            // Извлекаем telegram_id реферера из команды /start ref{TELEGRAM_ID}
+            $parts = explode(' ', $text);
+            if (count($parts) >= 2 && str_starts_with($parts[1], 'ref')) {
+                $refParam = substr($parts[1], 3); // Убираем префикс "ref"
+                if (is_numeric($refParam)) {
+                    $referrerTelegramId = (int) $refParam;
+                    Log::info('Referral link detected', [
+                        'chat_id' => $chatId,
+                        'referrer_telegram_id' => $referrerTelegramId,
+                    ]);
+                    
+                    // Обрабатываем реферальную регистрацию
+                    $this->handleReferralRegistration($chatId, $referrerTelegramId);
+                }
+            }
+        }
         
         $config = config('telegram.welcome_message');
         
@@ -192,6 +217,121 @@ class TelegramWebhookController extends Controller
             Log::error('Failed to process callback query', [
                 'query_id' => $queryId,
                 'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Обработка реферальной регистрации
+     * 
+     * @param int|string $chatId Telegram ID нового пользователя (тот, кто перешел по ссылке)
+     * @param int $referrerTelegramId Telegram ID реферера (тот, кто поделился ссылкой)
+     * @return void
+     */
+    protected function handleReferralRegistration(int|string $chatId, int $referrerTelegramId): void
+    {
+        try {
+            DB::beginTransaction();
+
+            // Находим реферера по telegram_id
+            $referrer = User::where('telegram_id', $referrerTelegramId)->first();
+            
+            if (!$referrer) {
+                Log::warning('Referrer not found', [
+                    'referrer_telegram_id' => $referrerTelegramId,
+                    'chat_id' => $chatId,
+                ]);
+                DB::rollBack();
+                return;
+            }
+
+            // Проверяем, что пользователь не приглашает сам себя
+            if ($chatId == $referrerTelegramId) {
+                Log::info('User tried to refer themselves', [
+                    'telegram_id' => $chatId,
+                ]);
+                DB::rollBack();
+                return;
+            }
+
+            // Проверяем, что пользователь еще не существует
+            // Если пользователь уже существует, реферальная связь не создается
+            $existingUser = User::where('telegram_id', $chatId)->first();
+            if ($existingUser) {
+                Log::info('User already exists, skipping referral registration', [
+                    'user_id' => $existingUser->id,
+                    'telegram_id' => $chatId,
+                    'referrer_telegram_id' => $referrerTelegramId,
+                ]);
+                DB::rollBack();
+                return;
+            }
+
+            // Создаем нового пользователя
+            // ВАЖНО: Пользователь должен быть новым (проверка выше)
+            $user = User::create([
+                'telegram_id' => $chatId,
+                'name' => 'Telegram User',
+                'email' => "telegram_{$chatId}@telegram.local",
+                'password' => bcrypt(str()->random(32)),
+                'tickets_available' => 3, // Начальное количество билетов для нового пользователя
+                'stars_balance' => 0,
+                'total_spins' => 0,
+                'total_wins' => 0,
+            ]);
+
+            // Проверяем, что реферальная связь еще не существует
+            $existingReferral = Referral::where('inviter_id', $referrer->id)
+                ->where('invited_id', $user->id)
+                ->first();
+
+            if ($existingReferral) {
+                Log::info('Referral already exists', [
+                    'user_id' => $user->id,
+                    'referrer_id' => $referrer->id,
+                ]);
+                DB::rollBack();
+                return;
+            }
+
+            // Создаем реферальную связь
+            Referral::create([
+                'inviter_id' => $referrer->id,
+                'invited_id' => $user->id,
+                'invited_at' => now(),
+            ]);
+
+            // Обновляем invited_by у пользователя
+            $user->invited_by = $referrer->id;
+            $user->save();
+
+            // Начисляем 1 билет рефереру за приглашение
+            $referrer->tickets_available = min($referrer->tickets_available + 1, 3);
+            
+            // Если билеты стали больше 0, сбрасываем точку восстановления
+            if ($referrer->tickets_available > 0) {
+                $referrer->tickets_depleted_at = null;
+            }
+            
+            $referrer->save();
+
+            DB::commit();
+
+            Log::info('Referral registration successful', [
+                'user_id' => $user->id,
+                'user_telegram_id' => $chatId,
+                'referrer_id' => $referrer->id,
+                'referrer_telegram_id' => $referrerTelegramId,
+                'referrer_tickets_after' => $referrer->tickets_available,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error in referral registration', [
+                'chat_id' => $chatId,
+                'referrer_telegram_id' => $referrerTelegramId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
         }
     }
