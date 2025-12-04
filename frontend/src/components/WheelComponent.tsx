@@ -364,19 +364,63 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNum
           {Array.from({ length: 12 }).map((_, index) => {
             const isWinning = winningIndex === index;
             return (
-              <path
-                key={`sector-${index}`}
-                d={createSectorPath(index)}
-                fill={isWinning ? "#FFE5B4" : sectorColors[index % 2]}
-                stroke={isWinning ? "#FFD700" : "#F6A974"}
-                strokeWidth={isWinning ? "4" : "1"}
-                className={isWinning ? "winning-sector" : ""}
+              <g key={`sector-group-${index}`}>
+                <path
+                  d={createSectorPath(index)}
+                  fill={isWinning ? "#FFF4D6" : sectorColors[index % 2]}
+                  stroke={isWinning ? "#FFD700" : "#F6A974"}
+                  strokeWidth={isWinning ? "5" : "1"}
+                  className={isWinning ? "winning-sector" : ""}
+                  style={{
+                    filter: isWinning 
+                      ? 'drop-shadow(0 0 20px rgba(255, 215, 0, 1))'
+                      : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                  }}
+                />
+                {/* Дополнительная подсветка для выигрышного сектора */}
+                {isWinning && (
+                  <path
+                    d={createSectorPath(index)}
+                    fill="none"
+                    stroke="#FFD700"
+                    strokeWidth="2"
+                    opacity="0.7"
+                    style={{
+                      filter: 'blur(4px)',
+                    }}
+                  />
+                )}
+              </g>
+            );
+          })}
+          
+          {/* Текст с призами на секторах */}
+          {segments.map((segment, index) => {
+            const midAngle = (index * 30 + 15 - 90) * (Math.PI / 180);
+            const textRadius = radius * 0.75;
+            const x = centerX + textRadius * Math.cos(midAngle);
+            const y = centerY + textRadius * Math.sin(midAngle);
+            
+            const isWinning = winningIndex === index;
+            let displayText = segment.value > 0 ? segment.value.toString() : "0";
+            
+            return (
+              <text
+                key={`text-${index}`}
+                x={x}
+                y={y}
+                fill={isWinning ? "#FFD700" : "#333"}
+                fontSize={isWinning ? "18" : "16"}
+                fontWeight="bold"
+                textAnchor="middle"
+                dominantBaseline="middle"
                 style={{
-                  filter: isWinning 
-                    ? 'drop-shadow(0 0 12px rgba(255, 215, 0, 1))'
-                    : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                  pointerEvents: 'none',
+                  filter: isWinning ? 'drop-shadow(0 0 4px rgba(255, 215, 0, 1))' : 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))',
                 }}
-              />
+              >
+                {displayText}
+              </text>
             );
           })}
           
