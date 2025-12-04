@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\WheelSector;
+use App\Models\WheelSetting;
 use App\Models\Spin;
 use App\Models\User;
 use App\Services\TelegramService;
@@ -82,8 +83,27 @@ class WheelController extends Controller
                 ], 400);
             }
 
-            // Определяем выигрышный сектор на основе вероятностей
-            $winningSector = WheelSector::getRandomSector();
+            // Проверяем режим "всегда пусто"
+            $settings = WheelSetting::getSettings();
+            $winningSector = null;
+            
+            if ($settings->always_empty_mode) {
+                // Режим "всегда пусто" - выбираем случайный пустой сектор
+                $emptySectors = WheelSector::where('is_active', true)
+                    ->where('prize_type', 'empty')
+                    ->get();
+                
+                if ($emptySectors->isEmpty()) {
+                    return response()->json([
+                        'error' => 'No empty sectors configured'
+                    ], 500);
+                }
+                
+                $winningSector = $emptySectors->random();
+            } else {
+                // Обычный режим - выбираем сектор на основе вероятностей
+                $winningSector = WheelSector::getRandomSector();
+            }
             
             if (!$winningSector) {
                 return response()->json([

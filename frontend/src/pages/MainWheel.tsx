@@ -209,7 +209,7 @@ const MainWheel = () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const apiPath = apiUrl ? `${apiUrl}/api/spin` : `/api/spin`;
-      
+
       const response = await fetch(apiPath, {
         method: 'POST',
         headers: {
@@ -252,20 +252,20 @@ const MainWheel = () => {
       }
 
       // Ждем завершения анимации (4 секунды)
-      setTimeout(() => {
-        setIsSpinning(false);
+    setTimeout(() => {
+      setIsSpinning(false);
         setLastResult(resultValue);
-        
-        // Different haptic feedback based on result
+      
+      // Different haptic feedback based on result
         if (resultValue > 0 || resultValue === -1) {
-          // Win - success notification
-          haptic.success();
-        } else {
-          // No win - soft tap
-          haptic.softTap();
-        }
-        
-        setShowResultPopup(true);
+        // Win - success notification
+        haptic.success();
+      } else {
+        // No win - soft tap
+        haptic.softTap();
+      }
+      
+      setShowResultPopup(true);
         
         // Показываем сообщение о призе, если он был начислен
         if (data.prize_awarded) {
@@ -275,7 +275,7 @@ const MainWheel = () => {
             toast.success(`Получено ${prizeValue} билет(а)!`, { duration: 3000 });
           }
         }
-      }, 4100);
+    }, 4100);
 
     } catch (error: any) {
       console.error('Ошибка прокрута:', error);

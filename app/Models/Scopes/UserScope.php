@@ -51,8 +51,24 @@ class UserScope implements Scope
                               });
                     });
                 } else {
+                    // Для media файлов: показываем файлы текущего пользователя ИЛИ системные (user_id = NULL)
+                    // Это позволяет отображать общие файлы, например иконки колеса
+                    if ($table === 'media') {
+                        $builder->where(function ($query) use ($table) {
+                            $query->where($table . '.user_id', auth()->id())
+                                  ->orWhereNull($table . '.user_id');
+                        });
+                } elseif ($table === 'media') {
+                    // Для media файлов: показываем файлы текущего пользователя ИЛИ системные (user_id = NULL)
+                    // Это позволяет отображать общие файлы, например иконки колеса
+                    $builder->where(function ($query) use ($table) {
+                        $query->where($table . '.user_id', auth()->id())
+                              ->orWhereNull($table . '.user_id');
+                    });
+                } else {
                     // Для других таблиц применяем обычный фильтр
                     $builder->where($table . '.user_id', auth()->id());
+                }
                 }
             }
         }

@@ -39,14 +39,19 @@ class TicketController extends Controller
                 ]);
             }
 
-            $user = User::where('telegram_id', $telegramId)->first();
-            
-            if (!$user) {
-                return response()->json([
-                    'tickets_available' => 0,
-                    'max_tickets' => 3,
-                ]);
-            }
+            // Находим или создаем пользователя, если его нет
+            $user = User::firstOrCreate(
+                ['telegram_id' => $telegramId],
+                [
+                    'name' => 'Telegram User',
+                    'email' => "telegram_{$telegramId}@telegram.local",
+                    'password' => bcrypt(str()->random(32)),
+                    'tickets_available' => 3, // Начальное количество билетов
+                    'stars_balance' => 0,
+                    'total_spins' => 0,
+                    'total_wins' => 0,
+                ]
+            );
 
             // Проверяем, нужно ли восстановить билеты (каждые 2-4 часа)
             $this->checkTicketRestore($user);

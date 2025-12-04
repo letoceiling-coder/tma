@@ -27,6 +27,30 @@
             </div>
         </div>
 
+        <!-- Настройки рулетки -->
+        <div v-if="!loading" class="bg-card rounded-lg border border-border p-6">
+            <h2 class="text-xl font-semibold mb-4">Настройки рулетки</h2>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-medium mb-1">Режим "Всегда пусто"</h3>
+                    <p class="text-sm text-muted-foreground">
+                        При включении колесо всегда будет останавливаться на пустом секторе
+                    </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input
+                        v-model="alwaysEmptyMode"
+                        @change="saveSettings"
+                        type="checkbox"
+                        class="sr-only peer"
+                    />
+                    <div
+                        class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"
+                    ></div>
+                </label>
+            </div>
+        </div>
+
         <!-- Loading State -->
         <div v-if="loading" class="flex items-center justify-center py-12">
             <p class="text-muted-foreground">Загрузка секторов...</p>
@@ -178,8 +202,10 @@ export default {
     setup() {
         const loading = ref(false)
         const saving = ref(false)
+        const savingSettings = ref(false)
         const error = ref(null)
         const sectors = ref([])
+        const alwaysEmptyMode = ref(false)
         const showMediaModal = ref(false)
         const currentSector = ref(null)
         const selectedMediaFile = ref(null)
@@ -208,6 +234,11 @@ export default {
                     probability_percent: parseFloat(sector.probability_percent) || 0,
                     prize_value: sector.prize_value || 0,
                 }))
+                
+                // Загружаем настройки
+                if (data.settings) {
+                    alwaysEmptyMode.value = data.settings.always_empty_mode || false
+                }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки секторов'
             } finally {
@@ -303,6 +334,40 @@ export default {
             }
         }
 
+        const saveSettings = async () => {
+            savingSettings.value = true
+            try {
+                const response = await apiPost('/wow/wheel/settings', {
+                    always_empty_mode: alwaysEmptyMode.value,
+                })
+
+                if (!response.ok) {
+                    const errorData = await response.json()
+                    throw new Error(errorData.message || 'Ошибка сохранения настроек')
+                }
+
+                await Swal.fire({
+                    title: 'Настройки сохранены',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                })
+            } catch (err) {
+                await Swal.fire({
+                    title: 'Ошибка',
+                    text: err.message || 'Ошибка сохранения настроек',
+                    icon: 'error',
+                    confirmButtonText: 'ОК'
+                })
+                // Откатываем значение при ошибке
+                await fetchSectors()
+            } finally {
+                savingSettings.value = false
+            }
+        }
+
         onMounted(() => {
             fetchSectors()
         })
@@ -310,11 +375,14 @@ export default {
         return {
             loading,
             saving,
+            savingSettings,
             error,
             sectors,
+            alwaysEmptyMode,
             totalProbability,
             probabilityValid,
             saveAllSectors,
+            saveSettings,
             handleImageError,
             showMediaModal,
             currentSector,

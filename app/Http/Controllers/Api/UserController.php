@@ -6,29 +6,33 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Role;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(): JsonResponse
     {
-        $users = User::with('roles')->paginate(20);
+        $users = User::with('roles')->get();
         
-        return response()->json($users);
+        return response()->json([
+            'data' => $users,
+        ]);
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
             'roles' => 'nullable|array',
             'roles.*' => 'exists:roles,id',
@@ -41,26 +45,39 @@ class UserController extends Controller
             ], 422);
         }
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-        ]);
+        DB::beginTransaction();
+        
+        try {
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+            ]);
 
-        if ($request->has('roles')) {
-            $user->roles()->sync($request->roles);
+            if ($request->has('roles') && is_array($request->roles)) {
+                $user->roles()->sync($request->roles);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Пользователь успешно создан',
+                'data' => $user->load('roles'),
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'message' => 'Ошибка при создании пользователя',
+                'error' => $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'message' => 'Пользователь успешно создан',
-            'data' => $user->load('roles'),
-        ], 201);
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(string $id): JsonResponse
     {
         $user = User::with('roles')->findOrFail($id);
         
@@ -72,7 +89,7 @@ class UserController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, string $id): JsonResponse
     {
         $user = User::findOrFail($id);
 
@@ -91,36 +108,49 @@ class UserController extends Controller
             ], 422);
         }
 
-        $user->name = $request->name;
-        $user->email = $request->email;
+        DB::beginTransaction();
         
-        if ($request->filled('password')) {
-            $user->password = Hash::make($request->password);
-        }
-        
-        $user->save();
+        try {
+            $user->name = $request->name;
+            $user->email = $request->email;
+            
+            if ($request->filled('password')) {
+                $user->password = Hash::make($request->password);
+            }
+            
+            $user->save();
 
-        if ($request->has('roles')) {
-            $user->roles()->sync($request->roles);
-        }
+            if ($request->has('roles') && is_array($request->roles)) {
+                $user->roles()->sync($request->roles);
+            }
 
-        return response()->json([
-            'message' => 'Пользователь успешно обновлен',
-            'data' => $user->fresh()->load('roles'),
-        ]);
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Пользователь успешно обновлен',
+                'data' => $user->fresh('roles'),
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'message' => 'Ошибка при обновлении пользователя',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(string $id): JsonResponse
     {
         $user = User::findOrFail($id);
         
-        // Нельзя удалить самого себя
+        // Не разрешаем удалять самого себя
         if ($user->id === auth()->id()) {
             return response()->json([
-                'message' => 'Нельзя удалить самого себя',
+                'message' => 'Невозможно удалить самого себя',
             ], 422);
         }
 

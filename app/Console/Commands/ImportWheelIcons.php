@@ -7,7 +7,6 @@ use App\Models\Folder;
 use App\Models\Media;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB;
 
 class ImportWheelIcons extends Command
 {
@@ -16,7 +15,7 @@ class ImportWheelIcons extends Command
      *
      * @var string
      */
-    protected $signature = 'wow:import-wheel-icons';
+    protected $signature = 'wow:import-wheel-icons {--force : Принудительно переимпортировать все файлы, даже если записи существуют}';
 
     /**
      * The console command description.
@@ -40,29 +39,41 @@ class ImportWheelIcons extends Command
             return 1;
         }
 
-        // Найти или создать папку "общая"
-        $folder = Folder::withoutUserScope()->where('name', 'общая')->first();
+        // Найти папку "общая" или "Общая" по имени или slug
+        // Сначала ищем существующую папку "Общая" (slug: 'common') из миграции
+        $folder = Folder::withoutUserScope()
+            ->where(function($query) {
+                $query->where('slug', 'common')
+                      ->orWhere('slug', 'obshhaia')
+                      ->orWhere('name', 'общая')
+                      ->orWhere('name', 'Общая');
+            })
+            ->first();
         
         if (!$folder) {
             $this->info('Папка "общая" не найдена, создаем...');
             $folder = Folder::withoutUserScope()->create([
                 'name' => 'общая',
                 'slug' => 'obshhaia',
+                'src' => 'folder',
                 'parent_id' => null,
                 'position' => 0,
-                'user_id' => null,
             ]);
             $this->info('Папка "общая" создана (ID: ' . $folder->id . ')');
         } else {
-            $this->info('Папка "общая" найдена (ID: ' . $folder->id . ')');
+            $this->info('Папка найдена (ID: ' . $folder->id . ', название: "' . $folder->name . '", slug: "' . $folder->slug . '")');
         }
 
-        // Получить путь к папке "общая" используя метод getFolderPath
-        $folderPath = $this->getFolderPath($folder);
-        $targetPath = public_path('upload/' . $folderPath);
+        // Определяем путь к папке для сохранения файлов
+        // Используем slug папки для пути (common или obshhaia)
+        $folderSlug = $folder->slug ?: Str::slug($folder->name);
+        $targetPath = public_path('upload/' . $folderSlug);
+        
         if (!File::exists($targetPath)) {
             File::makeDirectory($targetPath, 0755, true);
             $this->info("Создана директория: {$targetPath}");
+        } else {
+            $this->info("Директория существует: {$targetPath}");
         }
 
         // Получить все PNG файлы из директории иконок
@@ -74,9 +85,11 @@ class ImportWheelIcons extends Command
         }
 
         $this->info('Найдено файлов: ' . count($iconFiles));
+        $this->newLine();
 
         $imported = 0;
         $skipped = 0;
+        $errors = 0;
 
         foreach ($iconFiles as $sourceFile) {
             $fileName = File::name($sourceFile);
@@ -84,14 +97,47 @@ class ImportWheelIcons extends Command
             $originalName = File::basename($sourceFile);
             
             // Проверяем, не существует ли уже файл с таким именем в папке "общая"
-            $existingMedia = Media::where('folder_id', $folder->id)
+            $existingMedia = Media::withoutUserScope()
+                ->where('folder_id', $folder->id)
                 ->where('original_name', $originalName)
                 ->first();
 
-            if ($existingMedia) {
-                $this->warn("  Пропущен: {$originalName} (уже существует)");
-                $skipped++;
-                continue;
+            // Если запись существует и не режим force, проверяем физическое наличие файла
+            if ($existingMedia && !$this->option('force')) {
+                // Получаем путь к файлу из metadata или из disk/name
+                $metadata = json_decode($existingMedia->metadata, true);
+                $filePath = $metadata['path'] ?? ($existingMedia->disk . '/' . $existingMedia->name);
+                $fullPath = public_path($filePath);
+                
+                // Если файл физически существует, пропускаем
+                if (File::exists($fullPath)) {
+                    $this->warn("  Пропущен: {$originalName} (файл уже существует)");
+                    $skipped++;
+                    continue;
+                } else {
+                    // Если файла нет, удаляем старую запись
+                    $this->info("  Удаление старой записи для {$originalName} (файл не найден)...");
+                    try {
+                        $existingMedia->delete();
+                    } catch (\Exception $e) {
+                        $this->warn("  Не удалось удалить запись: " . $e->getMessage());
+                    }
+                }
+            } elseif ($existingMedia && $this->option('force')) {
+                // Принудительная перезапись - удаляем старую запись
+                $this->info("  Удаление существующей записи для {$originalName} (режим --force)...");
+                try {
+                    // Удаляем физический файл
+                    $metadata = json_decode($existingMedia->metadata, true);
+                    $filePath = $metadata['path'] ?? ($existingMedia->disk . '/' . $existingMedia->name);
+                    $fullPath = public_path($filePath);
+                    if (File::exists($fullPath)) {
+                        File::delete($fullPath);
+                    }
+                    $existingMedia->delete();
+                } catch (\Exception $e) {
+                    $this->warn("  Не удалось удалить запись: " . $e->getMessage());
+                }
             }
 
             // Генерируем уникальное имя файла
@@ -101,6 +147,7 @@ class ImportWheelIcons extends Command
             // Копируем файл
             if (!File::copy($sourceFile, $targetFile)) {
                 $this->error("  Ошибка копирования: {$originalName}");
+                $errors++;
                 continue;
             }
 
@@ -117,20 +164,20 @@ class ImportWheelIcons extends Command
             }
 
             // Создаем запись в базе данных
-            $relativePath = 'upload/' . $folderPath . '/' . $uniqueFileName;
+            $relativePath = 'upload/' . $folderSlug . '/' . $uniqueFileName;
             
             try {
-                Media::withoutUserScope()->create([
+                $media = Media::withoutUserScope()->create([
                     'name' => $uniqueFileName,
                     'original_name' => $originalName,
                     'extension' => $extension,
-                    'disk' => 'upload/' . $folderPath,
+                    'disk' => 'upload/' . $folderSlug,
                     'width' => $width,
                     'height' => $height,
                     'type' => 'photo',
                     'size' => $fileSize,
                     'folder_id' => $folder->id,
-                    'user_id' => null,
+                    'user_id' => null, // Без привязки к пользователю
                     'temporary' => false,
                     'metadata' => json_encode([
                         'path' => $relativePath,
@@ -138,7 +185,7 @@ class ImportWheelIcons extends Command
                     ])
                 ]);
 
-                $this->info("  ✓ Импортирован: {$originalName}");
+                $this->info("  ✓ Импортирован: {$originalName} (ID: {$media->id})");
                 $imported++;
             } catch (\Exception $e) {
                 $this->error("  ✗ Ошибка создания записи для {$originalName}: " . $e->getMessage());
@@ -146,6 +193,7 @@ class ImportWheelIcons extends Command
                 if (File::exists($targetFile)) {
                     File::delete($targetFile);
                 }
+                $errors++;
             }
         }
 
@@ -153,25 +201,21 @@ class ImportWheelIcons extends Command
         $this->info("Импорт завершен!");
         $this->info("  Импортировано: {$imported}");
         $this->info("  Пропущено: {$skipped}");
+        if ($errors > 0) {
+            $this->warn("  Ошибок: {$errors}");
+        }
+
+        // Выводим информацию о папке
+        $this->newLine();
+        $this->info("Папка: {$folder->name} (ID: {$folder->id}, slug: {$folder->slug})");
+        $this->info("Путь к файлам: upload/{$folderSlug}/");
+        
+        // Проверяем количество файлов в папке
+        $filesInFolder = Media::withoutUserScope()
+            ->where('folder_id', $folder->id)
+            ->count();
+        $this->info("Файлов в БД для этой папки: {$filesInFolder}");
 
         return 0;
     }
-
-    /**
-     * Получить путь к папке из иерархии (как в MediaController)
-     */
-    private function getFolderPath(Folder $folder): string
-    {
-        $path = [];
-        $currentFolder = $folder;
-
-        // Загружаем родителей для построения пути
-        while ($currentFolder) {
-            array_unshift($path, Str::slug($currentFolder->name));
-            $currentFolder = $currentFolder->parent;
-        }
-
-        return implode('/', $path);
-    }
 }
-

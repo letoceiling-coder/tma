@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\WheelController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\WowAuthController;
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\StarExchangeController;
 use App\Http\Controllers\Api\v1\FolderController;
@@ -26,6 +27,9 @@ Route::get('/wheel-config', [WheelController::class, 'getConfig']);
 
 // Защищенные роуты для Telegram WebApp (требуют initData, но не обязательна валидация в режиме разработки)
 Route::middleware(['telegram.initdata'])->group(function () {
+    // Инициализация пользователя WOW (создание/обновление при первом запуске)
+    Route::post('/user/init', [WowAuthController::class, 'init']);
+    
     // Рулетка
     Route::post('/spin', [WheelController::class, 'spin']);
     
@@ -97,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('wheel', [\App\Http\Controllers\Api\Admin\WheelController::class, 'index']);
                 Route::put('wheel/sectors/{id}', [\App\Http\Controllers\Api\Admin\WheelController::class, 'update']);
                 Route::post('wheel/bulk-update', [\App\Http\Controllers\Api\Admin\WheelController::class, 'bulkUpdate']);
+                Route::post('wheel/settings', [\App\Http\Controllers\Api\Admin\WheelController::class, 'updateSettings']);
                 Route::get('wheel/validate', [\App\Http\Controllers\Api\Admin\WheelController::class, 'validateProbabilities']);
                 
                 // Пользователи WOW

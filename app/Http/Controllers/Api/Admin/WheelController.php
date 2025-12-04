@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\WheelSector;
+use App\Models\WheelSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -12,17 +13,22 @@ use Illuminate\Support\Facades\DB;
 class WheelController extends Controller
 {
     /**
-     * Получить все секторы рулетки
+     * Получить все секторы рулетки и настройки
      */
     public function index(): JsonResponse
     {
         $sectors = WheelSector::orderBy('sector_number')->get();
 
         $totalProbability = $sectors->sum('probability_percent');
+        
+        $settings = WheelSetting::getSettings();
 
         return response()->json([
             'data' => $sectors,
             'total_probability' => (float) $totalProbability,
+            'settings' => [
+                'always_empty_mode' => $settings->always_empty_mode,
+            ],
         ]);
     }
 
@@ -131,6 +137,34 @@ class WheelController extends Controller
             'is_valid' => $isValid,
             'total_probability' => (float) $totalProbability,
             'difference' => (float) (100 - $totalProbability),
+        ]);
+    }
+
+    /**
+     * Обновить настройки рулетки
+     */
+    public function updateSettings(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'always_empty_mode' => 'required|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $settings = WheelSetting::updateSettings([
+            'always_empty_mode' => $request->always_empty_mode,
+        ]);
+
+        return response()->json([
+            'message' => 'Настройки успешно обновлены',
+            'settings' => [
+                'always_empty_mode' => $settings->always_empty_mode,
+            ],
         ]);
     }
 }

@@ -169,6 +169,29 @@ export default {
                         </li>
                     </ul>
 
+                    <h3>Инициализация пользователя</h3>
+                    <ul>
+                        <li><strong>POST /api/user/init</strong> - Инициализация/регистрация пользователя WOW при первом запуске Mini App
+                            <ul>
+                                <li>Требует: заголовок <code>X-Telegram-Init-Data</code> или query параметр <code>initData</code></li>
+                                <li>Создает нового пользователя или обновляет существующего на основе данных из Telegram</li>
+                                <li>Устанавливает начальные значения: 3 билета, 0 звёзд, обнуляет статистику</li>
+                                <li>Автоматически обновляет данные из Telegram: имя, username, аватар</li>
+                                <li>Возвращает: <code>{success: bool, user: object, is_new_user: bool}</code></li>
+                                <li><strong>Рекомендуется вызывать</strong> сразу после успешной проверки подписки на каналы</li>
+                                <li>Альтернатива: пользователь автоматически создается при первом запросе к <code>/api/user/tickets</code> или <code>/api/spin</code></li>
+                            </ul>
+                        </li>
+                    </ul>
+                    <p><strong>Процесс запуска приложения:</strong></p>
+                    <ol>
+                        <li>Пользователь открывает Mini App в Telegram</li>
+                        <li>Проверка подписки на обязательные каналы (<code>/api/check-all-subscriptions</code>)</li>
+                        <li>Инициализация пользователя (<code>/api/user/init</code>) - создание/обновление записи в БД</li>
+                        <li>Загрузка конфигурации рулетки (<code>/api/wheel-config</code>)</li>
+                        <li>Загрузка билетов пользователя (<code>/api/user/tickets</code>)</li>
+                    </ol>
+
                     <h3>Рулетка</h3>
                     <ul>
                         <li><strong>GET /api/wheel-config</strong> - Получение конфигурации рулетки (публичный доступ)

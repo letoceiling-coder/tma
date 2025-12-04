@@ -11,6 +11,7 @@ import Leaderboard from "./pages/Leaderboard";
 import HowToPlay from "./pages/HowToPlay";
 import NotFound from "./pages/NotFound";
 import ChannelSubscriptionCheck from "./components/ChannelSubscriptionCheck";
+import { useUserInit } from "./hooks/useUserInit";
 
 const queryClient = new QueryClient();
 
@@ -34,19 +35,34 @@ const ScrollToTop = () => {
 const AppContent = () => {
   // Очищаем sessionStorage при каждом запуске - проверка обязательна каждый раз
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const { initUser, isInitializing } = useUserInit();
 
   // Очищаем старые данные при монтировании
   useEffect(() => {
     sessionStorage.removeItem("channel_subscribed");
   }, []);
 
-  const handleSubscribed = () => {
+  const handleSubscribed = async () => {
     setIsSubscribed(true);
     sessionStorage.setItem("channel_subscribed", "true");
     // Сохраняем в localStorage для тестирования
     CHANNEL_USERNAMES.forEach((username) => {
       localStorage.setItem(`channel_subscribed_${username}`, "true");
     });
+
+    // Инициализируем пользователя после успешной проверки подписки
+    try {
+      const result = await initUser();
+      if (result?.success) {
+        console.log("Пользователь инициализирован:", result.is_new_user ? "новый" : "существующий");
+      } else if (result?.error) {
+        console.warn("Ошибка инициализации пользователя:", result.error);
+        // Не блокируем запуск приложения при ошибке инициализации
+      }
+    } catch (error) {
+      console.error("Ошибка при инициализации пользователя:", error);
+      // Не блокируем запуск приложения при ошибке инициализации
+    }
   };
 
   // Если пользователь не подписан, показываем экран подписки

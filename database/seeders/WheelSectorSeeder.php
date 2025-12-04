@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\WheelSector;
+use App\Models\Folder;
+use App\Models\Media;
 use Illuminate\Support\Facades\DB;
 
 class WheelSectorSeeder extends Seeder
@@ -129,14 +131,120 @@ class WheelSectorSeeder extends Seeder
             ],
         ];
 
+        // Маппинг иконок по типу приза и значению
+        // Ищем иконки в папке "общая" по оригинальному имени
+        $iconMapping = $this->getIconMapping();
+
         foreach ($sectors as $sector) {
+            // Определяем, какая иконка нужна для этого сектора
+            $iconUrl = $this->getIconUrlForSector($sector, $iconMapping);
+            
+            $sectorData = $sector;
+            if ($iconUrl) {
+                $sectorData['icon_url'] = $iconUrl;
+            }
+
             WheelSector::updateOrCreate(
                 ['sector_number' => $sector['sector_number']],
-                $sector
+                $sectorData
             );
         }
 
         $this->command->info('Создано/обновлено 12 секторов рулетки');
+        
+        // Выводим информацию о присвоенных иконках
+        $sectorsWithIcons = WheelSector::whereNotNull('icon_url')->count();
+        $iconsFound = count($iconMapping);
+        
+        if ($iconsFound > 0) {
+            $this->command->info("  Найдено иконок в media: {$iconsFound}");
+        } else {
+            $this->command->warn("  Внимание: иконки не найдены в media. Выполните: php artisan wow:import-wheel-icons");
+        }
+        
+        if ($sectorsWithIcons > 0) {
+            $this->command->info("  Секторов с иконками: {$sectorsWithIcons}/12");
+        } else {
+            $this->command->warn("  Секторы созданы, но иконки не присвоены. Импортируйте иконки: php artisan wow:import-wheel-icons");
+        }
+    }
+
+    /**
+     * Получить маппинг иконок из media
+     */
+    private function getIconMapping(): array
+    {
+        // Найти папку "общая" или "Общая"
+        $folder = Folder::withoutUserScope()
+            ->where(function($query) {
+                $query->where('slug', 'common')
+                      ->orWhere('slug', 'obshhaia')
+                      ->orWhere('name', 'общая')
+                      ->orWhere('name', 'Общая');
+            })
+            ->first();
+
+        if (!$folder) {
+            return [];
+        }
+
+        // Получаем все иконки из папки
+        $mediaFiles = Media::withoutUserScope()
+            ->where('folder_id', $folder->id)
+            ->where('extension', 'png')
+            ->get();
+
+        $mapping = [];
+        foreach ($mediaFiles as $media) {
+            $metadata = json_decode($media->metadata, true);
+            $url = '/' . ($metadata['path'] ?? ($media->disk . '/' . $media->name));
+            $mapping[$media->original_name] = $url;
+        }
+
+        return $mapping;
+    }
+
+    /**
+     * Получить URL иконки для сектора на основе типа приза и значения
+     */
+    private function getIconUrlForSector(array $sector, array $iconMapping): ?string
+    {
+        $prizeType = $sector['prize_type'] ?? null;
+        $prizeValue = $sector['prize_value'] ?? 0;
+
+        // Определяем имя иконки на основе типа приза
+        $iconName = null;
+
+        switch ($prizeType) {
+            case 'empty':
+                $iconName = 'prize-0.png';
+                break;
+            case 'money':
+                if ($prizeValue == 300) {
+                    $iconName = 'prize-300.png';
+                } elseif ($prizeValue == 500) {
+                    $iconName = 'prize-500.png';
+                } elseif ($prizeValue == 1000) {
+                    $iconName = 'prize-500.png'; // Можно использовать другую иконку для 1000
+                } elseif ($prizeValue == 2000) {
+                    $iconName = 'prize-wow.png';
+                } else {
+                    $iconName = 'prize-0.png';
+                }
+                break;
+            case 'ticket':
+                $iconName = 'prize-ticket.png';
+                break;
+            case 'secret_box':
+                $iconName = 'prize-secret.png';
+                break;
+            default:
+                $iconName = 'prize-0.png';
+                break;
+        }
+
+        // Возвращаем URL иконки из маппинга
+        return $iconMapping[$iconName] ?? null;
     }
 }
 
