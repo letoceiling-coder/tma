@@ -18,6 +18,9 @@ use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
 
 // Публичные роуты для Telegram WebApp
+// Получение списка активных каналов
+Route::get('/channels', [SubscriptionController::class, 'getActiveChannels']);
+
 // Проверка подписки на канал
 Route::get('/check-subscription/{channelUsername}', [SubscriptionController::class, 'checkSubscription']);
 Route::get('/check-all-subscriptions', [SubscriptionController::class, 'checkAllSubscriptions']);

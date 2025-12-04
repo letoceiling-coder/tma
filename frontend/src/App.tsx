@@ -15,9 +15,6 @@ import { useUserInit } from "./hooks/useUserInit";
 
 const queryClient = new QueryClient();
 
-// Каналы для проверки подписки (можно добавить несколько)
-const CHANNEL_USERNAMES = ["neeklo_studio", "neiroitishka"];
-
 // Scroll to top on route change
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -33,20 +30,68 @@ const ScrollToTop = () => {
 };
 
 const AppContent = () => {
-  // Очищаем sessionStorage при каждом запуске - проверка обязательна каждый раз
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [channelUsernames, setChannelUsernames] = useState<string[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
   const { initUser, isInitializing } = useUserInit();
 
-  // Очищаем старые данные при монтировании
+  // Загружаем список каналов при монтировании
   useEffect(() => {
-    sessionStorage.removeItem("channel_subscribed");
+    const loadChannels = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const apiPath = apiUrl ? `${apiUrl}/api/channels` : `/api/channels`;
+        
+        const response = await fetch(apiPath, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Ошибка загрузки каналов');
+        }
+
+        const data = await response.json();
+        const channels = data.channels || [];
+        
+        if (channels.length === 0) {
+          // Если каналов нет, пропускаем проверку подписки
+          console.log('Каналов для проверки нет, пропускаем проверку подписки');
+          setIsSubscribed(true);
+          
+          // Инициализируем пользователя
+          try {
+            const result = await initUser();
+            if (result?.success) {
+              console.log("Пользователь инициализирован:", result.is_new_user ? "новый" : "существующий");
+            }
+          } catch (error) {
+            console.error("Ошибка при инициализации пользователя:", error);
+          }
+        } else {
+          // Загружаем usernames каналов
+          setChannelUsernames(channels.map((ch: any) => ch.username));
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки каналов:', error);
+        // При ошибке пропускаем проверку подписки
+        setIsSubscribed(true);
+      } finally {
+        setLoadingChannels(false);
+      }
+    };
+
+    loadChannels();
   }, []);
 
   const handleSubscribed = async () => {
     setIsSubscribed(true);
     sessionStorage.setItem("channel_subscribed", "true");
     // Сохраняем в localStorage для тестирования
-    CHANNEL_USERNAMES.forEach((username) => {
+    channelUsernames.forEach((username) => {
       localStorage.setItem(`channel_subscribed_${username}`, "true");
     });
 
@@ -65,11 +110,37 @@ const AppContent = () => {
     }
   };
 
-  // Если пользователь не подписан, показываем экран подписки
-  if (!isSubscribed) {
+  // Показываем загрузку пока каналы загружаются
+  if (loadingChannels) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{
+          background: "#FECFB2",
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+        }}
+      >
+        <div className="text-center">
+          <p
+            style={{
+              fontSize: "16px",
+              fontWeight: 600,
+              color: "#CC5C47",
+              margin: 0,
+            }}
+          >
+            Загрузка...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Если пользователь не подписан И есть каналы для проверки, показываем экран подписки
+  if (!isSubscribed && channelUsernames.length > 0) {
     return (
       <ChannelSubscriptionCheck
-        channelUsernames={CHANNEL_USERNAMES}
+        channelUsernames={channelUsernames}
         onSubscribed={handleSubscribed}
       />
     );

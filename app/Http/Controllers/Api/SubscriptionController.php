@@ -11,6 +11,26 @@ use Illuminate\Support\Facades\Log;
 class SubscriptionController extends Controller
 {
     /**
+     * Получить список активных каналов для проверки подписки
+     * 
+     * @return JsonResponse
+     */
+    public function getActiveChannels(): JsonResponse
+    {
+        $channels = \App\Models\Channel::getActiveChannels();
+        
+        return response()->json([
+            'channels' => $channels->map(function ($channel) {
+                return [
+                    'username' => $channel->username,
+                    'title' => $channel->title,
+                    'priority' => $channel->priority,
+                ];
+            }),
+        ]);
+    }
+    
+    /**
      * Проверка подписки пользователя на канал Telegram
      * 
      * @param Request $request
