@@ -191,24 +191,14 @@ const routes = [
                 component: () => import('./pages/admin/Dashboard.vue'),
             },
             {
-                path: 'products',
-                name: 'admin.products',
-                component: () => import('./pages/admin/Products.vue'),
-            },
-            {
-                path: 'categories',
-                name: 'admin.categories',
-                component: () => import('./pages/admin/Categories.vue'),
-            },
-            {
-                path: 'services',
-                name: 'admin.services',
-                component: () => import('./pages/admin/Services.vue'),
-            },
-            {
                 path: 'media',
                 name: 'admin.media',
                 component: () => import('./pages/admin/Media.vue'),
+            },
+            {
+                path: 'notifications',
+                name: 'admin.notifications',
+                component: () => import('./pages/admin/Notifications.vue'),
             },
             {
                 path: 'users',
@@ -221,26 +211,6 @@ const routes = [
                 name: 'admin.roles',
                 component: () => import('./pages/admin/Roles.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
-            },
-            {
-                path: 'subscription',
-                name: 'admin.subscription',
-                component: () => import('./pages/admin/Subscription.vue'),
-            },
-            {
-                path: 'versions',
-                name: 'admin.versions',
-                component: () => import('./pages/admin/Versions.vue'),
-            },
-            {
-                path: 'settings',
-                name: 'admin.settings',
-                component: () => import('./pages/admin/Settings.vue'),
-            },
-            {
-                path: 'notifications',
-                name: 'admin.notifications',
-                component: () => import('./pages/admin/Notifications.vue'),
             },
             // WOW Рулетка
             {

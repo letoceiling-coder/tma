@@ -44,27 +44,6 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
                 </svg>
             </button>
-            <div class="hidden lg:flex items-center gap-2">
-                <button class="flex items-center gap-2 h-11 px-6 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-colors">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    Сохранить
-                </button>
-                <button class="flex items-center gap-2 h-11 px-6 bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-colors">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                    </svg>
-                    Опубликовать
-                </button>
-            </div>
-            <div class="relative lg:hidden">
-                <button class="h-11 w-11 flex items-center justify-center bg-accent text-accent-foreground rounded-xl hover:bg-accent/90 transition-colors">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                </button>
-            </div>
             <div class="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-sm font-bold text-accent flex-shrink-0">
                 {{ userInitials }}
             </div>
