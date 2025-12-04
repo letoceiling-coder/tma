@@ -35,8 +35,16 @@ class ForceHttps
             'host' => $request->getHost(),
         ]);
         
-        // Принудительно используем HTTPS в production
-        if (!$request->secure() && config('app.env') === 'production') {
+        // Принудительно используем HTTPS только в production и только для реальных доменов
+        // Не применяем для локальных доменов (.loc, .local, localhost)
+        $host = $request->getHost();
+        $isLocalDomain = str_contains($host, '.loc') || 
+                         str_contains($host, '.local') || 
+                         $host === 'localhost' || 
+                         str_starts_with($host, '127.0.0.1') ||
+                         str_starts_with($host, '192.168.');
+        
+        if (!$request->secure() && config('app.env') === 'production' && !$isLocalDomain) {
             $uri = $request->getRequestUri();
             // Убираем /public/ из URI, если он там есть
             $uri = str_replace('/public', '', $uri);
@@ -44,10 +52,17 @@ class ForceHttps
             return redirect()->secure($uri);
         }
 
+        // Для локальных доменов явно сбрасываем принудительный HTTPS
+        if ($isLocalDomain) {
+            URL::forceScheme(null);
+            \Log::info('ForceHttps Middleware - Local domain detected, forcing scheme to null', ['host' => $host]);
+        }
+        
         // Исправляем APP_URL, если он содержит /public/ или использует HTTP
+        // Но только для production и не для локальных доменов
         $needsUpdate = false;
         
-        if ($appUrl) {
+        if ($appUrl && !$isLocalDomain) {
             // Убираем /public/ из URL
             if (str_contains($appUrl, '/public')) {
                 $appUrl = str_replace('/public', '', $appUrl);
@@ -55,8 +70,8 @@ class ForceHttps
                 \Log::info('ForceHttps Middleware - Removing /public/ from APP_URL', ['old' => config('app.url'), 'new' => $appUrl]);
             }
             
-            // Заменяем HTTP на HTTPS
-            if (str_starts_with($appUrl, 'http://')) {
+            // Заменяем HTTP на HTTPS только в production
+            if (str_starts_with($appUrl, 'http://') && config('app.env') === 'production') {
                 $appUrl = str_replace('http://', 'https://', $appUrl);
                 $needsUpdate = true;
                 \Log::info('ForceHttps Middleware - Replacing http:// with https://', ['old' => config('app.url'), 'new' => $appUrl]);
@@ -66,11 +81,14 @@ class ForceHttps
                 config(['app.url' => $appUrl]);
                 // Устанавливаем базовый URL для генерации URL
                 URL::forceRootUrl($appUrl);
-                URL::forceScheme('https');
-                \Log::info('ForceHttps Middleware - Updated APP_URL and forced HTTPS', [
+                // Принудительно используем HTTPS только в production
+                if (config('app.env') === 'production') {
+                    URL::forceScheme('https');
+                }
+                \Log::info('ForceHttps Middleware - Updated APP_URL', [
                     'app_url' => config('app.url'),
                     'forced_root_url' => $appUrl,
-                    'forced_scheme' => 'https',
+                    'forced_scheme' => config('app.env') === 'production' ? 'https' : 'auto',
                 ]);
             }
         }
