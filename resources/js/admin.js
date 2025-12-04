@@ -242,6 +242,38 @@ const routes = [
                 name: 'admin.notifications',
                 component: () => import('./pages/admin/Notifications.vue'),
             },
+            // WOW Рулетка
+            {
+                path: 'wow/channels',
+                name: 'admin.wow.channels',
+                component: () => import('./pages/admin/wow/Channels.vue'),
+            },
+            {
+                path: 'wow/wheel',
+                name: 'admin.wow.wheel',
+                component: () => import('./pages/admin/wow/Wheel.vue'),
+            },
+            {
+                path: 'wow/users',
+                name: 'admin.wow.users',
+                component: () => import('./pages/admin/wow/WowUsers.vue'),
+            },
+            {
+                path: 'wow/referrals',
+                name: 'admin.wow.referrals',
+                component: () => import('./pages/admin/wow/Referrals.vue'),
+            },
+            {
+                path: 'wow/statistics',
+                name: 'admin.wow.statistics',
+                component: () => import('./pages/admin/wow/Statistics.vue'),
+            },
+            // Документация
+            {
+                path: 'documentation',
+                name: 'admin.documentation',
+                component: () => import('./pages/admin/Documentation.vue'),
+            },
         ],
     },
 ];

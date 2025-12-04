@@ -1,0 +1,137 @@
+<?php
+
+namespace App\Http\Controllers\Api\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\WheelSector;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+
+class WheelController extends Controller
+{
+    /**
+     * Получить все секторы рулетки
+     */
+    public function index(): JsonResponse
+    {
+        $sectors = WheelSector::orderBy('sector_number')->get();
+
+        $totalProbability = $sectors->sum('probability_percent');
+
+        return response()->json([
+            'data' => $sectors,
+            'total_probability' => (float) $totalProbability,
+        ]);
+    }
+
+    /**
+     * Обновить сектор
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $sector = WheelSector::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'prize_type' => 'required|in:money,ticket,secret_box,empty',
+            'prize_value' => 'nullable|integer|min:0',
+            'icon_url' => 'nullable|string|max:500',
+            'probability_percent' => 'required|numeric|min:0|max:100',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $sector->update([
+            'prize_type' => $request->prize_type,
+            'prize_value' => $request->prize_value ?? 0,
+            'icon_url' => $request->icon_url,
+            'probability_percent' => $request->probability_percent,
+            'is_active' => $request->is_active ?? $sector->is_active,
+        ]);
+
+        // Пересчитываем общую вероятность
+        $totalProbability = WheelSector::sum('probability_percent');
+
+        return response()->json([
+            'data' => $sector,
+            'total_probability' => (float) $totalProbability,
+            'message' => 'Сектор успешно обновлен',
+        ]);
+    }
+
+    /**
+     * Массовое обновление секторов
+     */
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'sectors' => 'required|array',
+            'sectors.*.id' => 'required|exists:wheel_sectors,id',
+            'sectors.*.prize_type' => 'required|in:money,ticket,secret_box,empty',
+            'sectors.*.prize_value' => 'nullable|integer|min:0',
+            'sectors.*.icon_url' => 'nullable|string|max:500',
+            'sectors.*.probability_percent' => 'required|numeric|min:0|max:100',
+            'sectors.*.is_active' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($request->sectors as $sectorData) {
+                WheelSector::where('id', $sectorData['id'])->update([
+                    'prize_type' => $sectorData['prize_type'],
+                    'prize_value' => $sectorData['prize_value'] ?? 0,
+                    'icon_url' => $sectorData['icon_url'] ?? null,
+                    'probability_percent' => $sectorData['probability_percent'],
+                    'is_active' => $sectorData['is_active'] ?? true,
+                ]);
+            }
+
+            DB::commit();
+
+            $totalProbability = WheelSector::sum('probability_percent');
+
+            return response()->json([
+                'message' => 'Секторы успешно обновлены',
+                'total_probability' => (float) $totalProbability,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Ошибка при обновлении секторов',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Проверить, что сумма вероятностей = 100%
+     */
+    public function validateProbabilities(): JsonResponse
+    {
+        $totalProbability = WheelSector::sum('probability_percent');
+        $isValid = abs($totalProbability - 100) < 0.01; // Допускаем небольшую погрешность
+
+        return response()->json([
+            'is_valid' => $isValid,
+            'total_probability' => (float) $totalProbability,
+            'difference' => (float) (100 - $totalProbability),
+        ]);
+    }
+}
+

@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'deploy.token' => \App\Http\Middleware\VerifyDeployToken::class,
+            'telegram.initdata' => \App\Http\Middleware\ValidateTelegramInitData::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

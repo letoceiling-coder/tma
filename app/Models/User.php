@@ -6,7 +6,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -23,6 +25,15 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'telegram_id',
+        'username',
+        'avatar_url',
+        'stars_balance',
+        'tickets_available',
+        'last_spin_at',
+        'invited_by',
+        'total_spins',
+        'total_wins',
     ];
 
     /**
@@ -45,6 +56,11 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'last_spin_at' => 'datetime',
+            'stars_balance' => 'integer',
+            'tickets_available' => 'integer',
+            'total_spins' => 'integer',
+            'total_wins' => 'integer',
         ];
     }
 
@@ -78,5 +94,53 @@ class User extends Authenticatable
     public function notifications()
     {
         return $this->hasMany(\App\Models\Notification::class);
+    }
+
+    /**
+     * Пользователь, который пригласил этого пользователя
+     */
+    public function inviter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'invited_by');
+    }
+
+    /**
+     * Пользователи, приглашенные этим пользователем
+     */
+    public function invitedUsers(): HasMany
+    {
+        return $this->hasMany(User::class, 'invited_by');
+    }
+
+    /**
+     * Реферальные связи (когда этот пользователь пригласил)
+     */
+    public function referralsAsInviter(): HasMany
+    {
+        return $this->hasMany(Referral::class, 'inviter_id');
+    }
+
+    /**
+     * Прокруты рулетки
+     */
+    public function spins(): HasMany
+    {
+        return $this->hasMany(Spin::class);
+    }
+
+    /**
+     * Билеты пользователя
+     */
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(UserTicket::class);
+    }
+
+    /**
+     * Обмены звёзд
+     */
+    public function starExchanges(): HasMany
+    {
+        return $this->hasMany(StarExchange::class);
     }
 }

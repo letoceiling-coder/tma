@@ -7,13 +7,47 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\DeployController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\WheelController;
+use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\ReferralController;
+use App\Http\Controllers\Api\LeaderboardController;
+use App\Http\Controllers\Api\StarExchangeController;
 use App\Http\Controllers\Api\v1\FolderController;
 use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
 
-// Публичные роуты
+// Публичные роуты для Telegram WebApp
 // Проверка подписки на канал
 Route::get('/check-subscription/{channelUsername}', [SubscriptionController::class, 'checkSubscription']);
+Route::get('/check-all-subscriptions', [SubscriptionController::class, 'checkAllSubscriptions']);
+
+// Конфигурация рулетки (публичный доступ)
+Route::get('/wheel-config', [WheelController::class, 'getConfig']);
+
+// Защищенные роуты для Telegram WebApp (требуют initData, но не обязательна валидация в режиме разработки)
+Route::middleware(['telegram.initdata'])->group(function () {
+    // Рулетка
+    Route::post('/spin', [WheelController::class, 'spin']);
+    
+    // Билеты
+    Route::get('/user/tickets', [TicketController::class, 'getTickets']);
+    
+    // Рефералы
+    Route::get('/referral/link', [ReferralController::class, 'getLink']);
+    Route::post('/referral/register', [ReferralController::class, 'register']);
+    Route::get('/referral/stats', [ReferralController::class, 'getStats']);
+    
+    // Лидерборд
+    Route::get('/leaderboard', [LeaderboardController::class, 'index']);
+    
+    // Telegram Stars Exchange
+    Route::post('/stars/exchange/initiate', [StarExchangeController::class, 'initiateExchange']);
+    Route::post('/stars/exchange/confirm', [StarExchangeController::class, 'confirmExchange']);
+    Route::get('/stars/exchange/history', [StarExchangeController::class, 'getHistory']);
+});
+
+// Webhook для Telegram Stars Exchange (не требует initData, но защищен токеном)
+Route::post('/stars/exchange/webhook', [StarExchangeController::class, 'webhook']);
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -53,6 +87,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::middleware('admin')->group(function () {
             Route::apiResource('roles', RoleController::class);
             Route::apiResource('users', UserController::class);
+            
+            // WOW Рулетка - Админ панель
+            Route::prefix('wow')->group(function () {
+                // Каналы
+                Route::apiResource('channels', \App\Http\Controllers\Api\Admin\ChannelController::class);
+                
+                // Рулетка
+                Route::get('wheel', [\App\Http\Controllers\Api\Admin\WheelController::class, 'index']);
+                Route::put('wheel/sectors/{id}', [\App\Http\Controllers\Api\Admin\WheelController::class, 'update']);
+                Route::post('wheel/bulk-update', [\App\Http\Controllers\Api\Admin\WheelController::class, 'bulkUpdate']);
+                Route::get('wheel/validate', [\App\Http\Controllers\Api\Admin\WheelController::class, 'validateProbabilities']);
+                
+                // Пользователи WOW
+                Route::get('users', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'index']);
+                Route::get('users/{id}', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'show']);
+            });
         });
     });
 });

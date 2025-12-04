@@ -1,0 +1,90 @@
+<?php
+
+namespace App\Http\Controllers\Api\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Spin;
+use App\Models\Referral;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
+
+class WowUserController extends Controller
+{
+    /**
+     * Получить список пользователей WOW
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $query = User::whereNotNull('telegram_id')
+            ->withCount(['spins', 'referralsAsInviter as invites_count'])
+            ->with(['inviter']);
+
+        // Поиск
+        if ($search = $request->input('search')) {
+            $query->where(function($q) use ($search) {
+                $q->where('username', 'like', "%{$search}%")
+                  ->orWhere('telegram_id', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
+        // Фильтр по дате регистрации
+        if ($dateFrom = $request->input('date_from')) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo = $request->input('date_to')) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
+        // Сортировка
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        // Пагинация
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $users = $query->paginate($perPage);
+
+        return response()->json($users);
+    }
+
+    /**
+     * Получить детальную информацию о пользователе
+     */
+    public function show(int $id): JsonResponse
+    {
+        $user = User::whereNotNull('telegram_id')
+            ->with(['inviter', 'referralsAsInviter.invited'])
+            ->withCount([
+                'spins',
+                'spins as wins_count' => function($query) {
+                    $query->where('prize_type', '!=', 'empty')
+                          ->where('prize_value', '>', 0);
+                },
+                'referralsAsInviter as invites_count',
+            ])
+            ->findOrFail($id);
+
+        // Статистика прокрутов
+        $spinsStats = Spin::where('user_id', $user->id)
+            ->selectRaw('prize_type, COUNT(*) as count, SUM(prize_value) as total_value')
+            ->groupBy('prize_type')
+            ->get();
+
+        // Последние прокруты
+        $recentSpins = Spin::where('user_id', $user->id)
+            ->with('sector')
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'data' => $user,
+            'spins_stats' => $spinsStats,
+            'recent_spins' => $recentSpins,
+        ]);
+    }
+}
+

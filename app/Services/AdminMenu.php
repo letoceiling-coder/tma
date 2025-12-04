@@ -89,6 +89,49 @@ class AdminMenu
                 'icon' => 'settings',
                 'roles' => ['admin'],
             ],
+            [
+                'title' => 'WOW Рулетка',
+                'icon' => 'circle',
+                'roles' => ['admin', 'manager'],
+                'children' => [
+                    [
+                        'title' => 'Каналы',
+                        'route' => 'admin.wow.channels',
+                        'icon' => 'message-circle',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                    [
+                        'title' => 'Рулетка',
+                        'route' => 'admin.wow.wheel',
+                        'icon' => 'circle',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                    [
+                        'title' => 'Пользователи WOW',
+                        'route' => 'admin.wow.users',
+                        'icon' => 'users',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                    [
+                        'title' => 'Рефералы',
+                        'route' => 'admin.wow.referrals',
+                        'icon' => 'user-plus',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                    [
+                        'title' => 'Статистика',
+                        'route' => 'admin.wow.statistics',
+                        'icon' => 'bar-chart',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                ],
+            ],
+            [
+                'title' => 'Документация',
+                'route' => 'admin.documentation',
+                'icon' => 'book',
+                'roles' => ['admin', 'manager', 'user'],
+            ],
         ]);
 
         if (!$user) {

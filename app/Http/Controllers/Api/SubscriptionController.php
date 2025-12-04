@@ -60,43 +60,102 @@ class SubscriptionController extends Controller
 
             // Проверяем подписку через Telegram Bot API
             $chatId = '@' . ltrim($channelUsername, '@');
+            
+            Log::info('Checking subscription', [
+                'chat_id' => $chatId,
+                'user_id' => $userId,
+                'channel' => $channelUsername,
+            ]);
+            
             $response = Http::get("https://api.telegram.org/bot{$botToken}/getChatMember", [
                 'chat_id' => $chatId,
                 'user_id' => $userId,
             ]);
 
             if ($response->failed()) {
+                $errorBody = $response->body();
+                $errorJson = json_decode($errorBody, true);
+                
                 Log::error('Telegram API error', [
                     'status' => $response->status(),
-                    'body' => $response->body(),
+                    'body' => $errorBody,
+                    'error_code' => $errorJson['error_code'] ?? null,
+                    'description' => $errorJson['description'] ?? null,
                     'channel' => $channelUsername,
                     'user_id' => $userId,
                 ]);
                 
+                // Если ошибка "user not found" или "bot is not a member" - пользователь точно не подписан
+                // Если ошибка "bot is not an admin" - нужно сделать бота админом
+                $errorDescription = $errorJson['description'] ?? '';
+                if (str_contains($errorDescription, 'bot is not an admin')) {
+                    return response()->json([
+                        'is_subscribed' => false,
+                        'message' => 'Bot must be admin of the channel',
+                        'debug' => [
+                            'error' => $errorDescription,
+                            'chat_id' => $chatId,
+                        ]
+                    ]);
+                }
+                
                 // При ошибке API блокируем доступ - считаем что не подписан
                 return response()->json([
                     'is_subscribed' => false,
-                    'message' => 'API error, subscription check failed'
+                    'message' => 'API error, subscription check failed',
+                    'debug' => [
+                        'error' => $errorDescription,
+                        'status' => $response->status(),
+                    ]
                 ]);
             }
 
             $result = $response->json();
             
+            Log::info('Telegram API response', [
+                'ok' => $result['ok'] ?? false,
+                'result' => $result['result'] ?? null,
+                'channel' => $channelUsername,
+            ]);
+            
             if (!isset($result['ok']) || !$result['ok']) {
+                Log::warning('Telegram API returned not ok', [
+                    'result' => $result,
+                    'channel' => $channelUsername,
+                    'user_id' => $userId,
+                ]);
+                
                 return response()->json([
                     'is_subscribed' => false,
-                    'message' => $result['description'] ?? 'Unknown error'
+                    'message' => $result['description'] ?? 'Unknown error',
+                    'debug' => [
+                        'result' => $result,
+                    ]
                 ]);
             }
 
             $status = $result['result']['status'] ?? null;
             
             // Пользователь считается подписанным если статус: member, administrator, creator
-            $isSubscribed = in_array($status, ['member', 'administrator', 'creator']);
+            // Статусы: left, kicked - не подписан
+            // Статусы: member, administrator, creator, restricted - подписан
+            $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
+
+            Log::info('Subscription check result', [
+                'channel' => $channelUsername,
+                'user_id' => $userId,
+                'status' => $status,
+                'is_subscribed' => $isSubscribed,
+            ]);
 
             return response()->json([
                 'is_subscribed' => $isSubscribed,
                 'status' => $status,
+                'debug' => config('app.debug') ? [
+                    'chat_id' => $chatId,
+                    'user_id' => $userId,
+                    'result_status' => $status,
+                ] : null,
             ]);
 
         } catch (\Exception $e) {
@@ -115,6 +174,108 @@ class SubscriptionController extends Controller
     }
 
     /**
+     * Проверка подписки на все обязательные каналы
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function checkAllSubscriptions(Request $request): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            if (!$initData) {
+                return response()->json([
+                    'all_subscribed' => false,
+                    'channels' => [],
+                    'message' => 'Init data not provided'
+                ]);
+            }
+
+            $userData = \App\Services\TelegramService::parseInitData($initData);
+            
+            if (!isset($userData['user']['id'])) {
+                return response()->json([
+                    'all_subscribed' => false,
+                    'channels' => [],
+                    'message' => 'User ID not found in init data'
+                ]);
+            }
+
+            $userId = $userData['user']['id'];
+            $channels = \App\Models\Channel::getActiveChannels();
+            
+            $results = [];
+            $allSubscribed = true;
+            $botToken = config('services.telegram.bot_token');
+
+            foreach ($channels as $channel) {
+                $chatId = '@' . ltrim($channel->username, '@');
+                
+                try {
+                    $response = Http::get("https://api.telegram.org/bot{$botToken}/getChatMember", [
+                        'chat_id' => $chatId,
+                        'user_id' => $userId,
+                    ]);
+
+                    if ($response->successful()) {
+                        $result = $response->json();
+                        $status = $result['result']['status'] ?? null;
+                        $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
+                        
+                        $results[] = [
+                            'username' => $channel->username,
+                            'title' => $channel->title,
+                            'is_subscribed' => $isSubscribed,
+                            'status' => $status,
+                        ];
+                        
+                        if (!$isSubscribed) {
+                            $allSubscribed = false;
+                        }
+                    } else {
+                        $results[] = [
+                            'username' => $channel->username,
+                            'title' => $channel->title,
+                            'is_subscribed' => false,
+                            'status' => null,
+                        ];
+                        $allSubscribed = false;
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Error checking subscription for channel', [
+                        'channel' => $channel->username,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $results[] = [
+                        'username' => $channel->username,
+                        'title' => $channel->title,
+                        'is_subscribed' => false,
+                        'status' => null,
+                    ];
+                    $allSubscribed = false;
+                }
+            }
+
+            return response()->json([
+                'all_subscribed' => $allSubscribed,
+                'channels' => $results,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error in checkAllSubscriptions', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'all_subscribed' => false,
+                'channels' => [],
+                'message' => 'Error occurred during subscription check'
+            ]);
+        }
+    }
+
+    /**
      * Парсинг initData от Telegram WebApp
      * 
      * @param string $initData
@@ -122,14 +283,7 @@ class SubscriptionController extends Controller
      */
     private function parseInitData(string $initData): array
     {
-        $data = [];
-        parse_str($initData, $data);
-
-        // Декодируем user данные если они есть
-        if (isset($data['user'])) {
-            $data['user'] = json_decode($data['user'], true);
-        }
-
+        $data = \App\Services\TelegramService::parseInitData($initData) ?? [];
         return $data;
     }
 }

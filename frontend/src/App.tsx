@@ -15,7 +15,7 @@ import ChannelSubscriptionCheck from "./components/ChannelSubscriptionCheck";
 const queryClient = new QueryClient();
 
 // Каналы для проверки подписки (можно добавить несколько)
-const CHANNEL_USERNAMES = ["bunny_world_2025", "Putin_tg_Russia"];
+const CHANNEL_USERNAMES = ["neeklo_studio", "neiroitishka"];
 
 // Scroll to top on route change
 const ScrollToTop = () => {
