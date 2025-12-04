@@ -281,23 +281,41 @@ const routes = [
     },
 ];
 
-// Исправляем base для Vue Router, если document.baseURI содержит /public/
-let routerBase = '/admin';
-if (document.baseURI && document.baseURI.includes('/public/')) {
-    // Убираем /public/ из baseURI и используем правильный путь
-    const baseURI = document.baseURI.replace(/\/public\/?/g, '/');
-    // Извлекаем путь из baseURI (все после домена)
-    const basePath = new URL(baseURI).pathname;
-    // Если basePath заканчивается на /admin, используем его
-    if (basePath.endsWith('/admin')) {
-        routerBase = '/admin';
-    } else if (basePath === '/') {
-        routerBase = '/admin';
-    } else {
-        routerBase = basePath + '/admin';
-    }
-    console.log('🔧 Vue Router - Fixed base:', { originalBaseURI: document.baseURI, routerBase });
+// КРИТИЧНО: Исправляем текущий путь ДО инициализации Vue Router
+// Это нужно сделать как можно раньше, чтобы Vue Router не использовал неправильный путь
+const currentPath = window.location.pathname;
+const currentHref = window.location.href;
+
+console.log('🔍 Initial path check:', {
+    pathname: currentPath,
+    href: currentHref,
+    documentBaseURI: document.baseURI,
+});
+
+// Исправляем путь, если он содержит /public/
+if (currentPath.includes('/public/')) {
+    const fixedPath = currentPath.replace(/\/public\/?/g, '/');
+    const fixedHref = currentHref.replace(/\/public\/?/g, '/');
+    console.log('🔧 Fixing current path with /public/:', { 
+        originalPath: currentPath, 
+        fixedPath,
+        originalHref: currentHref,
+        fixedHref,
+    });
+    // Заменяем текущий URL на исправленный БЕЗ перезагрузки страницы
+    window.history.replaceState({}, '', fixedPath);
+    console.log('✅ Replaced history state with fixed path');
 }
+
+// Исправляем base для Vue Router
+// Всегда используем '/admin' как base, независимо от document.baseURI
+let routerBase = '/admin';
+console.log('🔧 Vue Router - Base:', { 
+    routerBase, 
+    documentBaseURI: document.baseURI,
+    currentPath: window.location.pathname,
+    fixedPath: window.location.pathname.replace(/\/public\/?/g, '/'),
+});
 
 const router = createRouter({
     history: createWebHistory(routerBase),
@@ -306,10 +324,29 @@ const router = createRouter({
 
 // Navigation guard
 router.beforeEach((to, from, next) => {
+    // КРИТИЧНО: Исправляем путь, если он содержит /public/
+    if (to.path.includes('/public/')) {
+        const fixedPath = to.path.replace(/\/public\/?/g, '/');
+        console.log('🔧 Router Guard - Fixing path with /public/:', { original: to.path, fixed: fixedPath });
+        // Редиректим на исправленный путь
+        next(fixedPath);
+        return;
+    }
+    
+    // Исправляем fullPath, если он содержит /public/
+    if (to.fullPath.includes('/public/')) {
+        const fixedFullPath = to.fullPath.replace(/\/public\/?/g, '/');
+        console.log('🔧 Router Guard - Fixing fullPath with /public/:', { original: to.fullPath, fixed: fixedFullPath });
+        // Редиректим на исправленный путь
+        next(fixedFullPath);
+        return;
+    }
+    
     const isAuthenticated = store.getters.isAuthenticated;
     
     console.log('🔍 Router Guard - Navigation:', {
         to: to.path,
+        fullPath: to.fullPath,
         from: from.path,
         requiresAuth: to.meta.requiresAuth,
         requiresRole: to.meta.requiresRole,
