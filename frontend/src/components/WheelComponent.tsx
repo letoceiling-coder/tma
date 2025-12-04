@@ -18,6 +18,7 @@ interface WheelComponentProps {
   onSpinComplete?: (winningIndex: number) => void;
   rotation: number; // Накопленный rotation для анимации
   lastSpinRotation?: number; // Последний rotation от сервера для определения сектора
+  winningSectorNumber?: number | null; // Номер выигрышного сектора (1-12) от сервера
 }
 
 // Функция для получения иконки по типу приза (fallback)
@@ -64,7 +65,7 @@ const sectorColors = [
   "#FFD4C2", // slightly darker peach
 ];
 
-const WheelComponent = ({ segments, rotation, lastSpinRotation, onSpinComplete }: WheelComponentProps) => {
+const WheelComponent = ({ segments, rotation, lastSpinRotation, winningSectorNumber, onSpinComplete }: WheelComponentProps) => {
   const [currentRotation, setCurrentRotation] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [winningIndex, setWinningIndex] = useState<number | null>(null);
@@ -82,41 +83,20 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, onSpinComplete }
 
       const timer = setTimeout(() => {
         setIsAnimating(false);
-        // Используем lastSpinRotation для определения сектора, если доступно
-        // Иначе используем накопленный rotation (для обратной совместимости)
-        const rotationForCalculation = lastSpinRotation !== undefined ? lastSpinRotation : rotation;
-        const normalizedRotation = rotationForCalculation % 360;
-        const calculatedWinningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
         
-        // Отладочная информация
-        console.log('=== WHEEL STOPPED ===');
-        console.log('Total rotation:', rotation);
-        console.log('Normalized rotation:', normalizedRotation);
-        console.log('Calculated winningIndex:', calculatedWinningIndex);
-        console.log('Winning segment:', segments[calculatedWinningIndex]);
-        console.log('Sector number (should be):', calculatedWinningIndex + 1);
+        let calculatedWinningIndex: number;
         
-        // Проверяем все секторы и их углы
-        console.log('\n=== ALL SECTORS ANALYSIS ===');
-        segments.forEach((seg, idx) => {
-          const sectorStartAngle = idx * 30 - 90; // Начальный угол сектора
-          const sectorEndAngle = (idx + 1) * 30 - 90; // Конечный угол сектора
-          const sectorCenterAngle = (sectorStartAngle + sectorEndAngle) / 2; // Центр сектора
-          
-          // После вращения, где находится этот сектор?
-          const rotatedStart = (sectorStartAngle - currentRotation) % 360;
-          const rotatedEnd = (sectorEndAngle - currentRotation) % 360;
-          const rotatedCenter = (sectorCenterAngle - currentRotation) % 360;
-          
-          console.log(`Sector #${idx + 1} (${seg.prizeType}: ${seg.value}):`);
-          console.log(`  Original angles: ${sectorStartAngle}° to ${sectorEndAngle}° (center: ${sectorCenterAngle}°)`);
-          console.log(`  After rotation: ${rotatedStart.toFixed(1)}° to ${rotatedEnd.toFixed(1)}° (center: ${rotatedCenter.toFixed(1)}°)`);
-        });
-        
-        // Указатель находится на 0° (сверху)
-        console.log('\nПоинтер находится на: 0° (сверху)');
-        console.log('Выигрышный сектор должен содержать 0° после поворота');
-        console.log('==================');
+        // Используем winningSectorNumber от сервера, если доступен (самый надежный способ)
+        if (winningSectorNumber !== undefined && winningSectorNumber !== null) {
+          // sector_number (1-12) -> index (0-11)
+          calculatedWinningIndex = winningSectorNumber - 1;
+        } else {
+          // Fallback: используем lastSpinRotation для определения сектора, если доступно и не равно 0
+          // Иначе используем накопленный rotation
+          const rotationForCalculation = (lastSpinRotation !== undefined && lastSpinRotation > 0) ? lastSpinRotation : rotation;
+          const normalizedRotation = rotationForCalculation % 360;
+          calculatedWinningIndex = Math.floor((360 - normalizedRotation + segmentAngle / 2) / segmentAngle) % segments.length;
+        }
         
         setWinningIndex(calculatedWinningIndex); // Устанавливаем выигрышный сектор для подсветки
         onSpinComplete?.(calculatedWinningIndex);
@@ -406,33 +386,6 @@ const WheelComponent = ({ segments, rotation, lastSpinRotation, onSpinComplete }
               }}
             />
           )}
-          
-          {/* Отладка: показываем номера секторов */}
-          {segments.map((segment, index) => {
-            const midAngle = (index * 30 + 15 - 90) * (Math.PI / 180);
-            const textRadius = radius * 0.5;
-            const x = centerX + textRadius * Math.cos(midAngle);
-            const y = centerY + textRadius * Math.sin(midAngle);
-            
-            return (
-              <text
-                key={`label-${index}`}
-                x={x}
-                y={y}
-                fill="#000"
-                fontSize="16"
-                fontWeight="bold"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                style={{
-                  pointerEvents: 'none',
-                  textShadow: '0 0 3px white, 0 0 3px white',
-                }}
-              >
-                #{index + 1}
-              </text>
-            );
-          })}
           
           {/* Center circle */}
           <circle

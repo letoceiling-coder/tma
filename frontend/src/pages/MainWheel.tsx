@@ -31,7 +31,8 @@ const MainWheel = () => {
   const [tickets, setTickets] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0); // Накопленный rotation для анимации
-  const [lastSpinRotation, setLastSpinRotation] = useState(0); // Последний rotation от сервера для определения сектора
+  const [lastSpinRotation, setLastSpinRotation] = useState<number | undefined>(undefined); // Последний rotation от сервера для определения сектора
+  const [winningSectorNumber, setWinningSectorNumber] = useState<number | null>(null); // Номер выигрышного сектора (1-12) от сервера
   const [timeLeft, setTimeLeft] = useState(0);
   const [showGiftPopup, setShowGiftPopup] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
@@ -236,6 +237,7 @@ const MainWheel = () => {
     // Heavy haptic feedback for spin start
     haptic.heavyTap();
     setIsSpinning(true);
+    setWinningSectorNumber(null); // Сбрасываем подсветку при новом спине
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || '';
@@ -261,13 +263,6 @@ const MainWheel = () => {
         throw new Error(data.message || 'Ошибка прокрута рулетки');
       }
 
-      // Отладка: выводим данные с сервера
-      console.log('=== SERVER RESPONSE ===');
-      console.log('Sector from server:', data.sector);
-      console.log('Rotation from server:', data.rotation);
-      console.log('Debug info:', data._debug);
-      console.log('=====================');
-
       // Обновляем билеты и таймер
       setTickets(data.tickets_available || 0);
       
@@ -286,6 +281,11 @@ const MainWheel = () => {
       if (data.rotation !== undefined) {
         setLastSpinRotation(data.rotation); // Сохраняем для определения сектора
         setRotation((prev) => prev + data.rotation); // Накапливаем для анимации
+      }
+      
+      // Сохраняем номер выигрышного сектора от сервера
+      if (data.sector?.sector_number) {
+        setWinningSectorNumber(data.sector.sector_number);
       }
 
       // Определяем значение приза для отображения
@@ -533,8 +533,9 @@ const MainWheel = () => {
           segments={wheelSegments}
           rotation={rotation}
           lastSpinRotation={lastSpinRotation}
+          winningSectorNumber={winningSectorNumber}
           onSpinComplete={(winningIndex) => {
-            console.log("WIN:", wheelSegments[winningIndex]);
+            // Сектор определен, подсветка установлена в WheelComponent
           }}
         />
       </div>
