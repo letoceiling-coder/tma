@@ -56,6 +56,10 @@ Route::middleware(['telegram.initdata'])->group(function () {
 
 // Webhook для Telegram Stars Exchange (не требует initData, но защищен токеном)
 Route::post('/stars/exchange/webhook', [StarExchangeController::class, 'webhook']);
+
+// Webhook для Telegram Bot (защищен middleware)
+Route::post('/telegram/webhook', [\App\Http\Controllers\Api\TelegramWebhookController::class, 'handle'])
+    ->middleware('telegram.webhook');
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
@@ -95,6 +99,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::middleware('admin')->group(function () {
             Route::apiResource('roles', RoleController::class);
             Route::apiResource('users', UserController::class);
+            
+            // Конфигурация бота
+            Route::prefix('config/bot')->group(function () {
+                Route::get('/', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'index']);
+                Route::post('/', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'store']);
+                Route::get('/webhook-info', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'getWebhookInfo']);
+                Route::post('/test-connection', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'testConnection']);
+                Route::post('/set-webhook', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'setWebhook']);
+                Route::post('/delete-webhook', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'deleteWebhook']);
+            });
             
             // WOW Рулетка - Админ панель
             Route::prefix('wow')->group(function () {

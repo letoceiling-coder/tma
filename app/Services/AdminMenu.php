@@ -84,6 +84,19 @@ class AdminMenu
                 ],
             ],
             [
+                'title' => 'Конфигурации',
+                'icon' => 'settings',
+                'roles' => ['admin'],
+                'children' => [
+                    [
+                        'title' => 'Бот',
+                        'route' => 'admin.config.bot',
+                        'icon' => 'bot',
+                        'roles' => ['admin'],
+                    ],
+                ],
+            ],
+            [
                 'title' => 'Документация',
                 'route' => 'admin.documentation',
                 'icon' => 'book',

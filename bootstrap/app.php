@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'deploy.token' => \App\Http\Middleware\VerifyDeployToken::class,
             'telegram.initdata' => \App\Http\Middleware\ValidateTelegramInitData::class,
+            'telegram.webhook' => \App\Http\Middleware\TelegramWebhook::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
