@@ -12,8 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->timestamp('tickets_depleted_at')->nullable()->after('last_spin_at')
-                ->comment('Время когда билеты закончились (стали 0) - точка начала отсчета для восстановления');
+            // Добавляем колонку без указания позиции, так как она может выполняться
+            // до миграции, которая добавляет tickets_available и last_spin_at
+            if (!Schema::hasColumn('users', 'tickets_depleted_at')) {
+                $table->timestamp('tickets_depleted_at')->nullable()
+                    ->comment('Время когда билеты закончились (стали 0) - точка начала отсчета для восстановления');
+            }
         });
     }
 
