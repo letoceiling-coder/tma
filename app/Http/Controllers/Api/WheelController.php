@@ -72,6 +72,10 @@ class WheelController extends Controller
                     'name' => 'Telegram User',
                     'email' => "telegram_{$telegramId}@telegram.local",
                     'password' => bcrypt(str()->random(32)),
+                    'tickets_available' => 3, // Начальное количество билетов для нового пользователя
+                    'stars_balance' => 0,
+                    'total_spins' => 0,
+                    'total_wins' => 0,
                 ]
             );
 
@@ -123,10 +127,11 @@ class WheelController extends Controller
                 // Получаем интервал восстановления билетов из настроек
                 $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
                 
-                // ВАЖНО: Фиксируем точку восстановления билета
-                // Когда билеты закончились (стали 0) - устанавливаем время восстановления = now() + период
+                // НОВАЯ ЛОГИКА: Когда билеты заканчиваются (становятся 0), фиксируем момент времени
+                // tickets_depleted_at = now() - это момент, когда билеты закончились
+                // От этого момента через интервал (ticket_restore_hours) будет восстановлен 1 билет
                 if ($user->tickets_available === 0) {
-                    $user->tickets_depleted_at = now()->addSeconds($restoreIntervalSeconds);
+                    $user->tickets_depleted_at = now(); // Фиксируем момент окончания билетов
                 }
                 
                 $user->save();
@@ -152,14 +157,27 @@ class WheelController extends Controller
                     // ПРИМЕЧАНИЕ: Уведомления о выигрыше отправляются отдельным endpoint
                     // после завершения анимации на фронтенде (4 секунды)
                 } elseif ($winningSector->prize_type === 'ticket') {
-                    // Начисляем билет
-                    $user->tickets_available++;
-                    // Сбрасываем точку отсчета, так как билет появился
+                    // Начисляем билет(ы) за выигрыш
+                    // prize_value может быть больше 1, но максимум билетов = 3
+                    $ticketsToAdd = $winningSector->prize_value ?? 1;
+                    $oldTickets = $user->tickets_available;
+                    $user->tickets_available = min($user->tickets_available + $ticketsToAdd, 3);
+                    
+                    // Если билеты стали больше 0, сбрасываем точку восстановления
+                    // (потому что билеты больше не закончились)
                     if ($user->tickets_available > 0) {
                         $user->tickets_depleted_at = null;
                     }
+                    
                     $user->save();
                     $prizeAwarded = true;
+                    
+                    Log::info('Ticket prize awarded', [
+                        'user_id' => $user->id,
+                        'tickets_added' => $ticketsToAdd,
+                        'old_tickets' => $oldTickets,
+                        'new_tickets' => $user->tickets_available,
+                    ]);
                 } elseif ($winningSector->prize_type === 'secret_box') {
                     // Секретный бокс - обрабатывается отдельно
                     $prizeAwarded = true;
@@ -171,11 +189,13 @@ class WheelController extends Controller
                 $secondsUntilNextTicket = null;
                 $nextTicketAt = null;
 
-                // tickets_depleted_at хранит момент восстановления билета (будущее время)
-                // Таймер показывает сколько осталось до этой точки
-                if ($user->tickets_available < 3 && $user->tickets_depleted_at) {
-                    $secondsUntilNextTicket = max(0, (int) $user->tickets_depleted_at->diffInSeconds(now()));
-                    $nextTicketAt = $user->tickets_depleted_at->toIso8601String();
+                // НОВАЯ ЛОГИКА: tickets_depleted_at хранит момент, когда билеты закончились
+                // Время до восстановления = tickets_depleted_at + интервал - now()
+                // Таймер показывается только если билетов нет (0)
+                if ($user->tickets_available === 0 && $user->tickets_depleted_at) {
+                    $restoreTime = $user->tickets_depleted_at->copy()->addSeconds($restoreIntervalSeconds);
+                    $secondsUntilNextTicket = max(0, (int) $restoreTime->diffInSeconds(now()));
+                    $nextTicketAt = $restoreTime->toIso8601String();
                 }
 
                 // ============================================

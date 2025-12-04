@@ -64,11 +64,13 @@ class TicketController extends Controller
             $nextTicketAt = null;
             $secondsUntilNextTicket = null;
             
-            // tickets_depleted_at хранит момент восстановления билета (будущее время)
-            // Таймер показывает сколько осталось до этой точки
-            if ($user->tickets_available < 3 && $user->tickets_depleted_at) {
-                $secondsUntilNextTicket = max(0, (int) $user->tickets_depleted_at->diffInSeconds(now()));
-                $nextTicketAt = $user->tickets_depleted_at->toIso8601String();
+            // НОВАЯ ЛОГИКА: tickets_depleted_at хранит момент, когда билеты закончились
+            // Время до восстановления = tickets_depleted_at + интервал - now()
+            // Таймер показывается только если билетов нет (0)
+            if ($user->tickets_available === 0 && $user->tickets_depleted_at) {
+                $restoreTime = $user->tickets_depleted_at->copy()->addSeconds($restoreIntervalSeconds);
+                $secondsUntilNextTicket = max(0, (int) $restoreTime->diffInSeconds(now()));
+                $nextTicketAt = $restoreTime->toIso8601String();
             }
 
             return response()->json([
@@ -96,6 +98,12 @@ class TicketController extends Controller
     /**
      * Проверка и восстановление билетов
      * 
+     * НОВАЯ ЛОГИКА:
+     * - tickets_depleted_at хранит момент, когда билеты закончились (стали 0)
+     * - От этого момента через интервал (ticket_restore_hours) восстанавливается 1 билет
+     * - Если билеты снова становятся 0, снова фиксируется момент и через интервал добавляется еще 1 билет
+     * - Процесс продолжается, пока не достигнут максимум (3 билета)
+     * 
      * @param User $user
      * @return void
      */
@@ -103,6 +111,11 @@ class TicketController extends Controller
     {
         // Если билетов уже 3, не восстанавливаем
         if ($user->tickets_available >= 3) {
+            // Сбрасываем точку восстановления, если она была установлена
+            if ($user->tickets_depleted_at) {
+                $user->tickets_depleted_at = null;
+                $user->save();
+            }
             return;
         }
 
@@ -111,20 +124,32 @@ class TicketController extends Controller
             return;
         }
 
-        // tickets_depleted_at хранит момент восстановления билета
+        // Получаем интервал восстановления из настроек
+        $settings = \App\Models\WheelSetting::getSettings();
+        $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
+        
+        // Вычисляем момент восстановления: tickets_depleted_at + интервал
+        $restoreTime = $user->tickets_depleted_at->copy()->addSeconds($restoreIntervalSeconds);
+        
         // Если текущее время >= момента восстановления → билет готов
-        if (now() >= $user->tickets_depleted_at) {
+        if (now() >= $restoreTime) {
             $oldTickets = $user->tickets_available;
             $user->tickets_available = min($user->tickets_available + 1, 3);
             
-            // Если билетов все еще меньше 3, устанавливаем новую точку восстановления для следующего билета
-            if ($user->tickets_available < 3) {
-                $settings = \App\Models\WheelSetting::getSettings();
-                $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
-                $user->tickets_depleted_at = now()->addSeconds($restoreIntervalSeconds);
-            } else {
-                // Билетов стало 3, сбрасываем точку
+            // Если билетов стало 3, сбрасываем точку восстановления
+            if ($user->tickets_available >= 3) {
                 $user->tickets_depleted_at = null;
+            } else {
+                // Если билеты все еще меньше 3, обновляем точку отсчета на текущий момент
+                // Это нужно для восстановления следующего билета через интервал
+                // Но только если билеты сейчас 0 (иначе точка отсчета не нужна, пока билеты не закончатся)
+                if ($user->tickets_available === 0) {
+                    $user->tickets_depleted_at = now();
+                } else {
+                    // Если билеты > 0, но < 3, сбрасываем точку отсчета
+                    // Новая точка отсчета установится только когда билеты снова станут 0
+                    $user->tickets_depleted_at = null;
+                }
             }
             
             $user->save();

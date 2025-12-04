@@ -126,7 +126,8 @@ const MainWheel = () => {
       }
 
       const data = await response.json();
-      setTickets(data.tickets_available || 0);
+      const newTickets = data.tickets_available || 0;
+      setTickets(newTickets);
       
       // Сохраняем интервал восстановления
       if (data.restore_interval_seconds) {
@@ -136,20 +137,28 @@ const MainWheel = () => {
         setRestoreIntervalHours(data.restore_interval_hours);
       }
       
-      // Устанавливаем время до следующего билета (округляем до целого)
-      // Обновляем только если значение изменилось значительно (больше чем на 2 секунды)
-      // Это предотвращает постоянные перезапуски таймера
-      if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
-        const newTimeLeft = Math.max(0, Math.floor(data.seconds_until_next_ticket));
-        setTimeLeft((prev) => {
-          // Обновляем только если разница больше 2 секунд
-          if (Math.abs(prev - newTimeLeft) > 2 || prev === 0) {
-            return newTimeLeft;
-          }
-          return prev;
-        });
+      // Устанавливаем таймер только если билетов нет (0)
+      if (newTickets === 0) {
+        // Устанавливаем время до следующего билета (округляем до целого)
+        // Обновляем только если значение изменилось значительно (больше чем на 2 секунды)
+        // Это предотвращает постоянные перезапуски таймера
+        if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
+          const newTimeLeft = Math.max(0, Math.floor(data.seconds_until_next_ticket));
+          setTimeLeft((prev) => {
+            // Обновляем только если разница больше 2 секунд
+            if (Math.abs(prev - newTimeLeft) > 2 || prev === 0) {
+              return newTimeLeft;
+            }
+            return prev;
+          });
+        } else {
+          // Если сервер не вернул время, устанавливаем полный интервал
+          const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
+          setTimeLeft(intervalSeconds);
+        }
       } else {
-        setTimeLeft((prev) => prev > 0 ? prev : 0); // Не сбрасываем если уже есть значение
+        // Если билеты есть, сбрасываем таймер
+        setTimeLeft(0);
       }
     } catch (error) {
       console.error('Ошибка загрузки билетов:', error);
@@ -215,6 +224,7 @@ const MainWheel = () => {
   };
 
   // Периодическая синхронизация с сервером (каждые 30 секунд)
+  // Синхронизируем только если билетов нет (0) или меньше 3
   useEffect(() => {
     if (!tgReady || tickets >= 3) return;
 
@@ -225,9 +235,10 @@ const MainWheel = () => {
     }, 30000); // Каждые 30 секунд
 
     return () => clearInterval(syncInterval);
-  }, [tgReady, tickets]); // Убрали loadTickets из зависимостей
+  }, [tgReady, tickets]);
 
   // Синхронизация при возврате в приложение
+  // Синхронизируем только если билетов нет (0) или меньше 3
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && tickets < 3) {
@@ -239,13 +250,15 @@ const MainWheel = () => {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [tickets]); // Убрали loadTickets из зависимостей
+  }, [tickets]);
 
   // Timer effect - локальный обратный отсчет между синхронизациями
+  // Таймер показывается только если билетов нет (0)
   useEffect(() => {
-    if (tickets >= 3) {
+    // Если билетов есть (больше 0), не запускаем таймер
+    if (tickets > 0) {
       setTimeLeft(0);
-      return; // Не запускаем таймер если билетов уже максимум
+      return;
     }
     
     // Если timeLeft уже 0 или меньше, не запускаем таймер
@@ -325,16 +338,23 @@ const MainWheel = () => {
         throw new Error(data.message || 'Ошибка прокрута рулетки');
       }
 
-      // Обновляем билеты и таймер
-      setTickets(data.tickets_available || 0);
+      // Обновляем билеты
+      const newTickets = data.tickets_available || 0;
+      setTickets(newTickets);
       
-      // Обновляем данные о времени до следующего билета (округляем до целого)
-      if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
-        setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
-      } else if (data.tickets_available === 0) {
-        // Если билетов 0 и сервер не вернул время, устанавливаем полный интервал
-        const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
-        setTimeLeft(intervalSeconds);
+      // Обновляем таймер только если билетов нет (0)
+      if (newTickets === 0) {
+        // Обновляем данные о времени до следующего билета (округляем до целого)
+        if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
+          setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
+        } else {
+          // Если сервер не вернул время, устанавливаем полный интервал
+          const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
+          setTimeLeft(intervalSeconds);
+        }
+      } else {
+        // Если билеты есть, сбрасываем таймер
+        setTimeLeft(0);
       }
       
       if (data.restore_interval_seconds) {
@@ -660,8 +680,10 @@ const MainWheel = () => {
             {loadingTickets ? (
               'Загрузка...'
             ) : tickets > 0 ? (
+              // Если есть билеты, показываем количество билетов
               `У вас ${tickets} ${getTicketWord(tickets)}`
             ) : (
+              // Если билетов нет (0), показываем таймер до восстановления
               `Новый билет через ${formatTime(timeLeft)}`
             )}
           </span>
