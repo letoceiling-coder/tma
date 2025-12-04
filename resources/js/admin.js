@@ -281,8 +281,26 @@ const routes = [
     },
 ];
 
+// Исправляем base для Vue Router, если document.baseURI содержит /public/
+let routerBase = '/admin';
+if (document.baseURI && document.baseURI.includes('/public/')) {
+    // Убираем /public/ из baseURI и используем правильный путь
+    const baseURI = document.baseURI.replace(/\/public\/?/g, '/');
+    // Извлекаем путь из baseURI (все после домена)
+    const basePath = new URL(baseURI).pathname;
+    // Если basePath заканчивается на /admin, используем его
+    if (basePath.endsWith('/admin')) {
+        routerBase = '/admin';
+    } else if (basePath === '/') {
+        routerBase = '/admin';
+    } else {
+        routerBase = basePath + '/admin';
+    }
+    console.log('🔧 Vue Router - Fixed base:', { originalBaseURI: document.baseURI, routerBase });
+}
+
 const router = createRouter({
-    history: createWebHistory('/admin'),
+    history: createWebHistory(routerBase),
     routes,
 });
 

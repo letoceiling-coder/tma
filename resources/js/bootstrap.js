@@ -19,6 +19,7 @@ function fixUrl(url) {
 }
 
 // Исправляем document.baseURI если он содержит /public/
+// Это критично для Vue Router, который использует baseURI для разрешения путей
 if (document.baseURI && document.baseURI.includes('/public/')) {
     const fixedBaseURI = fixUrl(document.baseURI);
     console.log('🔧 Fixing document.baseURI:', { original: document.baseURI, fixed: fixedBaseURI });
@@ -30,8 +31,29 @@ if (document.baseURI && document.baseURI.includes('/public/')) {
             },
             configurable: true
         });
+        console.log('✅ Successfully overridden document.baseURI');
     } catch (e) {
         console.warn('⚠️ Cannot override document.baseURI:', e);
+        // Если не удалось переопределить, попробуем исправить через <base> тег
+        const baseTag = document.querySelector('base');
+        if (baseTag) {
+            baseTag.href = fixedBaseURI;
+            console.log('✅ Fixed <base> tag href:', fixedBaseURI);
+        } else {
+            // Создаем <base> тег если его нет
+            const base = document.createElement('base');
+            base.href = fixedBaseURI;
+            document.head.insertBefore(base, document.head.firstChild);
+            console.log('✅ Created <base> tag with href:', fixedBaseURI);
+        }
+    }
+} else {
+    // Проверяем, есть ли <base> тег с неправильным href
+    const baseTag = document.querySelector('base');
+    if (baseTag && baseTag.href && baseTag.href.includes('/public/')) {
+        const fixedHref = fixUrl(baseTag.href);
+        baseTag.href = fixedHref;
+        console.log('🔧 Fixed <base> tag href:', { original: baseTag.href, fixed: fixedHref });
     }
 }
 

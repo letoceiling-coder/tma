@@ -92,6 +92,22 @@ class ForceHttps
                 ]);
             }
         }
+        
+        // ВАЖНО: Убеждаемся, что APP_URL не содержит /public/ даже если он был установлен ранее
+        // Это нужно делать всегда, не только при обновлении
+        $currentAppUrl = config('app.url');
+        if ($currentAppUrl && str_contains($currentAppUrl, '/public') && !$isLocalDomain) {
+            $cleanedAppUrl = str_replace('/public', '', $currentAppUrl);
+            config(['app.url' => $cleanedAppUrl]);
+            URL::forceRootUrl($cleanedAppUrl);
+            if (config('app.env') === 'production') {
+                URL::forceScheme('https');
+            }
+            \Log::info('ForceHttps Middleware - Cleaned APP_URL (always check)', [
+                'old' => $currentAppUrl,
+                'new' => $cleanedAppUrl,
+            ]);
+        }
 
         $response = $next($request);
 
