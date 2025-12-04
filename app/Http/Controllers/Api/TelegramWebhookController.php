@@ -73,16 +73,20 @@ class TelegramWebhookController extends Controller
             ];
 
             // Добавляем кнопку Mini App, если включена
-            if (!empty($miniAppButton['enabled']) && !empty($miniAppButton['url'])) {
-                $keyboard = Keyboard::inline()
-                    ->row()
-                    ->webApp(
-                        $miniAppButton['text'] ?? '🚀 Открыть приложение',
-                        $miniAppButton['url']
-                    )
-                    ->toArray();
+            if (!empty($miniAppButton['enabled'])) {
+                // Используем URL из настроек кнопки или из общих настроек
+                $buttonUrl = $miniAppButton['url'] ?? config('telegram.mini_app_url');
+                
+                if (!empty($buttonUrl)) {
+                    $keyboard = Keyboard::inline()
+                        ->webApp(
+                            $miniAppButton['text'] ?? '🚀 Открыть приложение',
+                            $buttonUrl
+                        )
+                        ->get();
 
-                $params['reply_markup'] = json_encode($keyboard);
+                    $params['reply_markup'] = json_encode($keyboard);
+                }
             }
 
             $bot->sendMessage($chatId, $welcomeText, $params);

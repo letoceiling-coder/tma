@@ -174,7 +174,7 @@ return [
 
     'welcome_message' => [
         'enabled' => env('TELEGRAM_WELCOME_MESSAGE_ENABLED', true),
-        'text' => env('TELEGRAM_WELCOME_MESSAGE_TEXT', '<b>Добро пожаловать!</b>'),
+        'text' => str_replace(['\\n', '\\r'], ["\n", "\r"], trim(env('TELEGRAM_WELCOME_MESSAGE_TEXT', '<b>Добро пожаловать!</b>'), '"')),
         'mini_app_button' => [
             'enabled' => env('TELEGRAM_WELCOME_MINI_APP_BUTTON_ENABLED', true),
             'text' => env('TELEGRAM_WELCOME_MINI_APP_BUTTON_TEXT', '🚀 Открыть приложение'),

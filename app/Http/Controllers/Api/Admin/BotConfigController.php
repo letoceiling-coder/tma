@@ -42,6 +42,15 @@ class BotConfigController extends Controller
                 'enabled' => $config['validation']['enabled'] ?? true,
                 'auto_truncate' => $config['validation']['auto_truncate'] ?? true,
             ],
+            'welcome_message' => [
+                'enabled' => $config['welcome_message']['enabled'] ?? true,
+                'text' => $config['welcome_message']['text'] ?? '<b>Добро пожаловать!</b>',
+                'mini_app_button' => [
+                    'enabled' => $config['welcome_message']['mini_app_button']['enabled'] ?? true,
+                    'text' => $config['welcome_message']['mini_app_button']['text'] ?? '🚀 Открыть приложение',
+                    'url' => $config['welcome_message']['mini_app_button']['url'] ?? '',
+                ],
+            ],
         ]);
     }
 
@@ -68,6 +77,11 @@ class BotConfigController extends Controller
             'rate_limiting.cache_driver' => 'nullable|string',
             'validation.enabled' => 'nullable|boolean',
             'validation.auto_truncate' => 'nullable|boolean',
+            'welcome_message.enabled' => 'nullable|boolean',
+            'welcome_message.text' => 'nullable|string',
+            'welcome_message.mini_app_button.enabled' => 'nullable|boolean',
+            'welcome_message.mini_app_button.text' => 'nullable|string|max:64',
+            'welcome_message.mini_app_button.url' => 'nullable|url',
         ]);
 
         // Обновляем .env файл
@@ -131,6 +145,27 @@ class BotConfigController extends Controller
         }
         if (isset($validated['validation']['auto_truncate'])) {
             $updateEnvValue('TELEGRAM_AUTO_TRUNCATE', $validated['validation']['auto_truncate'] ? 'true' : 'false');
+        }
+
+        // Обрабатываем приветственное сообщение
+        if (isset($validated['welcome_message']['enabled'])) {
+            $updateEnvValue('TELEGRAM_WELCOME_MESSAGE_ENABLED', $validated['welcome_message']['enabled'] ? 'true' : 'false');
+        }
+        if (isset($validated['welcome_message']['text'])) {
+            // Сохраняем текст как есть, но заменяем переносы строк на \n для .env
+            $text = $validated['welcome_message']['text'];
+            // Экранируем кавычки и переносы строк
+            $text = str_replace(['"', "\n", "\r"], ['\"', '\\n', '\\r'], $text);
+            $updateEnvValue('TELEGRAM_WELCOME_MESSAGE_TEXT', '"' . $text . '"');
+        }
+        if (isset($validated['welcome_message']['mini_app_button']['enabled'])) {
+            $updateEnvValue('TELEGRAM_WELCOME_MINI_APP_BUTTON_ENABLED', $validated['welcome_message']['mini_app_button']['enabled'] ? 'true' : 'false');
+        }
+        if (isset($validated['welcome_message']['mini_app_button']['text'])) {
+            $updateEnvValue('TELEGRAM_WELCOME_MINI_APP_BUTTON_TEXT', $validated['welcome_message']['mini_app_button']['text']);
+        }
+        if (isset($validated['welcome_message']['mini_app_button']['url'])) {
+            $updateEnvValue('TELEGRAM_WELCOME_MINI_APP_BUTTON_URL', $validated['welcome_message']['mini_app_button']['url']);
         }
 
         file_put_contents($envPath, $envContent);
