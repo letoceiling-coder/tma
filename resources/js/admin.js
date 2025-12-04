@@ -204,22 +204,25 @@ const routes = [
     {
         path: '/',
         component: () => import('./layouts/AdminLayout.vue'),
-        meta: { requiresAuth: true },
+        meta: { requiresAuth: true, requiresRole: ['admin'] },
         children: [
             {
                 path: '',
                 name: 'admin.dashboard',
                 component: () => import('./pages/admin/Dashboard.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
                 path: 'media',
                 name: 'admin.media',
                 component: () => import('./pages/admin/Media.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
                 path: 'notifications',
                 name: 'admin.notifications',
                 component: () => import('./pages/admin/Notifications.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
                 path: 'users',
@@ -238,32 +241,38 @@ const routes = [
                 path: 'wow/channels',
                 name: 'admin.wow.channels',
                 component: () => import('./pages/admin/wow/Channels.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
                 path: 'wow/wheel',
                 name: 'admin.wow.wheel',
                 component: () => import('./pages/admin/wow/Wheel.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
                 path: 'wow/users',
                 name: 'admin.wow.users',
                 component: () => import('./pages/admin/wow/WowUsers.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
                 path: 'wow/referrals',
                 name: 'admin.wow.referrals',
                 component: () => import('./pages/admin/wow/Referrals.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
-                   {
-                       path: 'wow/statistics',
-                       name: 'admin.wow.statistics',
-                       component: () => import('./pages/admin/wow/Statistics.vue'),
-                   },
-                   {
-                       path: 'wow/leaderboard-prizes',
-                       name: 'admin.wow.leaderboard',
-                       component: () => import('./pages/admin/wow/LeaderboardPrizes.vue'),
-                   },
+            {
+                path: 'wow/statistics',
+                name: 'admin.wow.statistics',
+                component: () => import('./pages/admin/wow/Statistics.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
+            },
+            {
+                path: 'wow/leaderboard-prizes',
+                name: 'admin.wow.leaderboard',
+                component: () => import('./pages/admin/wow/LeaderboardPrizes.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
+            },
             // Конфигурации
             {
                 path: 'settings/bot',
@@ -276,6 +285,7 @@ const routes = [
                 path: 'documentation',
                 name: 'admin.documentation',
                 component: () => import('./pages/admin/Documentation.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
         ],
     },
@@ -323,7 +333,7 @@ const router = createRouter({
 });
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
     // КРИТИЧНО: Исправляем путь, если он содержит /public/
     if (to.path.includes('/public/')) {
         const fixedPath = to.path.replace(/\/public\/?/g, '/');
@@ -344,6 +354,22 @@ router.beforeEach((to, from, next) => {
     
     const isAuthenticated = store.getters.isAuthenticated;
     
+    // КРИТИЧНО: Если требуется авторизация или роль, но пользователь еще не загружен, загружаем его
+    if ((to.meta.requiresAuth || to.meta.requiresRole) && isAuthenticated && !store.state.user) {
+        console.log('⏳ Router Guard - User not loaded, fetching user...');
+        try {
+            await store.dispatch('fetchUser');
+            console.log('✅ Router Guard - User loaded:', {
+                user: store.state.user,
+                roles: store.state.user?.roles?.map(r => r.slug) || [],
+            });
+        } catch (error) {
+            console.error('❌ Router Guard - Failed to fetch user:', error);
+            next('/login');
+            return;
+        }
+    }
+    
     console.log('🔍 Router Guard - Navigation:', {
         to: to.path,
         fullPath: to.fullPath,
@@ -355,14 +381,22 @@ router.beforeEach((to, from, next) => {
         userRoles: store.state.user?.roles?.map(r => r.slug) || [],
     });
     
+    // 1. Проверка авторизации - ПЕРВЫЙ ПРИОРИТЕТ
     if (to.meta.requiresAuth && !isAuthenticated) {
         console.log('❌ Router Guard - Not authenticated, redirecting to /login');
         next('/login');
-    } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+        return;
+    }
+    
+    // 2. Если пользователь авторизован и пытается зайти на страницы авторизации, редиректим на главную
+    if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
         console.log('✅ Router Guard - Already authenticated, redirecting to /');
         next('/');
-    } else if (to.meta.requiresRole) {
-        // Проверка ролей
+        return;
+    }
+    
+    // 3. Проверка ролей - ВАЖНО: проверяем ПОСЛЕ загрузки пользователя
+    if (to.meta.requiresRole) {
         const requiredRoles = Array.isArray(to.meta.requiresRole) 
             ? to.meta.requiresRole 
             : [to.meta.requiresRole];
@@ -390,18 +424,18 @@ router.beforeEach((to, from, next) => {
                 userRolesCount: store.state.user?.roles?.length || 0,
             });
             next('/');
+            return;
         } else {
             console.log('✅ Router Guard - Role check passed', {
                 route: to.path,
                 requiredRoles,
                 userRoles,
             });
-            next();
         }
-    } else {
-        console.log('✅ Router Guard - No restrictions, allowing navigation');
-        next();
     }
+    
+    console.log('✅ Router Guard - All checks passed, allowing navigation');
+    next();
 });
 
 // Initialize app
