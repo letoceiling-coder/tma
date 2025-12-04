@@ -270,9 +270,21 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
     const isAuthenticated = store.getters.isAuthenticated;
     
+    console.log('🔍 Router Guard - Navigation:', {
+        to: to.path,
+        from: from.path,
+        requiresAuth: to.meta.requiresAuth,
+        requiresRole: to.meta.requiresRole,
+        isAuthenticated,
+        user: store.state.user,
+        userRoles: store.state.user?.roles?.map(r => r.slug) || [],
+    });
+    
     if (to.meta.requiresAuth && !isAuthenticated) {
+        console.log('❌ Router Guard - Not authenticated, redirecting to /login');
         next('/login');
     } else if ((to.path === '/login' || to.path === '/register') && isAuthenticated) {
+        console.log('✅ Router Guard - Already authenticated, redirecting to /');
         next('/');
     } else if (to.meta.requiresRole) {
         // Проверка ролей
@@ -280,13 +292,23 @@ router.beforeEach((to, from, next) => {
             ? to.meta.requiresRole 
             : [to.meta.requiresRole];
         
-        if (!store.getters.hasAnyRole(requiredRoles)) {
+        const hasRole = store.getters.hasAnyRole(requiredRoles);
+        console.log('🔍 Router Guard - Role check:', {
+            requiredRoles,
+            hasRole,
+            userRoles: store.state.user?.roles?.map(r => r.slug) || [],
+        });
+        
+        if (!hasRole) {
             // Пользователь не имеет нужной роли
+            console.log('❌ Router Guard - No required role, redirecting to /');
             next('/');
         } else {
+            console.log('✅ Router Guard - Role check passed');
             next();
         }
     } else {
+        console.log('✅ Router Guard - No restrictions, allowing navigation');
         next();
     }
 });
