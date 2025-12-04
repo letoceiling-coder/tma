@@ -12,6 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Принудительное использование HTTPS (глобально)
+        $middleware->append(\App\Http\Middleware\ForceHttps::class);
+        
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
             'deploy.token' => \App\Http\Middleware\VerifyDeployToken::class,
