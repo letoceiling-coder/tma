@@ -101,8 +101,8 @@ class WowUserController extends Controller
         $ticketsToAdd = $request->input('tickets');
         $oldTickets = $user->tickets_available;
         
-        // Начисляем билеты (не превышая максимум 3 для использования, но храним историю)
-        $user->tickets_available = min($user->tickets_available + $ticketsToAdd, 3);
+        // Начисляем билеты
+        $user->tickets_available = $user->tickets_available + $ticketsToAdd;
         $user->save();
 
         // Создаем запись в истории билетов

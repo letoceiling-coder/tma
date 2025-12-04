@@ -307,7 +307,7 @@ class TelegramWebhookController extends Controller
             $user->save();
 
             // Начисляем 1 билет рефереру за приглашение
-            $referrer->tickets_available = min($referrer->tickets_available + 1, 3);
+            $referrer->tickets_available = $referrer->tickets_available + 1;
             
             // Если билеты стали больше 0, сбрасываем точку восстановления
             if ($referrer->tickets_available > 0) {

@@ -172,7 +172,7 @@ const MainWheel = () => {
     } catch (error) {
       console.error('Ошибка загрузки билетов:', error);
       // В случае ошибки используем локальное состояние
-      setTickets(3);
+      setTickets(0);
       setTimeLeft(0);
     } finally {
       setLoadingTickets(false);
@@ -233,9 +233,9 @@ const MainWheel = () => {
   };
 
   // Периодическая синхронизация с сервером (каждые 30 секунд)
-  // Синхронизируем только если билетов нет (0) или меньше 3
+  // Синхронизируем только если билетов нет (0)
   useEffect(() => {
-    if (!tgReady || tickets >= 3) return;
+    if (!tgReady || tickets > 0) return;
 
     const syncInterval = setInterval(() => {
       if (loadTicketsRef.current) {
@@ -247,10 +247,10 @@ const MainWheel = () => {
   }, [tgReady, tickets]);
 
   // Синхронизация при возврате в приложение
-  // Синхронизируем только если билетов нет (0) или меньше 3
+  // Синхронизируем только если билетов нет (0)
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (!document.hidden && tickets < 3) {
+      if (!document.hidden && tickets === 0) {
         if (loadTicketsRef.current) {
           loadTicketsRef.current(); // Обновляем данные когда пользователь возвращается
         }
@@ -464,11 +464,12 @@ const MainWheel = () => {
     }
   };
 
-  const handleGiftExchange = () => {
+  const handleGiftExchange = (ticketsReceived: number) => {
     haptic.success();
     setShowGiftPopup(false);
-    setTickets(tickets + 20);
-    toast.success("Получено 20 билетов!", { duration: 3000 });
+    setTickets(tickets + ticketsReceived);
+    // Обновляем билеты с сервера
+    loadTickets();
   };
 
   // Common button styles

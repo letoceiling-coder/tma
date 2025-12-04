@@ -26,7 +26,6 @@ class TicketController extends Controller
             if (!$initData) {
                 return response()->json([
                     'tickets_available' => 0,
-                    'max_tickets' => 3,
                 ]);
             }
 
@@ -35,7 +34,6 @@ class TicketController extends Controller
             if (!$telegramId) {
                 return response()->json([
                     'tickets_available' => 0,
-                    'max_tickets' => 3,
                 ]);
             }
 
@@ -108,8 +106,7 @@ class TicketController extends Controller
             }
 
             return response()->json([
-                'tickets_available' => min($user->tickets_available, 3),
-                'max_tickets' => 3,
+                'tickets_available' => $user->tickets_available,
                 'last_spin_at' => $user->last_spin_at?->toIso8601String(),
                 'restore_interval_hours' => $settings->ticket_restore_hours ?? 3,
                 'restore_interval_seconds' => $restoreIntervalSeconds,
@@ -124,7 +121,6 @@ class TicketController extends Controller
 
             return response()->json([
                 'tickets_available' => 0,
-                'max_tickets' => 3,
             ]);
         }
     }
@@ -132,20 +128,19 @@ class TicketController extends Controller
     /**
      * Проверка и восстановление билетов
      * 
-     * НОВАЯ ЛОГИКА:
+     * ЛОГИКА:
      * - tickets_depleted_at хранит момент, когда билеты закончились (стали 0)
      * - От этого момента через интервал (ticket_restore_hours) восстанавливается 1 билет
      * - Если билеты снова становятся 0, снова фиксируется момент и через интервал добавляется еще 1 билет
-     * - Процесс продолжается, пока не достигнут максимум (3 билета)
+     * - Процесс продолжается без ограничений
      * 
      * @param User $user
      * @return void
      */
     private function checkTicketRestore(User $user): void
     {
-        // Если билетов уже 3, не восстанавливаем
-        if ($user->tickets_available >= 3) {
-            // Сбрасываем точку восстановления, если она была установлена
+        // Если билетов больше 0, сбрасываем точку восстановления
+        if ($user->tickets_available > 0) {
             if ($user->tickets_depleted_at) {
                 $user->tickets_depleted_at = null;
                 $user->save();
@@ -178,7 +173,7 @@ class TicketController extends Controller
         // Если текущее время >= момента восстановления → билет готов
         if (now() >= $restoreTime) {
             $oldTickets = $user->tickets_available;
-            $user->tickets_available = min($user->tickets_available + 1, 3);
+            $user->tickets_available = $user->tickets_available + 1;
             
             Log::info('Restoring ticket', [
                 'user_id' => $user->id,
@@ -186,30 +181,24 @@ class TicketController extends Controller
                 'new_tickets' => $user->tickets_available,
             ]);
             
-            // Если билетов стало 3, сбрасываем точку восстановления
-            if ($user->tickets_available >= 3) {
+            // Если билеты > 0, сбрасываем точку восстановления
+            // Новая точка отсчета установится только когда билеты снова станут 0
+            if ($user->tickets_available > 0) {
                 $user->tickets_depleted_at = null;
             } else {
-                // Если билеты все еще меньше 3, обновляем точку отсчета на текущий момент
+                // Если билеты все еще 0, обновляем точку отсчета на текущий момент
                 // Это нужно для восстановления следующего билета через интервал
-                // Но только если билеты сейчас 0 (иначе точка отсчета не нужна, пока билеты не закончатся)
-                if ($user->tickets_available === 0) {
-                    $user->tickets_depleted_at = now();
-                    Log::info('Ticket restored but still 0, resetting tickets_depleted_at', [
-                        'user_id' => $user->id,
-                        'new_tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
-                    ]);
-                } else {
-                    // Если билеты > 0, но < 3, сбрасываем точку отсчета
-                    // Новая точка отсчета установится только когда билеты снова станут 0
-                    $user->tickets_depleted_at = null;
-                }
+                $user->tickets_depleted_at = now();
+                Log::info('Ticket restored but still 0, resetting tickets_depleted_at', [
+                    'user_id' => $user->id,
+                    'new_tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
+                ]);
             }
             
             $user->save();
             
             // Отправляем уведомление о восстановлении билета
-            if ($oldTickets < 3 && $user->tickets_available > $oldTickets) {
+            if ($user->tickets_available > $oldTickets) {
                 TelegramNotificationService::notifyNewTicket($user);
             }
         }

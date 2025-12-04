@@ -37,7 +37,7 @@ class RestoreTickets extends Command
 
         $users = User::whereNotNull('telegram_id')
             ->whereNotNull('tickets_depleted_at') // Только пользователи с установленной точкой восстановления
-            ->where('tickets_available', '<', 3)
+            ->where('tickets_available', '=', 0) // Только пользователи с 0 билетами
             ->get();
 
         $restored = 0;
@@ -50,20 +50,21 @@ class RestoreTickets extends Command
                 DB::beginTransaction();
                 try {
                     $oldTickets = $user->tickets_available;
-                    $user->tickets_available = min($user->tickets_available + 1, 3);
+                    $user->tickets_available = $user->tickets_available + 1;
                     
-                    // Если билетов все еще меньше 3, устанавливаем новую точку восстановления для следующего билета
-                    if ($user->tickets_available < 3) {
-                        $user->tickets_depleted_at = now()->addSeconds($restoreInterval);
-                    } else {
-                        // Билетов стало 3, сбрасываем точку
+                    // Если билеты > 0, сбрасываем точку восстановления
+                    // Новая точка отсчета установится только когда билеты снова станут 0
+                    if ($user->tickets_available > 0) {
                         $user->tickets_depleted_at = null;
+                    } else {
+                        // Если билеты все еще 0, устанавливаем новую точку восстановления для следующего билета
+                        $user->tickets_depleted_at = now()->addSeconds($restoreInterval);
                     }
                     
                     $user->save();
 
                     // Отправляем уведомление о восстановлении билета
-                    if ($oldTickets < 3 && $user->tickets_available > $oldTickets) {
+                    if ($user->tickets_available > $oldTickets) {
                         TelegramNotificationService::notifyNewTicket($user);
                         $notified++;
                     }

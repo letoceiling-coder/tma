@@ -318,6 +318,124 @@ class StarExchangeController extends Controller
     }
 
     /**
+     * Простой обмен звезд на билеты (списание из баланса пользователя)
+     * Обменяет 50 звезд на 20 билетов
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function exchangeStars(Request $request): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            if (!$initData) {
+                return response()->json([
+                    'error' => 'Init data not provided'
+                ], 401);
+            }
+
+            $telegramId = TelegramService::getTelegramId($initData);
+            
+            if (!$telegramId) {
+                return response()->json([
+                    'error' => 'User ID not found'
+                ], 401);
+            }
+
+            $user = User::where('telegram_id', $telegramId)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'error' => 'User not found'
+                ], 404);
+            }
+
+            $starsAmount = 50; // Фиксированная сумма для обмена
+            $ticketsAmount = 20; // Фиксированное количество билетов
+
+            // Проверяем баланс звезд
+            if ($user->stars_balance < $starsAmount) {
+                return response()->json([
+                    'error' => 'Insufficient stars',
+                    'message' => 'Недостаточно звезд для обмена. Требуется 50 звезд.',
+                    'stars_balance' => $user->stars_balance,
+                    'required' => $starsAmount,
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Списываем звезды
+                $user->stars_balance -= $starsAmount;
+                
+                // Начисляем билеты
+                $user->tickets_available += $ticketsAmount;
+                
+                // Сбрасываем точку восстановления билетов, если билеты были 0
+                if ($user->tickets_available > 0 && $user->tickets_depleted_at) {
+                    $user->tickets_depleted_at = null;
+                }
+                
+                $user->save();
+
+                // Создаем запись об обмене
+                $exchange = StarExchange::create([
+                    'user_id' => $user->id,
+                    'stars_amount' => $starsAmount,
+                    'tickets_received' => $ticketsAmount,
+                    'status' => 'completed',
+                    'transaction_id' => 'balance_exchange_' . now()->timestamp,
+                ]);
+
+                // Создаем запись в user_tickets
+                \App\Models\UserTicket::create([
+                    'user_id' => $user->id,
+                    'tickets_count' => $ticketsAmount,
+                    'restored_at' => now(),
+                    'source' => 'star_exchange',
+                ]);
+
+                DB::commit();
+
+                Log::info('Star exchange completed', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'stars_spent' => $starsAmount,
+                    'tickets_received' => $ticketsAmount,
+                    'new_stars_balance' => $user->stars_balance,
+                    'new_tickets_available' => $user->tickets_available,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Обмен выполнен успешно!',
+                    'stars_spent' => $starsAmount,
+                    'tickets_received' => $ticketsAmount,
+                    'stars_balance' => $user->stars_balance,
+                    'tickets_available' => $user->tickets_available,
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error exchanging stars', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'error' => 'Internal server error',
+                'message' => 'Произошла ошибка при обмене звезд'
+            ], 500);
+        }
+    }
+
+    /**
      * Получить историю обменов пользователя
      * 
      * @param Request $request

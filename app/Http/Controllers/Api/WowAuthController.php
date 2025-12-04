@@ -102,7 +102,7 @@ class WowAuthController extends Controller
 
                 // Если это новый пользователь и у него нет билетов, даем начальные билеты
                 if ($isNewUser && $user->tickets_available == 0) {
-                    $updateData['tickets_available'] = 3;
+                    $updateData['tickets_available'] = 3; // Начальное количество билетов для нового пользователя
                 }
 
                 if (!empty($updateData)) {

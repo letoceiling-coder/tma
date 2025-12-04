@@ -49,6 +49,7 @@ Route::middleware(['telegram.initdata'])->group(function () {
     Route::get('/leaderboard', [LeaderboardController::class, 'index']);
     
     // Telegram Stars Exchange
+    Route::post('/stars/exchange', [StarExchangeController::class, 'exchangeStars']); // Простой обмен 50 звезд на 20 билетов
     Route::post('/stars/exchange/initiate', [StarExchangeController::class, 'initiateExchange']);
     Route::post('/stars/exchange/confirm', [StarExchangeController::class, 'confirmExchange']);
     Route::get('/stars/exchange/history', [StarExchangeController::class, 'getHistory']);

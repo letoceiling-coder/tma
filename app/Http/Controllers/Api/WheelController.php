@@ -158,10 +158,9 @@ class WheelController extends Controller
                     // после завершения анимации на фронтенде (4 секунды)
                 } elseif ($winningSector->prize_type === 'ticket') {
                     // Начисляем билет(ы) за выигрыш
-                    // prize_value может быть больше 1, но максимум билетов = 3
                     $ticketsToAdd = $winningSector->prize_value ?? 1;
                     $oldTickets = $user->tickets_available;
-                    $user->tickets_available = min($user->tickets_available + $ticketsToAdd, 3);
+                    $user->tickets_available = $user->tickets_available + $ticketsToAdd;
                     
                     // Если билеты стали больше 0, сбрасываем точку восстановления
                     // (потому что билеты больше не закончились)

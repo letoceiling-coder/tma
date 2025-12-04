@@ -3,66 +3,61 @@ import { X, Star } from "lucide-react";
 import { toast } from "sonner";
 import popupBunnyHeart from "@/assets/popup-bunny-heart.png";
 import { haptic } from "@/lib/haptic";
+import useTelegramWebApp from "@/hooks/useTelegramWebApp";
 
 interface SecretGiftPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onExchange: () => void;
+  onExchange: (ticketsReceived: number) => void;
 }
 
 const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const { initData: telegramInitData } = useTelegramWebApp();
 
   if (!isOpen) return null;
 
-  // Telegram Stars exchange handler - ready for backend integration
+  // Обмен 50 звезд на 20 билетов
   const handleExchangeStars = async () => {
     if (isProcessing) return;
     
     haptic.mediumTap();
     setIsProcessing(true);
-    const tg = (window as any).Telegram?.WebApp;
     
     try {
-      // Check if Telegram WebApp is available
-      if (tg?.openInvoice) {
-        // For production: Call your backend to create a Stars invoice
-        // const response = await fetch('/api/create-stars-invoice', {
-        //   method: 'POST',
-        //   body: JSON.stringify({ amount: 50, userId: tg.initDataUnsafe?.user?.id })
-        // });
-        // const { invoiceLink } = await response.json();
-        // tg.openInvoice(invoiceLink, (status) => {
-        //   if (status === 'paid') {
-        //     haptic.success();
-        //     onExchange();
-        //     toast.success("Получено 20 билетов!");
-        //   }
-        // });
-        
-        // Simulated flow for development
-        toast.info("Обработка платежа...", { duration: 1500 });
-        
-        setTimeout(() => {
-          setIsProcessing(false);
-          haptic.success();
-          onExchange();
-          toast.success("Получено 20 билетов!", { duration: 2000 });
-        }, 1500);
-      } else {
-        // Fallback for non-Telegram environment
-        toast.info("Обработка...", { duration: 1000 });
-        setTimeout(() => {
-          setIsProcessing(false);
-          haptic.success();
-          onExchange();
-          toast.success("Получено 20 билетов!", { duration: 2000 });
-        }, 1000);
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiPath = apiUrl ? `${apiUrl}/api/stars/exchange` : `/api/stars/exchange`;
+      
+      const response = await fetch(apiPath, {
+        method: 'POST',
+        headers: {
+          'X-Telegram-Init-Data': telegramInitData || '',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || data.error || 'Ошибка при обмене звезд');
       }
-    } catch (error) {
+
+      if (data.success) {
+        haptic.success();
+        onExchange(data.tickets_received || 20);
+        toast.success(`Получено ${data.tickets_received || 20} билетов!`, { duration: 3000 });
+        onClose();
+      } else {
+        throw new Error(data.message || 'Ошибка при обмене звезд');
+      }
+    } catch (error: any) {
       setIsProcessing(false);
       haptic.error();
-      toast.error("Ошибка при обмене звезд", { duration: 2000 });
+      const errorMessage = error.message || 'Ошибка при обмене звезд';
+      toast.error(errorMessage, { duration: 3000 });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
