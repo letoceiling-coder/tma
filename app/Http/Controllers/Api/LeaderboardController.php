@@ -10,6 +10,7 @@ use App\Models\WheelSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class LeaderboardController extends Controller
 {
@@ -36,6 +37,14 @@ class LeaderboardController extends Controller
 
             // Проверяем, есть ли данные в таблице referrals
             $referralsCount = Referral::count();
+            $usersWithInvitedBy = User::whereNotNull('invited_by')->count();
+            
+            Log::info('Leaderboard data check', [
+                'referrals_count' => $referralsCount,
+                'users_with_invited_by' => $usersWithInvitedBy,
+                'period_months' => $periodMonths,
+                'period_start_date' => $periodStartDate->toIso8601String(),
+            ]);
             
             if ($referralsCount > 0) {
                 // Используем таблицу referrals (основной источник)
@@ -53,8 +62,14 @@ class LeaderboardController extends Controller
                     ->orderBy('invites_count', 'desc')
                     ->limit($limit)
                     ->get();
+                
+                Log::info('Leaderboard from referrals table', [
+                    'users_count' => $topUsers->count(),
+                ]);
             } else {
                 // Если таблица referrals пустая, используем поле invited_by из users
+                // ВАЖНО: Убираем фильтрацию по дате, если нет данных в referrals
+                // Показываем всех пользователей с рефералами
                 $topUsers = DB::table('users')
                     ->select(
                         'users.id as inviter_id',
@@ -64,12 +79,23 @@ class LeaderboardController extends Controller
                         'users.avatar_url'
                     )
                     ->join('users as invited_users', 'users.id', '=', 'invited_users.invited_by')
-                    ->whereNotNull('invited_users.invited_by')
-                    ->where('invited_users.created_at', '>=', $periodStartDate)
+                    ->whereNotNull('invited_users.invited_by');
+                
+                // Применяем фильтрацию по дате только если период установлен
+                if ($periodMonths > 0) {
+                    $topUsers->where('invited_users.created_at', '>=', $periodStartDate);
+                }
+                
+                $topUsers = $topUsers
                     ->groupBy('users.id', 'users.telegram_id', 'users.username', 'users.avatar_url')
                     ->orderBy('invites_count', 'desc')
                     ->limit($limit)
                     ->get();
+                
+                Log::info('Leaderboard from users.invited_by', [
+                    'users_count' => $topUsers->count(),
+                    'period_filter_applied' => $periodMonths > 0,
+                ]);
             }
 
             // Добавляем ранги и призы

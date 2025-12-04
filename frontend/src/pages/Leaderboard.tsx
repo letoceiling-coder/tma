@@ -34,12 +34,19 @@ const Leaderboard = () => {
         
         // Загружаем лидерборд
         const leaderboardPath = apiUrl ? `${apiUrl}/api/leaderboard` : `/api/leaderboard`;
+        const leaderboardHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        };
+        
+        // Добавляем initData если доступен (требуется для middleware telegram.initdata)
+        if (initData) {
+          leaderboardHeaders['X-Telegram-Init-Data'] = initData;
+        }
+        
         const leaderboardResponse = await fetch(leaderboardPath, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
+          headers: leaderboardHeaders,
         });
 
         if (leaderboardResponse.ok) {
