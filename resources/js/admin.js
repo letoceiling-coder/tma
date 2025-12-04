@@ -15,7 +15,17 @@ const store = createStore({
     },
     mutations: {
         SET_USER(state, user) {
+            console.log('🔍 SET_USER mutation - Setting user:', {
+                user,
+                roles: user?.roles,
+                rolesCount: user?.roles?.length || 0,
+            });
             state.user = user;
+            console.log('✅ SET_USER mutation - User set:', {
+                user: state.user,
+                roles: state.user?.roles,
+                rolesCount: state.user?.roles?.length || 0,
+            });
         },
         SET_TOKEN(state, token) {
             state.token = token;
@@ -99,8 +109,18 @@ const store = createStore({
             if (!state.token) return;
             try {
                 const response = await axios.get('/api/auth/user');
+                console.log('🔍 fetchUser - Response:', {
+                    user: response.data.user,
+                    roles: response.data.user?.roles,
+                    rolesCount: response.data.user?.roles?.length || 0,
+                });
                 commit('SET_USER', response.data.user);
+                console.log('✅ fetchUser - User set in store:', {
+                    user: state.user,
+                    roles: state.user?.roles,
+                });
             } catch (error) {
+                console.error('❌ fetchUser - Error:', error);
                 commit('LOGOUT');
             }
         },
@@ -322,6 +342,25 @@ if (store.state.token) {
     axios.defaults.headers.common['Authorization'] = `Bearer ${store.state.token}`;
 }
 
+// Инициализация пользователя при загрузке приложения
+if (store.state.token) {
+    console.log('🔍 App initialization - Token found, fetching user...');
+    store.dispatch('fetchUser').then(() => {
+        console.log('✅ App initialization - User fetched:', {
+            user: store.state.user,
+            roles: store.state.user?.roles,
+            rolesCount: store.state.user?.roles?.length || 0,
+        });
+        // Загружаем меню после загрузки пользователя
+        store.dispatch('fetchMenu');
+        store.dispatch('fetchNotifications');
+    }).catch((error) => {
+        console.error('❌ App initialization - Error fetching user:', error);
+    });
+} else {
+    console.log('⚠️ App initialization - No token found');
+}
+
 // Инициализация темы при загрузке приложения
 // Применяем тему сразу, до монтирования приложения
 const savedTheme = localStorage.getItem('theme') || 'light';
@@ -339,12 +378,23 @@ if (savedTheme === 'dark') {
 store.state.theme = savedTheme;
 
 // Initialize user and menu on app start
-store.dispatch('fetchUser').then((user) => {
-    if (user) {
+if (store.state.token) {
+    console.log('🔍 App initialization - Token found, fetching user...');
+    store.dispatch('fetchUser').then(() => {
+        console.log('✅ App initialization - User fetched:', {
+            user: store.state.user,
+            roles: store.state.user?.roles,
+            rolesCount: store.state.user?.roles?.length || 0,
+        });
+        // Загружаем меню после загрузки пользователя
         store.dispatch('fetchMenu');
         store.dispatch('fetchNotifications');
-    }
-});
+    }).catch((error) => {
+        console.error('❌ App initialization - Error fetching user:', error);
+    });
+} else {
+    console.log('⚠️ App initialization - No token found');
+}
 
 app.use(store);
 app.use(router);
