@@ -8,6 +8,46 @@ const axiosInstance = axios.create({
     },
 });
 
+// Перехватываем XMLHttpRequest на низком уровне для исправления URL
+// Это гарантирует, что все запросы будут исправлены, даже если они идут не через axios
+if (typeof window !== 'undefined' && window.XMLHttpRequest) {
+    const OriginalXHR = window.XMLHttpRequest;
+    
+    window.XMLHttpRequest = function() {
+        const xhr = new OriginalXHR();
+        const originalOpen = xhr.open;
+        
+        xhr.open = function(method, url, async, user, password) {
+            // Исправляем URL перед открытием соединения
+            if (typeof url === 'string') {
+                const originalUrl = url;
+                
+                // Убираем /public/ из URL (все вхождения)
+                url = url.replace(/\/public\//g, '/');
+                url = url.replace(/^\/public/, '');
+                url = url.replace(/\/public$/, '');
+                
+                // Заменяем HTTP на HTTPS
+                if (url.startsWith('http://')) {
+                    url = url.replace('http://', window.location.protocol + '//');
+                }
+                
+                // Если URL был изменен, логируем для отладки (можно убрать в продакшене)
+                if (originalUrl !== url && (originalUrl.includes('/public/') || originalUrl.startsWith('http://'))) {
+                    console.log('[XHR Fix] URL исправлен:', originalUrl, '->', url);
+                }
+            }
+            
+            return originalOpen.call(this, method, url, async, user, password);
+        };
+        
+        return xhr;
+    };
+    
+    // Сохраняем оригинальный конструктор для совместимости
+    window.XMLHttpRequest.prototype = OriginalXHR.prototype;
+}
+
 // Экспортируем экземпляр
 window.axios = axiosInstance;
 
