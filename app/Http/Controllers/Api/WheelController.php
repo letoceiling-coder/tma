@@ -153,6 +153,20 @@ class WheelController extends Controller
 
                 DB::commit();
 
+                // Рассчитываем время до следующего билета
+                $settings = WheelSetting::getSettings();
+                $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
+                $secondsUntilNextTicket = null;
+                $nextTicketAt = null;
+
+                if ($user->tickets_available < 3 && $user->last_spin_at) {
+                    $secondsSinceLastSpin = now()->diffInSeconds($user->last_spin_at);
+                    $completedIntervals = floor($secondsSinceLastSpin / $restoreIntervalSeconds);
+                    $nextRestoreTime = $user->last_spin_at->copy()->addSeconds(($completedIntervals + 1) * $restoreIntervalSeconds);
+                    $secondsUntilNextTicket = max(0, (int) $nextRestoreTime->diffInSeconds(now()));
+                    $nextTicketAt = $nextRestoreTime->toIso8601String();
+                }
+
                 // ============================================
                 // НОВАЯ ЛОГИКА: Точная остановка по центру сектора
                 // ============================================
@@ -222,6 +236,11 @@ class WheelController extends Controller
                     'rotation' => $targetRotation,
                     'tickets_available' => $user->tickets_available,
                     'prize_awarded' => $prizeAwarded,
+                    // Информация о восстановлении билетов
+                    'restore_interval_hours' => $settings->ticket_restore_hours ?? 3,
+                    'restore_interval_seconds' => $restoreIntervalSeconds,
+                    'next_ticket_at' => $nextTicketAt,
+                    'seconds_until_next_ticket' => $secondsUntilNextTicket,
                     // Добавляем отладочную информацию для проверки
                     '_debug' => [
                         'sector_index' => $sectorIndex,

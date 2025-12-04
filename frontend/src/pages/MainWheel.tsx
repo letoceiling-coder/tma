@@ -198,7 +198,30 @@ const MainWheel = () => {
     return 'часов';
   };
 
-  // Timer effect
+  // Периодическая синхронизация с сервером (каждые 30 секунд)
+  useEffect(() => {
+    if (!tgReady || tickets >= 3) return;
+
+    const syncInterval = setInterval(() => {
+      loadTickets(); // Синхронизируем время с сервером
+    }, 30000); // Каждые 30 секунд
+
+    return () => clearInterval(syncInterval);
+  }, [tgReady, tickets, loadTickets]);
+
+  // Синхронизация при возврате в приложение
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && tickets < 3) {
+        loadTickets(); // Обновляем данные когда пользователь возвращается
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [tickets, loadTickets]);
+
+  // Timer effect - локальный обратный отсчет между синхронизациями
   useEffect(() => {
     if (tickets >= 3) {
       setTimeLeft(0);
@@ -266,10 +289,17 @@ const MainWheel = () => {
       // Обновляем данные о времени до следующего билета (округляем до целого)
       if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
         setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
+      } else if (data.tickets_available === 0) {
+        // Если билетов 0 и сервер не вернул время, устанавливаем полный интервал
+        const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
+        setTimeLeft(intervalSeconds);
       }
       
       if (data.restore_interval_seconds) {
         setRestoreIntervalSeconds(data.restore_interval_seconds);
+      }
+      if (data.restore_interval_hours) {
+        setRestoreIntervalHours(data.restore_interval_hours);
       }
 
       // Устанавливаем ротацию от сервера
