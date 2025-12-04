@@ -145,14 +145,15 @@ const MainWheel = () => {
         if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
           const newTimeLeft = Math.max(0, Math.floor(data.seconds_until_next_ticket));
           setTimeLeft((prev) => {
-            // Обновляем только если разница больше 2 секунд
+            // Обновляем только если разница больше 2 секунд или если prev был 0
             if (Math.abs(prev - newTimeLeft) > 2 || prev === 0) {
               return newTimeLeft;
             }
             return prev;
           });
         } else {
-          // Если сервер не вернул время, устанавливаем полный интервал
+          // Если сервер не вернул время, но билетов 0, значит tickets_depleted_at не установлен
+          // Устанавливаем полный интервал восстановления
           const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
           setTimeLeft(intervalSeconds);
         }
@@ -261,8 +262,18 @@ const MainWheel = () => {
       return;
     }
     
-    // Если timeLeft уже 0 или меньше, не запускаем таймер
+    // Если timeLeft уже 0 или меньше, проверяем, нужно ли восстановить билет
     if (timeLeft <= 0) {
+      // Если билетов нет и время истекло, загружаем билеты с сервера
+      // (возможно, билет уже восстановлен на сервере)
+      const now = Date.now();
+      if (loadTicketsRef.current && !isLoadingRef.current && (now - lastLoadTimeRef.current) >= 5000) {
+        lastLoadTimeRef.current = now;
+        isLoadingRef.current = true;
+        loadTicketsRef.current().finally(() => {
+          isLoadingRef.current = false;
+        });
+      }
       return;
     }
     

@@ -57,6 +57,18 @@ class TicketController extends Controller
             $settings = \App\Models\WheelSetting::getSettings();
             $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
 
+            // ВАЖНО: Если у пользователя 0 билетов, но tickets_depleted_at не установлен,
+            // устанавливаем его на текущий момент (для запуска таймера)
+            if ($user->tickets_available === 0 && !$user->tickets_depleted_at) {
+                $user->tickets_depleted_at = now();
+                $user->save();
+                Log::info('Ticket timer started', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
+                ]);
+            }
+
             // Проверяем, нужно ли восстановить билеты
             $this->checkTicketRestore($user);
 
@@ -71,6 +83,14 @@ class TicketController extends Controller
                 $restoreTime = $user->tickets_depleted_at->copy()->addSeconds($restoreIntervalSeconds);
                 $secondsUntilNextTicket = max(0, (int) $restoreTime->diffInSeconds(now()));
                 $nextTicketAt = $restoreTime->toIso8601String();
+                
+                Log::debug('Ticket timer calculated', [
+                    'user_id' => $user->id,
+                    'tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
+                    'restore_interval_seconds' => $restoreIntervalSeconds,
+                    'restore_time' => $restoreTime->toIso8601String(),
+                    'seconds_until_next_ticket' => $secondsUntilNextTicket,
+                ]);
             }
 
             return response()->json([
