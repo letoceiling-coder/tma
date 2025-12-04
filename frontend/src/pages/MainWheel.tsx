@@ -137,10 +137,19 @@ const MainWheel = () => {
       }
       
       // Устанавливаем время до следующего билета (округляем до целого)
+      // Обновляем только если значение изменилось значительно (больше чем на 2 секунды)
+      // Это предотвращает постоянные перезапуски таймера
       if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
-        setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
+        const newTimeLeft = Math.max(0, Math.floor(data.seconds_until_next_ticket));
+        setTimeLeft((prev) => {
+          // Обновляем только если разница больше 2 секунд
+          if (Math.abs(prev - newTimeLeft) > 2 || prev === 0) {
+            return newTimeLeft;
+          }
+          return prev;
+        });
       } else {
-        setTimeLeft(0);
+        setTimeLeft((prev) => prev > 0 ? prev : 0); // Не сбрасываем если уже есть значение
       }
     } catch (error) {
       console.error('Ошибка загрузки билетов:', error);
@@ -154,6 +163,8 @@ const MainWheel = () => {
   
   // Ref для хранения функции loadTickets, чтобы избежать пересоздания
   const loadTicketsRef = useRef<() => Promise<void>>();
+  const lastLoadTimeRef = useRef<number>(0);
+  const isLoadingRef = useRef<boolean>(false);
   
   // Сохраняем функцию в ref
   useEffect(() => {
@@ -237,24 +248,42 @@ const MainWheel = () => {
       return; // Не запускаем таймер если билетов уже максимум
     }
     
+    // Если timeLeft уже 0 или меньше, не запускаем таймер
+    if (timeLeft <= 0) {
+      return;
+    }
+    
     let timerId: NodeJS.Timeout;
+    const MIN_LOAD_INTERVAL = 5000; // Минимальный интервал между загрузками (5 секунд)
     
     timerId = setInterval(() => {
       setTimeLeft((prev) => {
         const current = Math.floor(prev); // Убеждаемся что работаем с целыми числами
-        if (current <= 1) {
-          // Обновляем билеты с сервера когда таймер достигает 0
-          if (loadTicketsRef.current) {
-            loadTicketsRef.current();
+        
+        // Если время уже 0, не обновляем и не вызываем loadTickets
+        if (current <= 0) {
+          return 0;
+        }
+        
+        // Если время достигло 1, обновляем билеты с сервера, но не чаще чем раз в 5 секунд
+        if (current === 1) {
+          const now = Date.now();
+          if (loadTicketsRef.current && !isLoadingRef.current && (now - lastLoadTimeRef.current) >= MIN_LOAD_INTERVAL) {
+            lastLoadTimeRef.current = now;
+            isLoadingRef.current = true;
+            loadTicketsRef.current().finally(() => {
+              isLoadingRef.current = false;
+            });
           }
           return 0;
         }
+        
         return current - 1;
       });
     }, 1000);
 
     return () => clearInterval(timerId);
-  }, [tickets]); // Убрали loadTickets из зависимостей
+  }, [tickets, timeLeft]); // Добавили timeLeft в зависимости, чтобы таймер перезапускался при изменении времени
 
   const handleSpin = async () => {
     if (tickets <= 0) {
