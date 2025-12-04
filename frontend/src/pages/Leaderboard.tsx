@@ -24,20 +24,17 @@ const Leaderboard = () => {
   const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [topPrize, setTopPrize] = useState(1500); // По умолчанию
-  
-  // Формируем реферальную ссылку с реальным telegram_id пользователя
-  const referralLink = user?.id 
-    ? `https://t.me/wow_roulette_bot?start=ref${user.id}`
-    : "https://t.me/wow_roulette_bot";
+  const [referralLink, setReferralLink] = useState("https://t.me/wow_roulette_bot");
 
-  // Загрузка лидерборда с сервера
+  // Загрузка лидерборда и реферальной ссылки с сервера
   useEffect(() => {
-    const loadLeaderboard = async () => {
+    const loadData = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || '';
-        const apiPath = apiUrl ? `${apiUrl}/api/leaderboard` : `/api/leaderboard`;
-
-        const response = await fetch(apiPath, {
+        
+        // Загружаем лидерборд
+        const leaderboardPath = apiUrl ? `${apiUrl}/api/leaderboard` : `/api/leaderboard`;
+        const leaderboardResponse = await fetch(leaderboardPath, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -45,27 +42,49 @@ const Leaderboard = () => {
           },
         });
 
-        if (!response.ok) {
-          throw new Error('Ошибка загрузки лидерборда');
+        if (leaderboardResponse.ok) {
+          const leaderboardData = await leaderboardResponse.json();
+          setLeaders(leaderboardData.leaderboard || []);
+          
+          // Устанавливаем приз за 1 место для баннера
+          if (leaderboardData.leaderboard && leaderboardData.leaderboard.length > 0) {
+            setTopPrize(leaderboardData.leaderboard[0].prize_amount || 1500);
+          }
         }
 
-        const data = await response.json();
-        setLeaders(data.leaderboard || []);
-        
-        // Устанавливаем приз за 1 место для баннера
-        if (data.leaderboard && data.leaderboard.length > 0) {
-          setTopPrize(data.leaderboard[0].prize_amount || 1500);
+        // Загружаем реферальную ссылку
+        if (initData) {
+          const referralPath = apiUrl ? `${apiUrl}/api/referral/link` : `/api/referral/link`;
+          const referralResponse = await fetch(referralPath, {
+            method: 'GET',
+            headers: {
+              'X-Telegram-Init-Data': initData,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          });
+
+          if (referralResponse.ok) {
+            const referralData = await referralResponse.json();
+            if (referralData.referral_link) {
+              setReferralLink(referralData.referral_link);
+            }
+          }
         }
       } catch (error) {
-        console.error('Ошибка загрузки лидерборда:', error);
-        toast.error('Не удалось загрузить лидерборд');
+        console.error('Ошибка загрузки данных:', error);
+        toast.error('Не удалось загрузить данные');
+        // Используем fallback ссылку с telegram_id из user, если доступен
+        if (user?.id) {
+          setReferralLink(`https://t.me/wow_roulette_bot?start=ref${user.id}`);
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    loadLeaderboard();
-  }, []);
+    loadData();
+  }, [initData, user]);
 
   const handleInvite = async () => {
     haptic.mediumTap();

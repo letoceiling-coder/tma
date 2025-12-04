@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Referral;
 use App\Services\TelegramService;
+use App\Telegram\Bot;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class ReferralController extends Controller
 {
@@ -46,8 +48,36 @@ class ReferralController extends Controller
                 ], 404);
             }
 
-            // Генерируем реферальную ссылку
-            $referralLink = config('app.url') . '?ref=' . $user->telegram_id;
+            // Генерируем реферальную ссылку для Telegram бота
+            // Формат: https://t.me/{bot_username}?start=ref{telegram_id}
+            $botUsername = config('telegram.bot_username');
+            
+            // Если username не задан в конфигурации, получаем через API
+            if (!$botUsername) {
+                $botUsername = Cache::remember('telegram_bot_username', 3600, function () {
+                    try {
+                        $bot = new Bot();
+                        $me = $bot->getMe();
+                        return $me['username'] ?? null;
+                    } catch (\Exception $e) {
+                        Log::error('Failed to get bot username from API', [
+                            'error' => $e->getMessage(),
+                        ]);
+                        return null;
+                    }
+                });
+            }
+            
+            if (!$botUsername) {
+                return response()->json([
+                    'error' => 'Bot username not available. Please configure TELEGRAM_BOT_USERNAME in .env file.'
+                ], 500);
+            }
+            
+            // Убираем @ если оно есть
+            $botUsername = ltrim($botUsername, '@');
+            
+            $referralLink = "https://t.me/{$botUsername}?start=ref{$user->telegram_id}";
 
             return response()->json([
                 'referral_link' => $referralLink,

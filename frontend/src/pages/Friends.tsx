@@ -10,22 +10,49 @@ import useTelegramWebApp from "@/hooks/useTelegramWebApp";
 
 const Friends = () => {
   const navigate = useNavigate();
-  const { userName, share, isReady: tgReady, user } = useTelegramWebApp();
+  const { userName, share, isReady: tgReady, user, initData } = useTelegramWebApp();
   const [isCopied, setIsCopied] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  
-  // Формируем реферальную ссылку с реальным telegram_id пользователя
-  const referralLink = user?.id 
-    ? `https://t.me/wow_roulette_bot?start=ref${user.id}`
-    : "https://t.me/wow_roulette_bot";
+  const [referralLink, setReferralLink] = useState("https://t.me/wow_roulette_bot");
 
+  // Загружаем реферальную ссылку с сервера
   useEffect(() => {
-    if (tgReady) {
+    const loadReferralLink = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const apiPath = apiUrl ? `${apiUrl}/api/referral/link` : `/api/referral/link`;
+        
+        const response = await fetch(apiPath, {
+          method: 'GET',
+          headers: {
+            'X-Telegram-Init-Data': initData,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.referral_link) {
+            setReferralLink(data.referral_link);
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка загрузки реферальной ссылки:', error);
+        // Используем fallback ссылку с telegram_id из user, если доступен
+        if (user?.id) {
+          setReferralLink(`https://t.me/wow_roulette_bot?start=ref${user.id}`);
+        }
+      }
+    };
+
+    if (tgReady && initData) {
+      loadReferralLink();
       requestAnimationFrame(() => {
         setIsLoaded(true);
       });
     }
-  }, [tgReady]);
+  }, [tgReady, initData, user]);
 
   const handleInvite = async () => {
     haptic.mediumTap();
