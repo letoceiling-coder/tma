@@ -33,6 +33,7 @@ class LeaderboardPrizeController extends Controller
         $prize = LeaderboardPrize::findOrFail($id);
 
         $validator = Validator::make($request->all(), [
+            'rank' => 'sometimes|integer|min:1|unique:leaderboard_prizes,rank,' . $id,
             'prize_amount' => 'required|integer|min:0|max:1000000',
             'prize_description' => 'nullable|string|max:255',
             'is_active' => 'nullable|boolean',
@@ -45,11 +46,17 @@ class LeaderboardPrizeController extends Controller
             ], 422);
         }
 
-        $prize->update([
+        $updateData = [
             'prize_amount' => $request->prize_amount,
             'prize_description' => $request->prize_description ?? $prize->prize_description,
             'is_active' => $request->is_active ?? $prize->is_active,
-        ]);
+        ];
+
+        if ($request->has('rank')) {
+            $updateData['rank'] = $request->rank;
+        }
+
+        $prize->update($updateData);
 
         return response()->json([
             'message' => 'Приз успешно обновлен',
@@ -65,6 +72,7 @@ class LeaderboardPrizeController extends Controller
         $validator = Validator::make($request->all(), [
             'prizes' => 'required|array|min:1',
             'prizes.*.id' => 'required|exists:leaderboard_prizes,id',
+            'prizes.*.rank' => 'sometimes|integer|min:1',
             'prizes.*.prize_amount' => 'required|integer|min:0|max:1000000',
             'prizes.*.prize_description' => 'nullable|string|max:255',
             'prizes.*.is_active' => 'nullable|boolean',
@@ -78,11 +86,27 @@ class LeaderboardPrizeController extends Controller
         }
 
         foreach ($request->prizes as $prizeData) {
-            LeaderboardPrize::where('id', $prizeData['id'])->update([
+            $updateData = [
                 'prize_amount' => $prizeData['prize_amount'],
                 'prize_description' => $prizeData['prize_description'] ?? null,
                 'is_active' => $prizeData['is_active'] ?? true,
-            ]);
+            ];
+
+            // Обновляем rank, если он указан
+            if (isset($prizeData['rank'])) {
+                // Проверяем уникальность rank для других записей
+                $existingPrize = LeaderboardPrize::where('rank', $prizeData['rank'])
+                    ->where('id', '!=', $prizeData['id'])
+                    ->first();
+                
+                if ($existingPrize) {
+                    continue; // Пропускаем, если место уже занято
+                }
+                
+                $updateData['rank'] = $prizeData['rank'];
+            }
+
+            LeaderboardPrize::where('id', $prizeData['id'])->update($updateData);
         }
 
         $updatedPrizes = LeaderboardPrize::orderBy('rank')->get();
@@ -90,6 +114,51 @@ class LeaderboardPrizeController extends Controller
         return response()->json([
             'message' => 'Призы успешно обновлены',
             'data' => $updatedPrizes,
+        ]);
+    }
+
+    /**
+     * Создать новый приз
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'rank' => 'required|integer|min:1|unique:leaderboard_prizes,rank',
+            'prize_amount' => 'required|integer|min:0|max:1000000',
+            'prize_description' => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $prize = LeaderboardPrize::create([
+            'rank' => $request->rank,
+            'prize_amount' => $request->prize_amount,
+            'prize_description' => $request->prize_description ?? null,
+            'is_active' => $request->is_active ?? true,
+        ]);
+
+        return response()->json([
+            'message' => 'Приз успешно создан',
+            'data' => $prize,
+        ], 201);
+    }
+
+    /**
+     * Удалить приз
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        $prize = LeaderboardPrize::findOrFail($id);
+        $prize->delete();
+
+        return response()->json([
+            'message' => 'Приз успешно удален',
         ]);
     }
 

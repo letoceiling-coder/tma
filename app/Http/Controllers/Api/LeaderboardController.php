@@ -73,6 +73,8 @@ class LeaderboardController extends Controller
             }
 
             // Добавляем ранги и призы
+            // ВАЖНО: Показываем только те места, для которых есть пользователи
+            // Если пользователей меньше, чем настроено мест, список сокращается
             $leaderboard = $topUsers->map(function ($user, $index) {
                 $rank = $index + 1;
                 $prizeAmount = $this->getPrizeAmount($rank);
@@ -86,6 +88,9 @@ class LeaderboardController extends Controller
                     'prize_amount' => $prizeAmount,
                 ];
             });
+
+            // Список автоматически сокращается до количества пользователей
+            // Если пользователей 3, показываем только 3 места, даже если настроено 10
 
             return response()->json([
                 'leaderboard' => $leaderboard,

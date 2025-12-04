@@ -129,7 +129,9 @@ Route::middleware('auth:sanctum')->group(function () {
                 
                 // Призы лидерборда
                 Route::get('leaderboard-prizes', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'index']);
+                Route::post('leaderboard-prizes', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'store']);
                 Route::put('leaderboard-prizes/{id}', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'update']);
+                Route::delete('leaderboard-prizes/{id}', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'destroy']);
                 Route::post('leaderboard-prizes/bulk-update', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'bulkUpdate']);
                 Route::post('leaderboard-prizes/update-period', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'updatePeriod']);
             });
