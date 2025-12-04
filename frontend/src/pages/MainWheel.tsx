@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import WheelComponent from "@/components/WheelComponent";
 import BottomNav from "@/components/BottomNav";
@@ -151,6 +151,14 @@ const MainWheel = () => {
       setLoadingTickets(false);
     }
   }, []);
+  
+  // Ref для хранения функции loadTickets, чтобы избежать пересоздания
+  const loadTicketsRef = useRef<() => Promise<void>>();
+  
+  // Сохраняем функцию в ref
+  useEffect(() => {
+    loadTicketsRef.current = loadTickets;
+  }, [loadTickets]);
 
   // Animate on mount after Telegram is ready
   useEffect(() => {
@@ -200,23 +208,27 @@ const MainWheel = () => {
     if (!tgReady || tickets >= 3) return;
 
     const syncInterval = setInterval(() => {
-      loadTickets(); // Синхронизируем время с сервером
+      if (loadTicketsRef.current) {
+        loadTicketsRef.current(); // Синхронизируем время с сервером
+      }
     }, 30000); // Каждые 30 секунд
 
     return () => clearInterval(syncInterval);
-  }, [tgReady, tickets, loadTickets]);
+  }, [tgReady, tickets]); // Убрали loadTickets из зависимостей
 
   // Синхронизация при возврате в приложение
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && tickets < 3) {
-        loadTickets(); // Обновляем данные когда пользователь возвращается
+        if (loadTicketsRef.current) {
+          loadTicketsRef.current(); // Обновляем данные когда пользователь возвращается
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [tickets, loadTickets]);
+  }, [tickets]); // Убрали loadTickets из зависимостей
 
   // Timer effect - локальный обратный отсчет между синхронизациями
   useEffect(() => {
@@ -225,20 +237,24 @@ const MainWheel = () => {
       return; // Не запускаем таймер если билетов уже максимум
     }
     
-    const timer = setInterval(() => {
+    let timerId: NodeJS.Timeout;
+    
+    timerId = setInterval(() => {
       setTimeLeft((prev) => {
         const current = Math.floor(prev); // Убеждаемся что работаем с целыми числами
         if (current <= 1) {
           // Обновляем билеты с сервера когда таймер достигает 0
-          loadTickets();
+          if (loadTicketsRef.current) {
+            loadTicketsRef.current();
+          }
           return 0;
         }
         return current - 1;
       });
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [tickets, loadTickets]);
+    return () => clearInterval(timerId);
+  }, [tickets]); // Убрали loadTickets из зависимостей
 
   const handleSpin = async () => {
     if (tickets <= 0) {
