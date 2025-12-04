@@ -31,7 +31,7 @@ const MainWheel = () => {
   const [tickets, setTickets] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [showGiftPopup, setShowGiftPopup] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const [lastResult, setLastResult] = useState(0);
@@ -39,6 +39,7 @@ const MainWheel = () => {
   const [wheelSegments, setWheelSegments] = useState<WheelSegment[]>([]);
   const [loadingSectors, setLoadingSectors] = useState(true);
   const [loadingTickets, setLoadingTickets] = useState(true);
+  const [restoreIntervalSeconds, setRestoreIntervalSeconds] = useState(10800); // 3 часа по умолчанию
 
   // Загрузка секторов с сервера
   const loadWheelConfig = useCallback(async () => {
@@ -132,10 +133,23 @@ const MainWheel = () => {
 
       const data = await response.json();
       setTickets(data.tickets_available || 0);
+      
+      // Сохраняем интервал восстановления
+      if (data.restore_interval_seconds) {
+        setRestoreIntervalSeconds(data.restore_interval_seconds);
+      }
+      
+      // Устанавливаем время до следующего билета
+      if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
+        setTimeLeft(Math.max(0, data.seconds_until_next_ticket));
+      } else {
+        setTimeLeft(0);
+      }
     } catch (error) {
       console.error('Ошибка загрузки билетов:', error);
       // В случае ошибки используем локальное состояние
       setTickets(3);
+      setTimeLeft(0);
     } finally {
       setLoadingTickets(false);
     }
@@ -155,10 +169,15 @@ const MainWheel = () => {
     }
   }, [tgReady, loadWheelConfig, loadTickets]);
 
-  // Format seconds to MM:SS
+  // Format seconds to HH:MM:SS or MM:SS
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -171,13 +190,17 @@ const MainWheel = () => {
 
   // Timer effect
   useEffect(() => {
-    if (tickets >= 3) return; // Не запускаем таймер если билетов уже максимум
+    if (tickets >= 3) {
+      setTimeLeft(0);
+      return; // Не запускаем таймер если билетов уже максимум
+    }
     
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          loadTickets(); // Обновляем билеты с сервера
-          return 60;
+          // Обновляем билеты с сервера когда таймер достигает 0
+          loadTickets();
+          return 0;
         }
         return prev - 1;
       });
@@ -230,8 +253,17 @@ const MainWheel = () => {
         throw new Error(data.message || 'Ошибка прокрута рулетки');
       }
 
-      // Обновляем билеты
+      // Обновляем билеты и таймер
       setTickets(data.tickets_available || 0);
+      
+      // Обновляем данные о времени до следующего билета
+      if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
+        setTimeLeft(Math.max(0, data.seconds_until_next_ticket));
+      }
+      
+      if (data.restore_interval_seconds) {
+        setRestoreIntervalSeconds(data.restore_interval_seconds);
+      }
 
       // Устанавливаем ротацию, полученную с сервера
       if (data.rotation !== undefined) {
