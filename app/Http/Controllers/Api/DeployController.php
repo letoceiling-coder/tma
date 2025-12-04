@@ -584,6 +584,7 @@ class DeployController extends Controller
                 $seeders = [
                     'RoleSeeder',
                     'WheelSectorSeeder',
+                    'ChannelSeeder',
                 ];
             }
 

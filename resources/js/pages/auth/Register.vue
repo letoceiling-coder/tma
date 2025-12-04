@@ -101,7 +101,7 @@ export default {
             const result = await store.dispatch('register', form.value);
 
             if (result.success) {
-                router.push('/admin');
+                router.push({ name: 'admin.dashboard' });
             } else {
                 error.value = result.error;
             }

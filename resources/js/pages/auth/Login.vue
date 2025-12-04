@@ -80,7 +80,7 @@ export default {
             const result = await store.dispatch('login', form.value);
 
             if (result.success) {
-                router.push('/admin');
+                router.push({ name: 'admin.dashboard' });
             } else {
                 error.value = result.error;
             }

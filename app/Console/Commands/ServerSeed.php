@@ -14,8 +14,7 @@ class ServerSeed extends Command
      */
     protected $signature = 'server-seed 
                             {--class= : Выполнить конкретный seeder (например: DatabaseSeeder, WheelSectorSeeder)}
-                            {--all : Выполнить все seeders (db:seed)}
-                            {--insecure : Отключить проверку SSL сертификата (для разработки)}';
+                            {--all : Выполнить все seeders (db:seed)}';
 
     /**
      * The console command description.
@@ -84,18 +83,13 @@ class ServerSeed extends Command
             }
             $this->newLine();
 
-            // Настраиваем HTTP клиент
+            // Настраиваем HTTP клиент с отключенной проверкой SSL по умолчанию
             $client = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $deployToken,
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
-            ])->timeout(600); // 10 минут таймаут
-
-            // Отключаем проверку SSL если указан флаг
-            if ($this->option('insecure')) {
-                $client = $client->withoutVerifying();
-                $this->warn('⚠️  Проверка SSL сертификата отключена');
-            }
+            ])->timeout(600) // 10 минут таймаут
+              ->withoutVerifying(); // Отключаем проверку SSL сертификата
 
             // Отправляем запрос
             $response = $client->post($url, $data);
