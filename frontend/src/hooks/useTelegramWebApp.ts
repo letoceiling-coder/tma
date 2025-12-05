@@ -44,6 +44,7 @@ interface TelegramWebApp {
   };
   openTelegramLink: (url: string) => void;
   openLink: (url: string) => void;
+  shareLink?: (url: string, text: string) => Promise<void>;
   platform: string;
   version: string;
   colorScheme: "light" | "dark";
@@ -117,14 +118,32 @@ export const useTelegramWebApp = () => {
     window.Telegram?.WebApp?.expand();
   }, []);
 
-  const share = useCallback((url: string, text: string) => {
+  const share = useCallback(async (url: string, text: string): Promise<boolean> => {
     const tg = window.Telegram?.WebApp;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(
-        `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
-      );
-      return true;
+    
+    // Try Telegram.WebApp.shareLink() first (preferred method for Mini Apps)
+    if (tg?.shareLink) {
+      try {
+        await tg.shareLink(url, text);
+        return true;
+      } catch (error) {
+        console.error('Telegram shareLink failed:', error);
+        // Fall through to next method
+      }
     }
+    
+    // Fallback to openTelegramLink with share URL
+    if (tg?.openTelegramLink) {
+      try {
+        tg.openTelegramLink(
+          `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+        );
+        return true;
+      } catch (error) {
+        console.error('Telegram openTelegramLink failed:', error);
+      }
+    }
+    
     return false;
   }, []);
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import BottomNav from "@/components/BottomNav";
+import ShareIcon from "@/components/ShareIcon";
 import { toast } from "sonner";
 import leaderboardBunny from "@/assets/leaderboard-bunny-1500.png";
 import leaderboardTopText from "@/assets/leaderboard-top-text.png";
@@ -93,18 +94,65 @@ const Leaderboard = () => {
     loadData();
   }, [initData, user]);
 
+  const handleShare = async () => {
+    haptic.mediumTap();
+    
+    try {
+      // First copy to clipboard
+      await navigator.clipboard.writeText(referralLink);
+      
+      // Then try Telegram share
+      const shared = await share(referralLink, "Присоединяйся к WOW Рулетке! 🎰");
+      
+      if (shared) {
+        haptic.success();
+        return;
+      }
+      
+      // Try native share
+      if (navigator.share) {
+        await navigator.share({
+          title: "WOW Рулетка",
+          text: "Присоединяйся к WOW Рулетке! Крути колесо и выигрывай призы! 🎰",
+          url: referralLink,
+        });
+        haptic.success();
+        return;
+      }
+      
+      // Fallback: already copied, show toast
+      haptic.success();
+      toast.success("Ссылка скопирована!", { duration: 2000 });
+    } catch (error) {
+      // Final fallback
+      haptic.success();
+      toast.success("Ссылка скопирована!", { duration: 2000 });
+    }
+  };
+
   const handleInvite = async () => {
     haptic.mediumTap();
     
-    // Try Telegram share first
-    const shared = share(referralLink, "Присоединяйся к WOW Рулетке! 🎰");
-    if (shared) {
-      haptic.success();
-      return;
-    }
-    
-    // Fallback: copy to clipboard
     try {
+      // Try Telegram share first
+      const shared = await share(referralLink, "Присоединяйся к WOW Рулетке! 🎰");
+      if (shared) {
+        haptic.success();
+        return;
+      }
+      
+      // Try native share
+      if (navigator.share) {
+        await navigator.share({
+          title: "WOW Рулетка",
+          text: "Присоединяйся к WOW Рулетке! Крути колесо и выигрывай призы! 🎰",
+          url: referralLink,
+        });
+        haptic.success();
+        return;
+      }
+      
+      // Fallback: copy to clipboard
       await navigator.clipboard.writeText(referralLink);
       setIsCopied(true);
       haptic.success();
@@ -153,38 +201,62 @@ const Leaderboard = () => {
         </span>
       </div>
       
-      {/* Invite button */}
-      <button
-        onClick={handleInvite}
-        className="absolute flex items-center justify-center gap-2 transition-all duration-200 active:opacity-80"
+      {/* Invite button and Share icon */}
+      <div
+        className="absolute flex items-center gap-2"
         style={{
           top: '12px',
           right: '16px',
-          height: '36px',
-          padding: '0 14px',
-          background: 'linear-gradient(135deg, #E88B72 0%, #D87C68 100%)',
-          borderRadius: '10px',
-          fontSize: '12px',
-          color: '#FFFFFF',
-          fontWeight: 600,
-          border: 'none',
-          cursor: 'pointer',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-          fontFamily: "'Nunito', sans-serif"
         }}
       >
-        <span>{isCopied ? "Скопировано" : "Пригласить друга"}</span>
-        {isCopied ? (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-        )}
-      </button>
+        <button
+          onClick={handleInvite}
+          className="flex items-center justify-center gap-2 transition-all duration-200 active:opacity-80"
+          style={{
+            height: '36px',
+            padding: '0 14px',
+            background: 'linear-gradient(135deg, #E88B72 0%, #D87C68 100%)',
+            borderRadius: '10px',
+            fontSize: '12px',
+            color: '#FFFFFF',
+            fontWeight: 600,
+            border: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+            fontFamily: "'Nunito', sans-serif"
+          }}
+        >
+          <span>{isCopied ? "Скопировано" : "Пригласить друга"}</span>
+          {isCopied ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          )}
+        </button>
+        
+        {/* Share Icon Button */}
+        <button
+          onClick={handleShare}
+          className="flex items-center justify-center transition-all duration-200 active:opacity-80"
+          style={{
+            width: '36px',
+            height: '36px',
+            background: 'linear-gradient(135deg, #E88B72 0%, #D87C68 100%)',
+            borderRadius: '10px',
+            border: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+          }}
+          aria-label="Поделиться"
+        >
+          <ShareIcon size={18} color="#FFFFFF" />
+        </button>
+      </div>
 
       {/* Top Banner Card */}
       <div 

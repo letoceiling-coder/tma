@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Copy, Check } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import ShareIcon from "@/components/ShareIcon";
 import { toast } from "sonner";
 import friendsInvite from "@/assets/friends-invite.png";
 import friendsTickets from "@/assets/friends-tickets.png";
@@ -54,12 +55,48 @@ const Friends = () => {
     }
   }, [tgReady, initData, user]);
 
+  const handleShare = async () => {
+    haptic.mediumTap();
+    
+    try {
+      // First copy to clipboard
+      await navigator.clipboard.writeText(referralLink);
+      
+      // Then try Telegram share
+      const shared = await share(referralLink, "Присоединяйся к WOW Рулетке! 🎰");
+      
+      if (shared) {
+        haptic.success();
+        return;
+      }
+      
+      // Try native share
+      if (navigator.share) {
+        await navigator.share({
+          title: "WOW Рулетка",
+          text: "Присоединяйся к WOW Рулетке! Крути колесо и выигрывай призы! 🎰",
+          url: referralLink,
+        });
+        haptic.success();
+        return;
+      }
+      
+      // Fallback: already copied, show toast
+      haptic.success();
+      toast.success("Ссылка скопирована!", { duration: 2000 });
+    } catch (error) {
+      // Final fallback
+      haptic.success();
+      toast.success("Ссылка скопирована!", { duration: 2000 });
+    }
+  };
+
   const handleInvite = async () => {
     haptic.mediumTap();
     
     try {
       // Try Telegram share first
-      const shared = share(referralLink, "Присоединяйся к WOW Рулетке! 🎰");
+      const shared = await share(referralLink, "Присоединяйся к WOW Рулетке! 🎰");
       
       if (shared) {
         haptic.success();
@@ -220,50 +257,77 @@ const Friends = () => {
           transition: 'all 0.5s ease 0.3s'
         }}
       >
-        <button
-          onClick={handleInvite}
-          style={{
-            width: '100%',
-            padding: '16px 24px',
-            borderRadius: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px',
-            background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF8F5 100%)',
-            fontSize: '16px',
-            fontWeight: 700,
-            color: '#E07C63',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            WebkitTapHighlightColor: 'transparent'
-          }}
-          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        >
-          <span>{isCopied ? "Скопировано!" : "Пригласить друга"}</span>
-          <div 
-            style={{ 
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button
+            onClick={handleInvite}
+            style={{
+              flex: 1,
+              padding: '16px 24px',
+              borderRadius: '14px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: isCopied ? '#22C55E' : '#E07C63',
-              transition: 'background 0.2s ease'
+              gap: '12px',
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF8F5 100%)',
+              fontSize: '16px',
+              fontWeight: 700,
+              color: '#E07C63',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              WebkitTapHighlightColor: 'transparent'
             }}
+            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            {isCopied ? (
-              <Check size={18} color="white" />
-            ) : (
-              <Copy size={18} color="white" />
-            )}
-          </div>
-        </button>
+            <span>{isCopied ? "Скопировано!" : "Пригласить друга"}</span>
+            <div 
+              style={{ 
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: isCopied ? '#22C55E' : '#E07C63',
+                transition: 'background 0.2s ease'
+              }}
+            >
+              {isCopied ? (
+                <Check size={18} color="white" />
+              ) : (
+                <Copy size={18} color="white" />
+              )}
+            </div>
+          </button>
+          
+          {/* Share Icon Button */}
+          <button
+            onClick={handleShare}
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #FFF8F5 100%)',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              WebkitTapHighlightColor: 'transparent'
+            }}
+            onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.95)')}
+            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            aria-label="Поделиться"
+          >
+            <ShareIcon size={24} color="#E07C63" />
+          </button>
+        </div>
       </div>
 
       <BottomNav />

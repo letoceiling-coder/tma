@@ -629,7 +629,7 @@ const MainWheel = () => {
         className="absolute"
         style={{ 
           left: '50%', 
-          top: '48%', 
+          top: 'clamp(38%, 42%, 44%)', 
           transform: `translate(-50%, -50%) scale(${isSpinning ? 1.02 : 1})`,
           transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           opacity: isLoaded ? 1 : 0,
@@ -653,7 +653,7 @@ const MainWheel = () => {
         style={{
           left: 0,
           right: 0,
-          bottom: '80px',
+          bottom: 'calc(60px + 18px + env(safe-area-inset-bottom, 0px))',
           width: '100%',
           display: 'flex',
           flexDirection: 'column',

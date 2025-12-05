@@ -360,3 +360,4 @@ try {
 - [FAQ по лимитам](https://core.telegram.org/bots/faq#my-bot-is-hitting-limits-how-do-i-avoid-this)
 - [Лучшие практики](https://core.telegram.org/bots/api#making-requests)
 
+
