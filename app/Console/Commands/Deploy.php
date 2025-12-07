@@ -447,9 +447,30 @@ class Deploy extends Command
                 }
             }
 
-            $response = $httpClient->withHeaders([
+            // Дополнительные настройки для cURL при проблемах с SSL
+            $curlOptions = [];
+            if ($this->option('insecure')) {
+                $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
+                $curlOptions[CURLOPT_SSL_VERIFYHOST] = false;
+            }
+            
+            // Пробуем разные версии TLS
+            $curlOptions[CURLOPT_SSLVERSION] = CURL_SSLVERSION_TLSv1_2;
+            
+            // Увеличиваем таймауты
+            $curlOptions[CURLOPT_CONNECTTIMEOUT] = 30;
+            $curlOptions[CURLOPT_TIMEOUT] = 300;
+            
+            // Разрешаем редиректы
+            $curlOptions[CURLOPT_FOLLOWLOCATION] = true;
+            $curlOptions[CURLOPT_MAXREDIRS] = 5;
+
+            $response = $httpClient->withOptions($curlOptions)
+                ->withHeaders([
                     'X-Deploy-Token' => $deployToken,
                     'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'User-Agent' => 'WOW-Spin-Deploy/1.0',
                 ])
                 ->post($deployUrl, [
                     'commit_hash' => $commitHash,
@@ -460,6 +481,7 @@ class Deploy extends Command
                     'run_seeders' => $this->option('with-seed'),
                 ]);
 
+            // Проверяем статус ответа
             if ($response->successful()) {
                 $data = $response->json();
                 
@@ -525,8 +547,51 @@ class Deploy extends Command
                 );
             }
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
-            throw new \Exception("Не удалось подключиться к серверу: " . $e->getMessage());
+            $errorMessage = $e->getMessage();
+            
+            // Детальная диагностика ошибки
+            $this->newLine();
+            $this->error('❌ Ошибка подключения к серверу');
+            $this->line("  📡 URL: {$deployUrl}");
+            $this->line("  🔍 Ошибка: {$errorMessage}");
+            
+            // Проверяем тип ошибки и даем рекомендации
+            if (str_contains($errorMessage, 'Connection was reset') || str_contains($errorMessage, 'cURL error 35')) {
+                $this->newLine();
+                $this->warn('  💡 Возможные причины:');
+                $this->line('     1. Проблема с SSL/TLS сертификатом на сервере');
+                $this->line('     2. Несовместимость версий TLS между клиентом и сервером');
+                $this->line('     3. Файрвол или прокси блокирует соединение');
+                $this->line('     4. Сервер недоступен или перегружен');
+                $this->newLine();
+                $this->line('  🔧 Рекомендации:');
+                $this->line('     - Проверьте доступность сервера: curl -I ' . $deployUrl);
+                $this->line('     - Проверьте SSL сертификат: openssl s_client -connect ' . parse_url($deployUrl, PHP_URL_HOST) . ':443');
+                $this->line('     - Попробуйте использовать HTTP вместо HTTPS (только для тестирования)');
+                $this->line('     - Проверьте настройки файрвола на сервере');
+            } elseif (str_contains($errorMessage, 'timeout') || str_contains($errorMessage, 'timed out')) {
+                $this->newLine();
+                $this->warn('  💡 Возможные причины:');
+                $this->line('     1. Сервер не отвечает в течение 5 минут');
+                $this->line('     2. Медленное интернет-соединение');
+                $this->line('     3. Сервер перегружен');
+            } elseif (str_contains($errorMessage, 'SSL') || str_contains($errorMessage, 'certificate')) {
+                $this->newLine();
+                $this->warn('  💡 Проблема с SSL сертификатом');
+                $this->line('     Попробуйте использовать флаг --insecure (уже использован)');
+                $this->line('     Или проверьте валидность SSL сертификата на сервере');
+            }
+            
+            throw new \Exception("Не удалось подключиться к серверу: {$errorMessage}");
         } catch (\Exception $e) {
+            $this->newLine();
+            $this->error('❌ Ошибка отправки запроса');
+            $this->line("  🔍 Детали: " . $e->getMessage());
+            
+            if ($this->option('verbose')) {
+                $this->line("  📋 Trace: " . $e->getTraceAsString());
+            }
+            
             throw new \Exception("Ошибка отправки запроса: " . $e->getMessage());
         }
 
