@@ -123,6 +123,13 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::post('wheel/settings', [\App\Http\Controllers\Api\Admin\WheelController::class, 'updateSettings']);
                 Route::get('wheel/validate', [\App\Http\Controllers\Api\Admin\WheelController::class, 'validateProbabilities']);
                 
+                // Выигрыши
+                Route::get('wins', [\App\Http\Controllers\Api\Admin\WinsController::class, 'index']);
+                Route::get('wins/stats', [\App\Http\Controllers\Api\Admin\WinsController::class, 'stats']);
+                
+                // Лидерборд (админка)
+                Route::get('leaderboard', [\App\Http\Controllers\Api\Admin\LeaderboardAdminController::class, 'index']);
+                
                 // Пользователи WOW
                 Route::get('users', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'index']);
                 Route::get('users/{id}', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'show']);

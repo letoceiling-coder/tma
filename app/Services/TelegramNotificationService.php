@@ -80,9 +80,10 @@ class TelegramNotificationService
      * @param User $user
      * @param int $prizeValue
      * @param string $prizeType
+     * @param string|null $adminLink Ссылка на админа для связи
      * @return bool
      */
-    public static function notifyWin(User $user, int $prizeValue, string $prizeType): bool
+    public static function notifyWin(User $user, int $prizeValue, string $prizeType, ?string $adminLink = null): bool
     {
         if (!$user->telegram_id) {
             return false;
@@ -90,12 +91,26 @@ class TelegramNotificationService
 
         $message = "🎉 <b>Поздравляем с выигрышем!</b>\n\n";
         
-        if ($prizeType === 'money') {
-            $message .= "Вы выиграли <b>{$prizeValue} ₽</b>! 💰";
-        } elseif ($prizeType === 'ticket') {
-            $message .= "Вы выиграли <b>{$prizeValue} билет(ов)</b>! 🎫";
+        // Правильные шаблоны сообщений для каждого типа приза
+        if ($prizeType === 'money' && $prizeValue > 0) {
+            $message .= "Вы выиграли <b>{$prizeValue} ₽</b>! 💰\n\n";
+            $message .= "Для получения приза свяжитесь с администратором.";
+        } elseif ($prizeType === 'ticket' && $prizeValue > 0) {
+            // Исправляем сообщение для билетов
+            $ticketWord = $prizeValue == 1 ? 'билет' : ($prizeValue < 5 ? 'билета' : 'билетов');
+            $message .= "Вы выиграли <b>{$prizeValue} {$ticketWord}</b>! 🎫\n\n";
+            $message .= "Билеты уже добавлены на ваш счет. Крутите колесо и выигрывайте призы!";
         } elseif ($prizeType === 'secret_box') {
-            $message .= "Вы выиграли <b>Секретный бокс</b>! 🎁";
+            $message .= "Вы выиграли <b>Секретный бокс</b>! 🎁\n\n";
+            $message .= "Для получения приза свяжитесь с администратором.";
+        } else {
+            // Пустой сектор или некорректный тип - не должно вызываться, но на всякий случай
+            return false;
+        }
+        
+        // Добавляем ссылку на админа, если предоставлена
+        if ($adminLink) {
+            $message .= "\n\n<a href=\"{$adminLink}\">💬 Написать администратору</a>";
         }
 
         return self::sendNotification($user->telegram_id, $message);

@@ -28,12 +28,23 @@ class LeaderboardController extends Controller
         try {
             $limit = min((int) $request->input('limit', 10), 50); // Максимум 50
 
-            // Получаем период из настроек
-            $settings = WheelSetting::getSettings();
-            $periodMonths = $settings->leaderboard_period_months ?? 1;
+            // Поддержка фильтрации по периоду: day, week, all
+            $period = $request->input('period', 'all'); // day, week, all
             
-            // Вычисляем дату начала периода
-            $periodStartDate = now()->subMonths($periodMonths)->startOfDay();
+            $periodStartDate = null;
+            if ($period === 'day') {
+                $periodStartDate = now()->startOfDay();
+            } elseif ($period === 'week') {
+                $periodStartDate = now()->startOfWeek();
+            } elseif ($period === 'all') {
+                // Для "всё время" не применяем фильтрацию по дате
+                $periodStartDate = null;
+            } else {
+                // Если период не указан или неверный, используем настройки по умолчанию
+                $settings = WheelSetting::getSettings();
+                $periodMonths = $settings->leaderboard_period_months ?? 1;
+                $periodStartDate = now()->subMonths($periodMonths)->startOfDay();
+            }
 
             // Проверяем, есть ли данные в таблице referrals
             $referralsCount = Referral::count();
@@ -56,8 +67,13 @@ class LeaderboardController extends Controller
                         'users.username',
                         'users.avatar_url'
                     )
-                    ->join('users', 'referrals.inviter_id', '=', 'users.id')
-                    ->where('referrals.invited_at', '>=', $periodStartDate)
+                    ->join('users', 'referrals.inviter_id', '=', 'users.id');
+                
+                if ($periodStartDate) {
+                    $topUsers->where('referrals.invited_at', '>=', $periodStartDate);
+                }
+                
+                $topUsers = $topUsers
                     ->groupBy('referrals.inviter_id', 'users.telegram_id', 'users.username', 'users.avatar_url')
                     ->orderBy('invites_count', 'desc')
                     ->limit($limit)
@@ -82,7 +98,7 @@ class LeaderboardController extends Controller
                     ->whereNotNull('invited_users.invited_by');
                 
                 // Применяем фильтрацию по дате только если период установлен
-                if ($periodMonths > 0) {
+                if ($periodStartDate) {
                     $topUsers->where('invited_users.created_at', '>=', $periodStartDate);
                 }
                 
@@ -120,6 +136,8 @@ class LeaderboardController extends Controller
 
             return response()->json([
                 'leaderboard' => $leaderboard,
+                'period' => $period,
+                'period_start_date' => $periodStartDate?->toIso8601String(),
             ]);
 
         } catch (\Exception $e) {

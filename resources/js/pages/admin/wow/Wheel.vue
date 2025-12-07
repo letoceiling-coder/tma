@@ -73,6 +73,25 @@
                     <span class="text-sm text-muted-foreground">часов</span>
                 </div>
             </div>
+
+            <!-- Username администратора -->
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h3 class="text-base font-medium mb-1">Username администратора</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Telegram username администратора для генерации ссылок (без @)
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model="adminUsername"
+                        @change="saveSettings"
+                        type="text"
+                        placeholder="admin_username"
+                        class="w-64 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                    />
+                </div>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -231,6 +250,7 @@ export default {
         const sectors = ref([])
         const alwaysEmptyMode = ref(false)
         const ticketRestoreHours = ref(3)
+        const adminUsername = ref('')
         const showMediaModal = ref(false)
         const currentSector = ref(null)
         const selectedMediaFile = ref(null)
@@ -264,6 +284,7 @@ export default {
                 if (data.settings) {
                     alwaysEmptyMode.value = data.settings.always_empty_mode || false
                     ticketRestoreHours.value = data.settings.ticket_restore_hours || 3
+                    adminUsername.value = data.settings.admin_username || ''
                 }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки секторов'
@@ -366,6 +387,7 @@ export default {
                 const response = await apiPost('/wow/wheel/settings', {
                     always_empty_mode: alwaysEmptyMode.value,
                     ticket_restore_hours: ticketRestoreHours.value,
+                    admin_username: adminUsername.value,
                 })
 
                 if (!response.ok) {
@@ -407,6 +429,7 @@ export default {
             sectors,
             alwaysEmptyMode,
             ticketRestoreHours,
+            adminUsername,
             totalProbability,
             probabilityValid,
             saveAllSectors,

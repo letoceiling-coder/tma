@@ -143,24 +143,42 @@ class WheelController extends Controller
                     'prize_type' => $winningSector->prize_type,
                     'prize_value' => $winningSector->prize_value,
                     'sector_id' => $winningSector->id,
+                    'sector_number' => $winningSector->sector_number, // Сохраняем номер сектора для админки
                 ]);
 
                 // Если выигрыш - начисляем приз
                 $prizeAwarded = false;
-                if ($winningSector->prize_type === 'money' && $winningSector->prize_value > 0) {
-                    // Здесь должна быть логика начисления денег пользователю
-                    // Пока просто отмечаем что приз выигран
+                
+                // ВАЖНО: Проверяем что сектор действительно выпал и приз должен быть выдан
+                if ($winningSector->prize_type === 'empty') {
+                    // Пустой сектор - приз не начисляется
+                    $prizeAwarded = false;
+                    Log::info('Empty sector - no prize awarded', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                    ]);
+                } elseif ($winningSector->prize_type === 'money' && $winningSector->prize_value > 0) {
+                    // Денежный приз - отмечаем выигрыш
                     $user->total_wins++;
                     $user->save();
                     $prizeAwarded = true;
                     
+                    Log::info('Money prize awarded', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_value' => $winningSector->prize_value,
+                    ]);
+                    
                     // ПРИМЕЧАНИЕ: Уведомления о выигрыше отправляются отдельным endpoint
                     // после завершения анимации на фронтенде (4 секунды)
-                } elseif ($winningSector->prize_type === 'ticket') {
+                } elseif ($winningSector->prize_type === 'ticket' && $winningSector->prize_value > 0) {
                     // Начисляем билет(ы) за выигрыш
                     $ticketsToAdd = $winningSector->prize_value ?? 1;
                     $oldTickets = $user->tickets_available;
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
+                    
+                    // Ограничиваем максимальное количество билетов (если есть лимит)
+                    // Пока без лимита, но можно добавить
                     
                     // Если билеты стали больше 0, сбрасываем точку восстановления
                     // (потому что билеты больше не закончились)
@@ -173,6 +191,7 @@ class WheelController extends Controller
                     
                     Log::info('Ticket prize awarded', [
                         'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
                         'tickets_added' => $ticketsToAdd,
                         'old_tickets' => $oldTickets,
                         'new_tickets' => $user->tickets_available,
@@ -180,6 +199,19 @@ class WheelController extends Controller
                 } elseif ($winningSector->prize_type === 'secret_box') {
                     // Секретный бокс - обрабатывается отдельно
                     $prizeAwarded = true;
+                    
+                    Log::info('Secret box prize awarded', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                    ]);
+                } else {
+                    // Неизвестный тип приза или некорректное значение
+                    Log::warning('Unknown prize type or invalid value', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
+                        'prize_value' => $winningSector->prize_value,
+                    ]);
                 }
 
                 DB::commit();

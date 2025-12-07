@@ -425,12 +425,20 @@ const MainWheel = () => {
       setShowResultPopup(true);
         
         // Показываем сообщение о призе, если он был начислен
+        // Исправляем шаблоны сообщений для каждого типа приза
         if (data.prize_awarded) {
-          if (prizeType === 'money') {
+          if (prizeType === 'money' && prizeValue > 0) {
             toast.success(`Выиграно ${prizeValue}₽!`, { duration: 3000 });
-          } else if (prizeType === 'ticket') {
-            toast.success(`Получено ${prizeValue} билет(а)!`, { duration: 3000 });
+          } else if (prizeType === 'ticket' && prizeValue > 0) {
+            // Правильное склонение для билетов
+            const ticketWord = prizeValue === 1 ? 'билет' : (prizeValue < 5 ? 'билета' : 'билетов');
+            toast.success(`Получено ${prizeValue} ${ticketWord}!`, { duration: 3000 });
+          } else if (prizeType === 'secret_box') {
+            toast.success(`Выигран секретный бокс!`, { duration: 3000 });
           }
+        } else if (prizeType === 'empty') {
+          // Пустой сектор - не показываем сообщение о выигрыше
+          // или показываем нейтральное сообщение
         }
         
         // Отправляем уведомление после завершения анимации

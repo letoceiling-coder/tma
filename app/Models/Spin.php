@@ -16,6 +16,7 @@ class Spin extends Model
         'prize_type',
         'prize_value',
         'sector_id',
+        'sector_number',
     ];
 
     protected $casts = [

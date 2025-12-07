@@ -68,6 +68,14 @@ class SpinNotificationController extends Controller
                 ], 404);
             }
 
+            // Генерируем ссылку на админа, если настроена
+            $adminLink = null;
+            $settings = \App\Models\WheelSetting::getSettings();
+            if ($settings->admin_username) {
+                $adminUsername = ltrim($settings->admin_username, '@');
+                $adminLink = "https://t.me/{$adminUsername}?text=" . urlencode("Здравствуйте, я выиграл приз в WOW Spin");
+            }
+
             // Отправляем уведомление в зависимости от типа приза
             $notificationSent = false;
             
@@ -75,19 +83,22 @@ class SpinNotificationController extends Controller
                 $notificationSent = TelegramNotificationService::notifyWin(
                     $user,
                     $spin->prize_value,
-                    'money'
+                    'money',
+                    $adminLink
                 );
-            } elseif ($spin->prize_type === 'ticket') {
+            } elseif ($spin->prize_type === 'ticket' && $spin->prize_value > 0) {
                 $notificationSent = TelegramNotificationService::notifyWin(
                     $user,
                     $spin->prize_value,
-                    'ticket'
+                    'ticket',
+                    $adminLink
                 );
             } elseif ($spin->prize_type === 'secret_box') {
                 $notificationSent = TelegramNotificationService::notifyWin(
                     $user,
                     0,
-                    'secret_box'
+                    'secret_box',
+                    $adminLink
                 );
             }
 

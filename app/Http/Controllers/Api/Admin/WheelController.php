@@ -29,6 +29,7 @@ class WheelController extends Controller
             'settings' => [
                 'always_empty_mode' => $settings->always_empty_mode,
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
+                'admin_username' => $settings->admin_username,
             ],
         ]);
     }
@@ -149,6 +150,7 @@ class WheelController extends Controller
         $validator = Validator::make($request->all(), [
             'always_empty_mode' => 'nullable|boolean',
             'ticket_restore_hours' => 'nullable|integer|min:1|max:24',
+            'admin_username' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -167,6 +169,10 @@ class WheelController extends Controller
         if ($request->has('ticket_restore_hours')) {
             $updateData['ticket_restore_hours'] = $request->ticket_restore_hours;
         }
+        
+        if ($request->has('admin_username')) {
+            $updateData['admin_username'] = $request->admin_username;
+        }
 
         if (empty($updateData)) {
             return response()->json([
@@ -181,6 +187,7 @@ class WheelController extends Controller
             'settings' => [
                 'always_empty_mode' => $settings->always_empty_mode,
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
+                'admin_username' => $settings->admin_username,
             ],
         ]);
     }

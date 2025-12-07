@@ -13,6 +13,7 @@ class WheelSetting extends Model
         'always_empty_mode',
         'ticket_restore_hours',
         'leaderboard_period_months',
+        'admin_username',
     ];
 
     protected $casts = [
