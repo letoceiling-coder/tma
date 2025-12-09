@@ -23,5 +23,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Не логируем ошибки Method Not Allowed для API эндпоинтов
+        // Это нормальное поведение, когда браузер или бот делает GET запрос на POST эндпоинт
+        $exceptions->dontReport([
+            \Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException::class,
+        ]);
     })->create();

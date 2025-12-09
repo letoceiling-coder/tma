@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class WheelController extends Controller
 {
@@ -97,76 +98,134 @@ class WheelController extends Controller
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
-        // Валидация с проверкой максимального значения билетов
-        $validator = Validator::make($request->all(), [
-            'sectors' => 'required|array',
-            'sectors.*.id' => 'required|exists:wheel_sectors,id',
-            'sectors.*.prize_type' => 'required|in:money,ticket,secret_box,empty,gift,sponsor_gift',
-            'sectors.*.prize_value' => [
-                'nullable',
-                'integer',
-                'min:0',
-                function ($attribute, $value, $fail) use ($request) {
-                    // Определяем индекс сектора из атрибута (например, "sectors.0.prize_type")
-                    $attributeParts = explode('.', $attribute);
-                    $sectorIndex = isset($attributeParts[1]) ? (int)$attributeParts[1] : null;
-                    
-                    if ($sectorIndex !== null && isset($request->sectors[$sectorIndex])) {
-                        $prizeType = $request->sectors[$sectorIndex]['prize_type'] ?? null;
-                        // Для типа 'ticket' - максимальное значение 10 билетов
-                        // Это предотвратит создание призов типа "500 билетов" если это не задано явно
-                        if ($prizeType === 'ticket' && $value !== null && $value > 10) {
-                            $fail('Максимальное количество билетов для приза: 10. Если нужен приз с большим количеством билетов, создайте его явно через админку.');
-                        }
-                    }
-                },
-            ],
-            'sectors.*.icon_url' => 'nullable|string|max:500',
-            'sectors.*.probability_percent' => 'required|numeric|min:0|max:100',
-            'sectors.*.is_active' => 'nullable|boolean',
-            'sectors.*.prize_type_id' => 'nullable|exists:prize_types,id',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Ошибка валидации',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        DB::beginTransaction();
-
         try {
-            foreach ($request->sectors as $sectorData) {
-                $updateData = [
-                    'prize_type' => $sectorData['prize_type'],
-                    'prize_value' => $sectorData['prize_value'] ?? 0,
-                    'icon_url' => $sectorData['icon_url'] ?? null,
-                    'probability_percent' => $sectorData['probability_percent'],
-                    'is_active' => $sectorData['is_active'] ?? true,
-                ];
-
-                if (isset($sectorData['prize_type_id'])) {
-                    $updateData['prize_type_id'] = $sectorData['prize_type_id'];
-                }
-
-                WheelSector::where('id', $sectorData['id'])->update($updateData);
-            }
-
-            DB::commit();
-
-            $totalProbability = WheelSector::sum('probability_percent');
-
-            return response()->json([
-                'message' => 'Секторы успешно обновлены',
-                'total_probability' => (float) $totalProbability,
+            // Логируем входящие данные для отладки
+            Log::info('Bulk update sectors request', [
+                'sectors_count' => count($request->input('sectors', [])),
+                'first_sector' => $request->input('sectors.0', []),
             ]);
 
+            // Валидация с проверкой максимального значения билетов
+            $validator = Validator::make($request->all(), [
+                'sectors' => 'required|array',
+                'sectors.*.id' => 'required|exists:wheel_sectors,id',
+                'sectors.*.prize_type' => 'required|in:money,ticket,secret_box,empty,gift,sponsor_gift',
+                'sectors.*.prize_value' => [
+                    'nullable',
+                    'integer',
+                    'min:0',
+                    function ($attribute, $value, $fail) use ($request) {
+                        // Определяем индекс сектора из атрибута (например, "sectors.0.prize_type")
+                        $attributeParts = explode('.', $attribute);
+                        $sectorIndex = isset($attributeParts[1]) ? (int)$attributeParts[1] : null;
+                        
+                        if ($sectorIndex !== null && isset($request->sectors[$sectorIndex])) {
+                            $prizeType = $request->sectors[$sectorIndex]['prize_type'] ?? null;
+                            // Для типа 'ticket' - максимальное значение 10 билетов
+                            // Это предотвратит создание призов типа "500 билетов" если это не задано явно
+                            if ($prizeType === 'ticket' && $value !== null && $value > 10) {
+                                $fail('Максимальное количество билетов для приза: 10. Если нужен приз с большим количеством билетов, создайте его явно через админку.');
+                            }
+                        }
+                    },
+                ],
+                'sectors.*.icon_url' => 'nullable|string|max:500',
+                'sectors.*.probability_percent' => 'required|numeric|min:0|max:100',
+                'sectors.*.is_active' => 'nullable|boolean',
+                'sectors.*.prize_type_id' => 'nullable|exists:prize_types,id',
+            ]);
+
+            if ($validator->fails()) {
+                Log::warning('Bulk update validation failed', [
+                    'errors' => $validator->errors()->toArray(),
+                ]);
+                return response()->json([
+                    'message' => 'Ошибка валидации',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                foreach ($request->sectors as $index => $sectorData) {
+                    try {
+                        // Преобразуем типы данных
+                        $updateData = [
+                            'prize_type' => $sectorData['prize_type'],
+                            'prize_value' => isset($sectorData['prize_value']) && $sectorData['prize_value'] !== '' && $sectorData['prize_value'] !== null 
+                                ? (int)$sectorData['prize_value'] 
+                                : 0,
+                            'icon_url' => $sectorData['icon_url'] ?? null,
+                            'probability_percent' => isset($sectorData['probability_percent']) 
+                                ? (float)$sectorData['probability_percent'] 
+                                : 0,
+                            'is_active' => isset($sectorData['is_active']) 
+                                ? (bool)$sectorData['is_active'] 
+                                : true,
+                        ];
+
+                        if (isset($sectorData['prize_type_id']) && $sectorData['prize_type_id'] !== null && $sectorData['prize_type_id'] !== '') {
+                            $updateData['prize_type_id'] = (int)$sectorData['prize_type_id'];
+                        } else {
+                            $updateData['prize_type_id'] = null;
+                        }
+
+                        $affected = WheelSector::where('id', $sectorData['id'])->update($updateData);
+                        
+                        if ($affected === 0) {
+                            Log::warning('Sector not updated', [
+                                'sector_id' => $sectorData['id'],
+                                'update_data' => $updateData,
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Error updating sector', [
+                            'sector_index' => $index,
+                            'sector_data' => $sectorData,
+                            'error' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString(),
+                        ]);
+                        throw $e;
+                    }
+                }
+
+                DB::commit();
+
+                $totalProbability = WheelSector::sum('probability_percent');
+
+                Log::info('Bulk update sectors completed', [
+                    'total_probability' => $totalProbability,
+                ]);
+
+                return response()->json([
+                    'message' => 'Секторы успешно обновлены',
+                    'total_probability' => (float) $totalProbability,
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error('Bulk update sectors failed', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]);
+                return response()->json([
+                    'message' => 'Ошибка при обновлении секторов',
+                    'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера',
+                ], 500);
+            }
         } catch (\Exception $e) {
-            DB::rollBack();
+            Log::error('Bulk update sectors exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             return response()->json([
                 'message' => 'Ошибка при обновлении секторов',
-                'error' => $e->getMessage(),
+                'error' => config('app.debug') ? $e->getMessage() : 'Внутренняя ошибка сервера',
             ], 500);
         }
     }

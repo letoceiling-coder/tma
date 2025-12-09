@@ -1,58 +1,4 @@
-<template>
-    <div class="documentation-page">
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-foreground">Документация</h1>
-            <p class="text-muted-foreground mt-1">Техническая документация по системе WOW Рулетка</p>
-        </div>
-
-        <div class="space-y-6">
-            <!-- Навигация по разделам -->
-            <div class="bg-card rounded-lg border border-border p-4">
-                <h2 class="text-lg font-semibold mb-4">Разделы документации</h2>
-                <nav class="flex flex-wrap gap-2">
-                    <button
-                        v-for="section in sections"
-                        :key="section.id"
-                        @click="activeSection = section.id"
-                        :class="[
-                            'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                            activeSection === section.id
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        ]"
-                    >
-                        {{ section.title }}
-                    </button>
-                </nav>
-            </div>
-
-            <!-- Содержимое документации -->
-            <div class="bg-card rounded-lg border border-border p-6">
-                <div v-html="currentContent" class="prose prose-sm max-w-none dark:prose-invert"></div>
-            </div>
-        </div>
-    </div>
-</template>
-
-<script>
-export default {
-    name: 'Documentation',
-    data() {
-        return {
-            activeSection: 'application',
-            sections: [
-                { id: 'application', title: 'Логика приложения' },
-                { id: 'database', title: 'База данных' },
-                { id: 'api', title: 'API Endpoints' },
-                { id: 'admin', title: 'Админ-панель' },
-                { id: 'admin-settings', title: 'Настройки админ-панели' },
-                { id: 'frontend', title: 'Frontend' },
-                { id: 'telegram', title: 'Telegram интеграция' },
-                { id: 'notifications', title: 'Уведомления' },
-                { id: 'commands', title: 'Команды' },
-            ],
-            documentation: {
-                application: `
+import{_ as s,c as t,a as l,F as d,q as c,o as r,p as g,t as a}from"./admin-DCecbpOE.js";const u={name:"Documentation",data(){return{activeSection:"application",sections:[{id:"application",title:"Логика приложения"},{id:"database",title:"База данных"},{id:"api",title:"API Endpoints"},{id:"admin",title:"Админ-панель"},{id:"admin-settings",title:"Настройки админ-панели"},{id:"frontend",title:"Frontend"},{id:"telegram",title:"Telegram интеграция"},{id:"notifications",title:"Уведомления"},{id:"commands",title:"Команды"}],documentation:{application:`
                     <h2>Логика работы приложения WOW Рулетка</h2>
                     
                     <h3>Общий обзор</h3>
@@ -298,8 +244,7 @@ export default {
                         <li><strong>Призы лидерборда</strong> - раздел "Призы лидерборда" (<code>/admin/wow/leaderboard</code>)</li>
                     </ul>
                     <p>Подробнее о каждом разделе см. в разделе "Настройки админ-панели".</p>
-                `,
-                database: `
+                `,database:`
                     <h2>Структура базы данных</h2>
                     <h3>Таблица: users</h3>
                     <p>Расширенная таблица пользователей с поддержкой Telegram:</p>
@@ -405,8 +350,7 @@ export default {
                         <li>1 сектор с билетом - 5% вероятности</li>
                         <li>Общая вероятность: 100%</li>
                     </ul>
-                `,
-                api: `
+                `,api:`
                     <h2>API Endpoints</h2>
                     <p>Все API endpoints используют префикс <code>/api</code>. Для защиты используется middleware <code>telegram.initdata</code>, который проверяет валидность Telegram initData.</p>
 
@@ -551,7 +495,7 @@ export default {
                     </ul>
 
                     <h3>Telegram Service</h3>
-                    <p>Сервис <code>App\Services\TelegramService</code> предоставляет следующие методы:</p>
+                    <p>Сервис <code>AppServicesTelegramService</code> предоставляет следующие методы:</p>
                     <ul>
                         <li><strong>validateInitData(string $initData, string $botToken): bool</strong> - Валидация подписи initData</li>
                         <li><strong>parseInitData(string $initData): ?array</strong> - Парсинг initData и извлечение данных</li>
@@ -567,8 +511,7 @@ export default {
                             </ul>
                         </li>
                     </ul>
-                `,
-                admin: `
+                `,admin:`
                     <h2>Админ-панель - Обзор</h2>
                     <p>Админ-панель доступна по адресу <code>/admin</code> и требует авторизации. Доступ предоставляется пользователям с ролями <code>admin</code> или <code>manager</code>.</p>
 
@@ -638,8 +581,7 @@ export default {
                     <h3>Документация</h3>
                     <p>Этот раздел содержит техническую документацию по системе. Документация обновляется автоматически при добавлении новых функций.</p>
                     <p><strong>Совет:</strong> Для подробного описания настроек каждого раздела с примерами перейдите в раздел <strong>"Настройки админ-панели"</strong>.</p>
-                `,
-                'admin-settings': `
+                `,"admin-settings":`
                     <h2>Настройки админ-панели</h2>
                     <p>Админ-панель предоставляет полный контроль над всеми аспектами приложения WOW Рулетка. Все изменения применяются немедленно и влияют на работу пользовательского приложения.</p>
 
@@ -1158,8 +1100,7 @@ export default {
                             </ul>
                         </li>
                     </ul>
-                `,
-                frontend: `
+                `,frontend:`
                     <h2>Frontend (React)</h2>
                     <p>React приложение находится в директории <code>/frontend</code>.</p>
 
@@ -1204,8 +1145,7 @@ export default {
                         <li>Восстановление билета: каждые 2-4 часа (настраивается)</li>
                         <li>Таймер отображается, если билетов меньше 3</li>
                     </ul>
-                `,
-                telegram: `
+                `,telegram:`
                     <h2>Интеграция с Telegram</h2>
 
                     <h3>Аутентификация</h3>
@@ -1270,13 +1210,12 @@ export default {
                         <li><code>wow:restore-tickets</code> - каждые 3 часа</li>
                         <li><code>wow:send-reminders</code> - ежедневно в 10:00</li>
                     </ul>
-                `,
-                notifications: `
+                `,notifications:`
                     <h2>Система уведомлений</h2>
                     <p>Система автоматических уведомлений через Telegram Bot API.</p>
 
                     <h3>TelegramNotificationService</h3>
-                    <p>Сервис <code>App\Services\TelegramNotificationService</code> предоставляет методы для отправки уведомлений:</p>
+                    <p>Сервис <code>AppServicesTelegramNotificationService</code> предоставляет методы для отправки уведомлений:</p>
                     <ul>
                         <li><strong>sendNotification(int $telegramId, string $message, array $options): bool</strong>
                             <ul>
@@ -1331,8 +1270,7 @@ export default {
                         <li>Если пользователь заблокировал бота, ошибка обрабатывается корректно</li>
                         <li>Неудачная отправка не блокирует работу приложения</li>
                     </ul>
-                `,
-                commands: `
+                `,commands:`
                     <h2>Консольные команды</h2>
                     <p>Система включает несколько Artisan команд для автоматизации задач.</p>
 
@@ -1386,60 +1324,4 @@ Schedule::command('wow:send-reminders')
                     </ul>
                     <p><strong>По умолчанию:</strong> 3 часа.</p>
                     <p><strong>Примечание:</strong> Настройка хранится в таблице <code>wheel_settings</code> в поле <code>ticket_restore_hours</code>.</p>
-                `,
-            },
-        };
-    },
-    computed: {
-        currentContent() {
-            return this.documentation[this.activeSection] || '<p>Раздел в разработке</p>';
-        },
-    },
-};
-</script>
-
-<style scoped>
-.documentation-page {
-    min-height: 100vh;
-}
-
-.prose {
-    color: inherit;
-}
-
-.prose h2 {
-    margin-top: 2rem;
-    margin-bottom: 1rem;
-    font-size: 1.5rem;
-    font-weight: 700;
-}
-
-.prose h3 {
-    margin-top: 1.5rem;
-    margin-bottom: 0.75rem;
-    font-size: 1.25rem;
-    font-weight: 600;
-}
-
-.prose ul {
-    margin: 1rem 0;
-    padding-left: 1.5rem;
-}
-
-.prose li {
-    margin: 0.5rem 0;
-}
-
-.prose code {
-    background-color: rgba(0, 0, 0, 0.05);
-    padding: 0.125rem 0.25rem;
-    border-radius: 0.25rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.875em;
-}
-
-.dark .prose code {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-</style>
-
+                `}}},computed:{currentContent(){return this.documentation[this.activeSection]||"<p>Раздел в разработке</p>"}}},p={class:"documentation-page"},h={class:"space-y-6"},m={class:"bg-card rounded-lg border border-border p-4"},_={class:"flex flex-wrap gap-2"},b=["onClick"],w={class:"bg-card rounded-lg border border-border p-6"},T=["innerHTML"];function k(v,i,f,y,o,n){return r(),t("div",p,[i[1]||(i[1]=l("div",{class:"mb-6"},[l("h1",{class:"text-2xl font-bold text-foreground"},"Документация"),l("p",{class:"text-muted-foreground mt-1"},"Техническая документация по системе WOW Рулетка")],-1)),l("div",h,[l("div",m,[i[0]||(i[0]=l("h2",{class:"text-lg font-semibold mb-4"},"Разделы документации",-1)),l("nav",_,[(r(!0),t(d,null,c(o.sections,e=>(r(),t("button",{key:e.id,onClick:W=>o.activeSection=e.id,class:g(["px-4 py-2 rounded-lg text-sm font-medium transition-colors",o.activeSection===e.id?"bg-primary text-primary-foreground":"bg-muted text-muted-foreground hover:bg-muted/80"])},a(e.title),11,b))),128))])]),l("div",w,[l("div",{innerHTML:n.currentContent,class:"prose prose-sm max-w-none dark:prose-invert"},null,8,T)])])])}const O=s(u,[["render",k],["__scopeId","data-v-3e61eda4"]]);export{O as default};
