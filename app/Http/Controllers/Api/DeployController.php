@@ -452,11 +452,16 @@ class DeployController extends Controller
         }
 
         // 2. Попробовать найти composer через which (самый надежный способ)
+        // Добавляем пользовательский путь в PATH для поиска
+        $userComposerPath = '/home/d/dsc23ytp/.local/bin';
+        $pathEnv = getenv('PATH') ?: '';
+        $enhancedPath = $userComposerPath . ':' . $pathEnv;
+        
         try {
-            $whichProcess = Process::run('which composer 2>&1');
+            $whichProcess = Process::env(['PATH' => $enhancedPath])->run('which composer 2>&1');
             if ($whichProcess->successful()) {
                 $foundPath = trim($whichProcess->output());
-                if ($foundPath && file_exists($foundPath)) {
+                if ($foundPath) {
                     Log::info("Composer найден через which: {$foundPath}");
                     return $foundPath;
                 }
@@ -473,9 +478,15 @@ class DeployController extends Controller
         ];
 
         foreach ($possiblePaths as $path) {
-            if (file_exists($path)) {
-                Log::info("Composer найден по пути: {$path}");
-                return $path;
+            // Проверяем через test -f, так как file_exists() может не работать из-за прав доступа
+            try {
+                $testProcess = Process::run("test -f {$path} && echo 'exists' 2>&1");
+                if ($testProcess->successful() && trim($testProcess->output()) === 'exists') {
+                    Log::info("Composer найден по пути: {$path}");
+                    return $path;
+                }
+            } catch (\Exception $e) {
+                // Продолжаем проверку других путей
             }
         }
 
