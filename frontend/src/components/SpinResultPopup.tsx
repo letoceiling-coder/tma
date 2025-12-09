@@ -43,9 +43,24 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   const adminLink = getAdminLink();
   // Кнопка показывается только для: 300 рублей, 500 рублей, Secret Box
   // НЕ показывается для: пустого сектора, +1 билет
+  const prizeValueNum = Number(prizeValue);
   const showContactButton = adminLink && prizeType !== 'empty' && 
-    ((prizeType === 'money' && (prizeValue === 300 || prizeValue === 500)) || 
+    ((prizeType === 'money' && (prizeValueNum === 300 || prizeValueNum === 500)) || 
      prizeType === 'secret_box');
+  
+  // Отладочное логирование (можно убрать после проверки)
+  useEffect(() => {
+    if (isOpen && isWin) {
+      console.log('SpinResultPopup Debug:', {
+        prizeType,
+        prizeValue,
+        prizeValueNum,
+        adminUsername,
+        adminLink: !!adminLink,
+        showContactButton,
+      });
+    }
+  }, [isOpen, isWin, prizeType, prizeValue, adminUsername, adminLink, showContactButton]);
 
   // Trigger haptic feedback when popup opens
   useEffect(() => {
