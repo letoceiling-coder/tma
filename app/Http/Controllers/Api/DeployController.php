@@ -398,7 +398,14 @@ class DeployController extends Controller
             }
             Log::info("🔍 HOME директория: {$homeDir}");
 
-            $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
+            // Формируем команду в зависимости от того, найден ли полный путь к composer
+            if (empty($composerPath)) {
+                // Если путь не найден, используем composer как команду напрямую
+                $command = "composer install --no-dev --optimize-autoloader --no-interaction --no-scripts";
+            } else {
+                // Если найден полный путь, используем его с php
+                $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
+            }
             Log::info("🔍 Команда composer: {$command}");
 
             $process = Process::path($this->basePath)
@@ -462,25 +469,31 @@ class DeployController extends Controller
         $possiblePaths = [
             '/usr/local/bin/composer',
             '/usr/bin/composer',
-            'composer', // Последняя попытка - использовать из PATH
         ];
 
         foreach ($possiblePaths as $path) {
-            if ($path === 'composer') {
-                // Для 'composer' просто возвращаем - будет использован из PATH
-                Log::info("Используем composer из PATH");
+            if (file_exists($path)) {
+                Log::info("Composer найден по пути: {$path}");
                 return $path;
-            } else {
-                if (file_exists($path)) {
-                    Log::info("Composer найден по пути: {$path}");
-                    return $path;
-                }
             }
         }
 
-        // 4. Последний fallback на 'composer' (будет использован из PATH)
-        Log::info("Используем composer из PATH (fallback)");
-        return 'composer';
+        // 4. Если composer не найден, пробуем использовать через shell
+        // Проверяем, доступен ли composer как команда
+        try {
+            $testProcess = Process::run('composer --version 2>&1');
+            if ($testProcess->successful()) {
+                Log::info("Composer доступен как команда в PATH");
+                // Возвращаем пустую строку, чтобы использовать composer напрямую
+                return '';
+            }
+        } catch (\Exception $e) {
+            Log::warning("Composer не доступен как команда: " . $e->getMessage());
+        }
+
+        // 5. Последний fallback - возвращаем пустую строку (будет ошибка при выполнении)
+        Log::error("Composer не найден нигде. Установите composer или укажите COMPOSER_PATH в .env");
+        return '';
     }
 
     /**
