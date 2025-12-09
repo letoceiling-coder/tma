@@ -37,6 +37,9 @@ const MainWheel = () => {
   const [showGiftPopup, setShowGiftPopup] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const [lastResult, setLastResult] = useState(0);
+  const [lastPrizeType, setLastPrizeType] = useState<'money' | 'ticket' | 'secret_box' | 'empty' | null>(null);
+  const [lastPrizeValue, setLastPrizeValue] = useState(0);
+  const [adminUsername, setAdminUsername] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [wheelSegments, setWheelSegments] = useState<WheelSegment[]>([]);
   const [loadingSectors, setLoadingSectors] = useState(true);
@@ -64,6 +67,11 @@ const MainWheel = () => {
       }
 
       const data = await response.json();
+      
+      // Сохраняем admin_username из настроек
+      if (data.settings?.admin_username) {
+        setAdminUsername(data.settings.admin_username);
+      }
       
       // Сортируем секторы по sector_number (1-12)
       const sortedSectors = (data.sectors || []).sort((a: WheelSector, b: WheelSector) => 
@@ -399,6 +407,10 @@ const MainWheel = () => {
       const prizeType = data.sector?.prize_type;
       const spinId = data.spin_id;
       
+      // Сохраняем данные о призе
+      setLastPrizeType(prizeType);
+      setLastPrizeValue(prizeValue);
+      
       let resultValue = 0;
       if (prizeType === 'money') {
         resultValue = prizeValue;
@@ -422,24 +434,23 @@ const MainWheel = () => {
         haptic.softTap();
       }
       
-      setShowResultPopup(true);
+      // Показываем попап только если есть выигрыш (не пустой сектор)
+      if (prizeType !== 'empty' && data.prize_awarded) {
+        setShowResultPopup(true);
+      }
         
         // Показываем сообщение о призе, если он был начислен
         // Исправляем шаблоны сообщений для каждого типа приза
         if (data.prize_awarded) {
           if (prizeType === 'money' && prizeValue > 0) {
-            toast.success(`Выиграно ${prizeValue}₽!`, { duration: 3000 });
+            toast.success(`Поздравляем! Вы выиграли ${prizeValue} рублей!`, { duration: 3000 });
           } else if (prizeType === 'ticket' && prizeValue > 0) {
-            // Правильное склонение для билетов
-            const ticketWord = prizeValue === 1 ? 'билет' : (prizeValue < 5 ? 'билета' : 'билетов');
-            toast.success(`Получено ${prizeValue} ${ticketWord}!`, { duration: 3000 });
+            toast.success(`Поздравляем! Вы выиграли ${prizeValue} дополнительный билет!`, { duration: 3000 });
           } else if (prizeType === 'secret_box') {
-            toast.success(`Выигран секретный бокс!`, { duration: 3000 });
+            toast.success(`Поздравляем! Вы выиграли подарок от спонсора. Свяжитесь с администратором.`, { duration: 3000 });
           }
-        } else if (prizeType === 'empty') {
-          // Пустой сектор - не показываем сообщение о выигрыше
-          // или показываем нейтральное сообщение
         }
+        // Пустой сектор - не показываем сообщение
         
         // Отправляем уведомление после завершения анимации
         try {
@@ -771,6 +782,9 @@ const MainWheel = () => {
         isOpen={showResultPopup}
         onClose={() => setShowResultPopup(false)}
         result={lastResult}
+        prizeType={lastPrizeType}
+        prizeValue={lastPrizeValue}
+        adminUsername={adminUsername}
         hasMoreTickets={tickets > 0}
       />
     </div>

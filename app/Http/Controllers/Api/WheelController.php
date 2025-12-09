@@ -24,6 +24,7 @@ class WheelController extends Controller
     public function getConfig(): JsonResponse
     {
         $sectors = WheelSector::getActiveSectors();
+        $settings = WheelSetting::getSettings();
         
         return response()->json([
             'sectors' => $sectors->map(function ($sector) {
@@ -37,6 +38,9 @@ class WheelController extends Controller
                 ];
             }),
             'total_probability' => (float) $sectors->sum('probability_percent'),
+            'settings' => [
+                'admin_username' => $settings->admin_username,
+            ],
         ]);
     }
 
