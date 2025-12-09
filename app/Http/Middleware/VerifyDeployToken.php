@@ -55,21 +55,45 @@ class VerifyDeployToken
             ], 500);
         }
 
+        // Детальное логирование для диагностики
+        Log::info('Проверка токена деплоя', [
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'received_token_length' => $token ? strlen($token) : 0,
+            'expected_token_length' => $expectedToken ? strlen($expectedToken) : 0,
+            'tokens_match' => $token === $expectedToken,
+            'received_token_preview' => $token ? substr($token, 0, 3) . '...' . substr($token, -3) : 'null',
+            'expected_token_preview' => $expectedToken ? substr($expectedToken, 0, 3) . '...' . substr($expectedToken, -3) : 'null',
+            'headers' => [
+                'X-Deploy-Token' => $request->header('X-Deploy-Token') ? 'present (' . strlen($request->header('X-Deploy-Token')) . ' chars)' : 'missing',
+                'X-Deploy-Secret' => $request->header('X-Deploy-Secret') ? 'present (' . strlen($request->header('X-Deploy-Secret')) . ' chars)' : 'missing',
+            ],
+            'body_token' => $request->input('token') ? 'present' : 'missing',
+            'body_secret' => $request->input('secret') ? 'present' : 'missing',
+        ]);
+        
         if (!$token || $token !== $expectedToken) {
             Log::warning('Попытка обновления с неверным секретным ключом', [
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'received_token' => $token ? substr($token, 0, 3) . '...' : 'null',
-                'expected_token' => $expectedToken ? substr($expectedToken, 0, 3) . '...' : 'null',
+                'received_token' => $token ? substr($token, 0, 3) . '...' . substr($token, -3) : 'null',
+                'expected_token' => $expectedToken ? substr($expectedToken, 0, 3) . '...' . substr($expectedToken, -3) : 'null',
+                'received_token_length' => $token ? strlen($token) : 0,
+                'expected_token_length' => $expectedToken ? strlen($expectedToken) : 0,
+                'tokens_match' => false,
                 'headers' => [
-                    'X-Deploy-Token' => $request->header('X-Deploy-Token') ? 'present' : 'missing',
-                    'X-Deploy-Secret' => $request->header('X-Deploy-Secret') ? 'present' : 'missing',
+                    'X-Deploy-Token' => $request->header('X-Deploy-Token') ? 'present (' . strlen($request->header('X-Deploy-Token')) . ' chars)' : 'missing',
+                    'X-Deploy-Secret' => $request->header('X-Deploy-Secret') ? 'present (' . strlen($request->header('X-Deploy-Secret')) . ' chars)' : 'missing',
                 ],
             ]);
             
             return response()->json([
                 'success' => false,
                 'message' => 'Неверный секретный ключ',
+                'debug' => config('app.debug') ? [
+                    'received_length' => $token ? strlen($token) : 0,
+                    'expected_length' => $expectedToken ? strlen($expectedToken) : 0,
+                ] : null,
             ], 403);
         }
 
