@@ -274,6 +274,12 @@ const routes = [
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
+                path: 'wow/winners',
+                name: 'admin.wow.winners',
+                component: () => import('./pages/admin/wow/Wins.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
+            {
                 path: 'wow/leaderboard',
                 name: 'admin.wow.leaderboard',
                 component: () => import('./pages/admin/wow/Leaderboard.vue'),

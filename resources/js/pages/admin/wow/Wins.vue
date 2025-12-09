@@ -1,7 +1,7 @@
 <template>
     <div class="wins-page space-y-6">
         <div>
-            <h1 class="text-3xl font-semibold text-foreground">Выигрыши</h1>
+            <h1 class="text-3xl font-semibold text-foreground">Победители</h1>
             <p class="text-muted-foreground mt-1">История всех выигрышей пользователей</p>
         </div>
 
@@ -70,37 +70,31 @@
                 <table class="w-full">
                     <thead class="bg-muted/50">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Дата</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Telegram ID</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Username</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Тип приза</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Сумма</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Сектор</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Название приза</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Номер сектора</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Дата и время выигрыша</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border">
                         <tr v-for="win in wins" :key="win.id" class="hover:bg-muted/30">
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                {{ formatDate(win.spin_time) }}
+                                {{ win.telegram_id || '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                {{ win.user?.telegram_id || '-' }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                {{ win.user?.username || '-' }}
+                                {{ win.username || '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
                                 <span :class="getPrizeTypeClass(win.prize_type)">
-                                    {{ getPrizeTypeLabel(win.prize_type) }}
+                                    {{ win.prize_name || '-' }}
                                 </span>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                <span v-if="win.prize_type === 'money'">{{ win.prize_value }} ₽</span>
-                                <span v-else-if="win.prize_type === 'ticket'">{{ win.prize_value }} билет(ов)</span>
-                                <span v-else>-</span>
+                                {{ win.sector_number ? '#' + win.sector_number : '-' }}
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                #{{ win.sector_number || win.sector?.sector_number || '-' }}
+                                {{ formatDate(win.spin_time) }}
                             </td>
                         </tr>
                     </tbody>

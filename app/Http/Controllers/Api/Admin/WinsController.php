@@ -44,8 +44,22 @@ class WinsController extends Controller
         $perPage = $request->get('per_page', 50);
         $wins = $query->paginate($perPage);
 
+        // Форматируем данные для отображения
+        $formattedData = $wins->getCollection()->map(function ($spin) {
+            return [
+                'id' => $spin->id,
+                'telegram_id' => $spin->user ? $spin->user->telegram_id : null,
+                'username' => $spin->user ? $spin->user->username : null,
+                'prize_name' => $this->getPrizeName($spin->prize_type ?? 'empty', $spin->prize_value ?? 0),
+                'sector_number' => $spin->sector_number ?? ($spin->sector ? $spin->sector->sector_number : null),
+                'spin_time' => $spin->spin_time,
+                'prize_type' => $spin->prize_type,
+                'prize_value' => $spin->prize_value,
+            ];
+        });
+
         return response()->json([
-            'data' => $wins->items(),
+            'data' => $formattedData,
             'pagination' => [
                 'current_page' => $wins->currentPage(),
                 'last_page' => $wins->lastPage(),
@@ -53,6 +67,24 @@ class WinsController extends Controller
                 'total' => $wins->total(),
             ],
         ]);
+    }
+
+    /**
+     * Получить название приза в читаемом формате
+     */
+    private function getPrizeName(string $prizeType, int $prizeValue): string
+    {
+        switch ($prizeType) {
+            case 'money':
+                return $prizeValue . ' рублей';
+            case 'ticket':
+                return 'плюс ' . $prizeValue . ' билет';
+            case 'secret_box':
+                return 'WOW Secret Box';
+            case 'empty':
+            default:
+                return 'пусто';
+        }
     }
 
     /**

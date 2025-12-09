@@ -81,6 +81,12 @@ class AdminMenu
                                'icon' => 'trophy',
                                'roles' => ['admin', 'manager'],
                            ],
+                           [
+                               'title' => 'Победители',
+                               'route' => 'admin.wow.winners',
+                               'icon' => 'award',
+                               'roles' => ['admin', 'manager'],
+                           ],
                 ],
             ],
             [
