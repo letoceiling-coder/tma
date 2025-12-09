@@ -404,8 +404,11 @@ class DeployController extends Controller
                 $command = "composer install --no-dev --optimize-autoloader --no-interaction --no-scripts";
             } else {
                 // Если найден полный путь, используем php8.2 для выполнения composer
-                // Это обходит проблемы с правами доступа (ACL, расширенные атрибуты)
-                $command = "{$this->phpPath} {$composerPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
+                // PHP может читать файл даже если он не может быть выполнен напрямую из-за ACL
+                $escapedPath = escapeshellarg($composerPath);
+                // Используем php8.2 для выполнения composer файла напрямую
+                // Это обходит проблему с правами на выполнение, так как PHP читает и выполняет файл
+                $command = "{$this->phpPath} {$escapedPath} install --no-dev --optimize-autoloader --no-interaction --no-scripts";
             }
             Log::info("🔍 Команда composer: {$command}");
 
