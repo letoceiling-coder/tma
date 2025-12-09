@@ -9,6 +9,27 @@ use Illuminate\Support\Facades\File;
 class BotConfigController extends Controller
 {
     /**
+     * Получить токен бота из конфига или .env
+     */
+    protected function getBotToken(): ?string
+    {
+        $token = config('telegram.bot_token');
+        
+        // Если токен не найден в конфиге, читаем напрямую из .env
+        if (!$token) {
+            $envPath = base_path('.env');
+            if (File::exists($envPath)) {
+                $envContent = File::get($envPath);
+                if (preg_match('/^TELEGRAM_BOT_TOKEN=(.+)$/m', $envContent, $matches)) {
+                    $token = trim($matches[1], '"\'');
+                }
+            }
+        }
+        
+        return $token ?: null;
+    }
+
+    /**
      * Получить текущие настройки бота
      */
     public function index()
@@ -122,14 +143,33 @@ class BotConfigController extends Controller
         \Artisan::call('config:clear');
 
         // Автоматически устанавливаем webhook при сохранении токена
+        $webhookError = null;
         if (isset($validated['bot_token']) && !empty($validated['bot_token'])) {
             try {
-                // Формируем webhook URL по умолчанию
-                $appUrl = rtrim(config('app.url', ''), '/');
+                // Получаем APP_URL из .env файла напрямую
+                $appUrl = null;
+                if (preg_match('/^APP_URL=(.+)$/m', $envContent, $matches)) {
+                    $appUrl = trim($matches[1], '"\'');
+                }
+                
+                // Если APP_URL не найден в .env, используем URL из запроса
+                if (empty($appUrl) || $appUrl === 'http://localhost') {
+                    $appUrl = rtrim($request->getSchemeAndHttpHost(), '/');
+                }
+                
+                $appUrl = rtrim($appUrl, '/');
                 $webhookUrl = $appUrl . '/api/telegram/webhook';
                 
+                // Исправляем двойные слеши в URL
+                $webhookUrl = preg_replace('#([^:])//+#', '$1/', $webhookUrl);
+                
                 $token = $validated['bot_token'];
-                $secretToken = config('telegram.webhook.secret_token');
+                
+                // Получаем secret_token из .env
+                $secretToken = null;
+                if (preg_match('/^TELEGRAM_WEBHOOK_SECRET_TOKEN=(.+)$/m', $envContent, $matches)) {
+                    $secretToken = trim($matches[1], '"\'');
+                }
 
                 $params = [
                     'url' => $webhookUrl,
@@ -143,6 +183,8 @@ class BotConfigController extends Controller
                 $result = $response->json();
                 
                 if (!($result['ok'] ?? false)) {
+                    $errorDescription = $result['description'] ?? 'Неизвестная ошибка';
+                    $webhookError = "Не удалось установить webhook: {$errorDescription}";
                     \Log::warning('Failed to set webhook automatically', [
                         'response' => $result,
                         'webhook_url' => $webhookUrl,
@@ -153,13 +195,19 @@ class BotConfigController extends Controller
                     ]);
                 }
             } catch (\Exception $e) {
+                $webhookError = "Ошибка установки webhook: " . $e->getMessage();
                 \Log::error('Error setting webhook automatically', [
                     'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        return response()->json(['message' => 'Настройки сохранены']);
+        $responseData = ['message' => 'Настройки сохранены'];
+        if ($webhookError) {
+            $responseData['webhook_error'] = $webhookError;
+        }
+
+        return response()->json($responseData);
     }
 
     /**
@@ -168,7 +216,8 @@ class BotConfigController extends Controller
     public function getWebhookInfo()
     {
         try {
-            $token = config('telegram.bot_token');
+            $token = $this->getBotToken();
+            
             if (!$token) {
                 return response()->json(['error' => 'Токен бота не установлен'], 400);
             }
@@ -186,7 +235,7 @@ class BotConfigController extends Controller
     public function testConnection()
     {
         try {
-            $token = config('telegram.bot_token');
+            $token = $this->getBotToken();
             if (!$token) {
                 return response()->json(['error' => 'Токен бота не установлен'], 400);
             }

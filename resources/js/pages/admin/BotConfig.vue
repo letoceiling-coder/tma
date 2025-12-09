@@ -177,10 +177,20 @@ const saveConfig = async () => {
     error.value = null
     successMessage.value = null
     try {
-        await axios.post('/api/v1/settings/bot', form.value)
+        const response = await axios.post('/api/v1/settings/bot', form.value)
         successMessage.value = 'Настройки сохранены'
         
-        // Webhook устанавливается автоматически на сервере при сохранении токена
+        // Показываем предупреждение, если webhook не установился
+        if (response.data.webhook_error) {
+            error.value = response.data.webhook_error
+        }
+        
+        // Автоматически обновляем информацию о webhook после сохранения
+        if (form.value.bot_token) {
+            setTimeout(() => {
+                getWebhookInfo()
+            }, 1000)
+        }
     } catch (err) {
         error.value = err.response?.data?.message || 'Ошибка сохранения настроек'
     } finally {
