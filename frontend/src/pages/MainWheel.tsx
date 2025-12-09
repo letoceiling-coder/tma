@@ -4,6 +4,7 @@ import WheelComponent from "@/components/WheelComponent";
 import BottomNav from "@/components/BottomNav";
 import SecretGiftPopup from "@/components/SecretGiftPopup";
 import SpinResultPopup from "@/components/SpinResultPopup";
+import NoTicketsBanner from "@/components/NoTicketsBanner";
 import wowBunny from "@/assets/wow-bunny.png";
 import { toast } from "sonner";
 import { haptic } from "@/lib/haptic";
@@ -761,6 +762,9 @@ const MainWheel = () => {
             )}
           </span>
         </div>
+
+        {/* No Tickets Banner - показывается когда билеты закончились */}
+        <NoTicketsBanner isVisible={!loadingTickets && tickets === 0} />
 
         {/* Spin Button */}
         <button

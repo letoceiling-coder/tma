@@ -88,9 +88,10 @@ class TelegramNotificationService
      * @param int $prizeValue
      * @param string $prizeType
      * @param string|null $adminLink Ссылка на админа для связи
+     * @param string|null $customMessage Кастомное сообщение из типа приза
      * @return bool
      */
-    public static function notifyWin(User $user, int $prizeValue, string $prizeType, ?string $adminLink = null): bool
+    public static function notifyWin(User $user, int $prizeValue, string $prizeType, ?string $adminLink = null, ?string $customMessage = null): bool
     {
         if (!$user->telegram_id) {
             return false;
@@ -99,25 +100,48 @@ class TelegramNotificationService
         $message = '';
         $keyboard = null;
         
-        // Правильные шаблоны сообщений для каждого типа приза
-        if ($prizeType === 'money' && $prizeValue > 0) {
-            $message = "Поздравляем, вы выиграли {$prizeValue} рублей";
-        } elseif ($prizeType === 'ticket' && $prizeValue > 0) {
-            // Правильное склонение для билетов
-            if ($prizeValue === 1) {
-                $message = "Поздравляем, вы выиграли 1 дополнительный билет";
-            } else {
-                $message = "Поздравляем, вы выиграли {$prizeValue} дополнительных билетов";
-            }
-        } elseif ($prizeType === 'secret_box') {
-            $message = "Поздравляем, вы выиграли подарок от спонсора. Свяжитесь с администратором.";
+        // Если есть кастомное сообщение из типа приза, используем его
+        if ($customMessage) {
+            $message = $customMessage;
         } else {
-            // Пустой сектор или некорректный тип - не отправляем сообщение
-            return false;
+            // Иначе используем стандартные шаблоны сообщений для каждого типа приза
+            // ВАЖНО: Для 300, 500 рублей, секретного бокса и подарка от спонсора - единое сообщение
+            if ($prizeType === 'money' && ($prizeValue === 300 || $prizeValue === 500)) {
+                // Для призов 300 и 500 рублей - специальное сообщение
+                $message = "Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.";
+            } elseif ($prizeType === 'money' && $prizeValue > 0) {
+                // Для других денежных призов (если есть)
+                $message = "Поздравляем, вы выиграли {$prizeValue} рублей";
+            } elseif ($prizeType === 'ticket' && $prizeValue > 0) {
+                // Правильное склонение для билетов
+                if ($prizeValue === 1) {
+                    $message = "Поздравляем! Вы выиграли 1 дополнительный билет!";
+                } else {
+                    $message = "Поздравляем, вы выиграли {$prizeValue} дополнительных билетов";
+                }
+            } elseif ($prizeType === 'secret_box') {
+                $message = "Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.";
+            } elseif ($prizeType === 'sponsor_gift') {
+                $message = "Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.";
+            } else {
+                // Пустой сектор или некорректный тип - не отправляем сообщение
+                return false;
+            }
         }
         
-        // Добавляем кнопку "Связаться с администратором" для всех непустых призов (кроме билетов)
-        if ($adminLink && $prizeType !== 'empty' && ($prizeType === 'money' || $prizeType === 'secret_box')) {
+        // Добавляем кнопку "Связаться с администратором" для призов требующих связи с админом:
+        // - 300, 500 рублей (money с value 300 или 500)
+        // - секретный бокс
+        // - подарок от спонсора
+        // НЕ для: билетов, пустых секторов, других денежных призов
+        $needsAdminContact = false;
+        if ($prizeType === 'money' && ($prizeValue === 300 || $prizeValue === 500)) {
+            $needsAdminContact = true;
+        } elseif ($prizeType === 'secret_box' || $prizeType === 'sponsor_gift') {
+            $needsAdminContact = true;
+        }
+        
+        if ($adminLink && $needsAdminContact) {
             $keyboard = \App\Telegram\Keyboard::inline()
                 ->url('Связаться с администратором', $adminLink)
                 ->get();

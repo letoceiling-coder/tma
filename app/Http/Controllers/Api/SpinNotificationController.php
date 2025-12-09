@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Spin;
 use App\Models\User;
 use App\Models\WheelSector;
+use App\Models\PrizeType;
 use App\Services\TelegramService;
 use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
@@ -154,14 +155,18 @@ class SpinNotificationController extends Controller
                 $verificationPassed = true; // Принимаем как валидный, если угол не передан
             }
 
-            // Загружаем актуальные данные сектора
-            $sector = WheelSector::find($spin->sector_id);
+            // Загружаем актуальные данные сектора с типом приза
+            $sector = WheelSector::with('prizeType')->find($spin->sector_id);
             if (!$sector) {
                 // Если сектор не найден, пытаемся найти по номеру
-                $sector = WheelSector::where('sector_number', $spin->sector_number)
+                $sector = WheelSector::with('prizeType')
+                    ->where('sector_number', $spin->sector_number)
                     ->where('is_active', true)
                     ->first();
             }
+
+            // Получаем тип приза, если он связан с сектором
+            $prizeType = $sector && $sector->prize_type_id ? $sector->prizeType : null;
 
             // Генерируем ссылку на админа, если настроена
             $adminLink = null;
@@ -176,7 +181,11 @@ class SpinNotificationController extends Controller
             // 1. При пустом секторе - НЕ отправляем уведомление в Telegram (только попап на фронтенде)
             // 2. При выигрыше - отправляем ОДНО уведомление в Telegram
             // 3. Сообщения в попапе и Telegram должны совпадать по содержанию
+            // 4. Если есть связанный тип приза, используем его сообщение
             $notificationSent = false;
+            
+            // Используем сообщение из типа приза, если оно есть
+            $customMessage = $prizeType && $prizeType->message ? $prizeType->message : null;
             
             if ($spin->prize_type === 'empty') {
                 // Пустой сектор - НЕ отправляем уведомление в Telegram
@@ -192,12 +201,14 @@ class SpinNotificationController extends Controller
                     $user,
                     $spin->prize_value,
                     'money',
-                    $adminLink
+                    $adminLink,
+                    $customMessage
                 );
                 Log::info('Money prize notification sent', [
                     'spin_id' => $spin->id,
                     'prize_value' => $spin->prize_value,
                     'notification_sent' => $notificationSent,
+                    'custom_message' => $customMessage,
                 ]);
             } elseif ($spin->prize_type === 'ticket' && $spin->prize_value > 0) {
                 // Билеты - отправляем уведомление в Telegram
@@ -205,12 +216,14 @@ class SpinNotificationController extends Controller
                     $user,
                     $spin->prize_value,
                     'ticket',
-                    $adminLink
+                    $adminLink,
+                    $customMessage
                 );
                 Log::info('Ticket prize notification sent', [
                     'spin_id' => $spin->id,
                     'prize_value' => $spin->prize_value,
                     'notification_sent' => $notificationSent,
+                    'custom_message' => $customMessage,
                 ]);
             } elseif ($spin->prize_type === 'secret_box') {
                 // Секретный бокс - отправляем уведомление в Telegram
@@ -218,11 +231,27 @@ class SpinNotificationController extends Controller
                     $user,
                     0,
                     'secret_box',
-                    $adminLink
+                    $adminLink,
+                    $customMessage
                 );
                 Log::info('Secret box prize notification sent', [
                     'spin_id' => $spin->id,
                     'notification_sent' => $notificationSent,
+                    'custom_message' => $customMessage,
+                ]);
+            } elseif ($spin->prize_type === 'sponsor_gift') {
+                // Подарок от спонсора - отправляем уведомление в Telegram
+                $notificationSent = TelegramNotificationService::notifyWin(
+                    $user,
+                    0,
+                    'sponsor_gift',
+                    $adminLink,
+                    $customMessage
+                );
+                Log::info('Sponsor gift prize notification sent', [
+                    'spin_id' => $spin->id,
+                    'notification_sent' => $notificationSent,
+                    'custom_message' => $customMessage,
                 ]);
             } else {
                 // Неизвестный тип приза - не отправляем

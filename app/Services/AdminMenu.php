@@ -58,6 +58,12 @@ class AdminMenu
                         'roles' => ['admin', 'manager'],
                     ],
                     [
+                        'title' => 'Типы призов',
+                        'route' => 'admin.wow.prize-types',
+                        'icon' => 'gift',
+                        'roles' => ['admin', 'manager'],
+                    ],
+                    [
                         'title' => 'Пользователи WOW',
                         'route' => 'admin.wow.users',
                         'icon' => 'users',

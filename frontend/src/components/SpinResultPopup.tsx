@@ -18,17 +18,25 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   
   // Формируем сообщение о призе
   const getPrizeMessage = () => {
-    if (prizeType === 'money' && prizeValue > 0) {
+    const prizeValueNum = Number(prizeValue);
+    
+    // ВАЖНО: Для 300, 500 рублей, секретного бокса и подарка от спонсора - единое сообщение
+    if (prizeType === 'money' && (prizeValueNum === 300 || prizeValueNum === 500)) {
+      return `Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.`;
+    } else if (prizeType === 'money' && prizeValue > 0) {
+      // Для других денежных призов (если есть)
       return `Поздравляем, вы выиграли ${prizeValue} рублей`;
     } else if (prizeType === 'ticket' && prizeValue > 0) {
       // Правильное склонение для билетов
       if (prizeValue === 1) {
-        return `Поздравляем, вы выиграли 1 дополнительный билет`;
+        return `Поздравляем! Вы выиграли 1 дополнительный билет!`;
       } else {
         return `Поздравляем, вы выиграли ${prizeValue} дополнительных билетов`;
       }
     } else if (prizeType === 'secret_box') {
-      return `Поздравляем, вы выиграли\nподарок от спонсора.\nСвяжитесь\nс администратором.`;
+      return `Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.`;
+    } else if (prizeType === 'sponsor_gift') {
+      return `Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.`;
     }
     return '';
   };
@@ -43,12 +51,13 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   
   const adminLink = getAdminLink();
   
-  // Кнопка показывается СТРОГО только для: 300 рублей, 500 рублей, Secret Box
+  // Кнопка показывается СТРОГО только для: 300 рублей, 500 рублей, Secret Box, Подарок от спонсора
   // НЕ показывается для: пустого сектора, +1 билет
   const prizeValueNum = Number(prizeValue);
   const isEligiblePrize = prizeType !== 'empty' && 
     ((prizeType === 'money' && (prizeValueNum === 300 || prizeValueNum === 500)) || 
-     prizeType === 'secret_box');
+     prizeType === 'secret_box' ||
+     prizeType === 'sponsor_gift');
   
   // Кнопка показывается только если есть adminUsername (иначе некуда вести)
   const showContactButton = isEligiblePrize && !!adminLink;

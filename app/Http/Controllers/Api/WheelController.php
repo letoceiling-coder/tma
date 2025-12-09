@@ -142,6 +142,12 @@ class WheelController extends Controller
                 
                 $user->save();
 
+                // Загружаем тип приза, если он связан с сектором
+                $prizeType = null;
+                if ($winningSector->prize_type_id) {
+                    $prizeType = \App\Models\PrizeType::find($winningSector->prize_type_id);
+                }
+
                 // Сохраняем результат прокрута
                 $spin = Spin::create([
                     'user_id' => $user->id,
@@ -155,6 +161,29 @@ class WheelController extends Controller
                 // Если выигрыш - начисляем приз
                 $prizeAwarded = false;
                 
+                // Обрабатываем действие из типа приза, если оно указано
+                if ($prizeType && $prizeType->action === 'add_ticket') {
+                    $ticketsToAdd = $prizeType->value ?? 1;
+                    $oldTickets = $user->tickets_available;
+                    $user->tickets_available = $user->tickets_available + $ticketsToAdd;
+                    
+                    if ($user->tickets_available > 0) {
+                        $user->tickets_depleted_at = null;
+                    }
+                    
+                    $user->save();
+                    $prizeAwarded = true;
+                    
+                    Log::info('Ticket added from prize type action', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type_id' => $prizeType->id,
+                        'tickets_added' => $ticketsToAdd,
+                        'old_tickets' => $oldTickets,
+                        'new_tickets' => $user->tickets_available,
+                    ]);
+                }
+                
                 // ВАЖНО: Проверяем что сектор действительно выпал и приз должен быть выдан
                 if ($winningSector->prize_type === 'empty') {
                     // Пустой сектор - приз не начисляется
@@ -164,22 +193,41 @@ class WheelController extends Controller
                         'sector_number' => $winningSector->sector_number,
                     ]);
                 } elseif ($winningSector->prize_type === 'money' && $winningSector->prize_value > 0) {
-                    // Денежный приз - отмечаем выигрыш
+                    // ВАЖНО: Денежный приз (300, 500 рублей и т.д.) - НЕ начисляется автоматически!
+                    // Деньги НЕ добавляются в баланс пользователя.
+                    // Только отмечаем выигрыш в статистике (total_wins++).
+                    // Пользователь должен связаться с администратором для получения приза.
+                    // Приз сохраняется в таблице spins с правильным prize_value.
                     $user->total_wins++;
                     $user->save();
                     $prizeAwarded = true;
                     
-                    Log::info('Money prize awarded', [
+                    Log::info('Money prize awarded (NOT automatically credited - user must contact admin)', [
                         'user_id' => $user->id,
                         'sector_number' => $winningSector->sector_number,
-                        'prize_value' => $winningSector->prize_value,
+                        'prize_value' => $winningSector->prize_value, // Используем напрямую из сектора - гарантированно правильное значение
+                        'note' => 'Money is NOT added to user balance automatically',
                     ]);
                     
                     // ПРИМЕЧАНИЕ: Уведомления о выигрыше отправляются отдельным endpoint
                     // после завершения анимации на фронтенде (4 секунды)
                 } elseif ($winningSector->prize_type === 'ticket' && $winningSector->prize_value > 0) {
-                    // Начисляем билет(ы) за выигрыш
+                    // ВАЖНО: Начисляем билет(ы) за выигрыш
+                    // prize_value должно соответствовать конфигурации сектора из админки
+                    // Максимальное значение контролируется валидацией в админке (max:10)
+                    // Если приз 500 билетов не задан в админке, он не может выпасть
                     $ticketsToAdd = $winningSector->prize_value ?? 1;
+                    
+                    // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Если значение больше 10, логируем предупреждение
+                    if ($ticketsToAdd > 10) {
+                        Log::warning('Unusual ticket prize value detected', [
+                            'user_id' => $user->id,
+                            'sector_number' => $winningSector->sector_number,
+                            'prize_value' => $ticketsToAdd,
+                            'note' => 'Prize value exceeds recommended maximum of 10 tickets',
+                        ]);
+                    }
+                    
                     $oldTickets = $user->tickets_available;
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
                     
@@ -195,20 +243,30 @@ class WheelController extends Controller
                     $user->save();
                     $prizeAwarded = true;
                     
-                    Log::info('Ticket prize awarded', [
+                    Log::info('Ticket prize awarded and credited to user', [
                         'user_id' => $user->id,
                         'sector_number' => $winningSector->sector_number,
                         'tickets_added' => $ticketsToAdd,
                         'old_tickets' => $oldTickets,
                         'new_tickets' => $user->tickets_available,
+                        'note' => 'Tickets were successfully added to user balance',
                     ]);
-                } elseif ($winningSector->prize_type === 'secret_box') {
-                    // Секретный бокс - обрабатывается отдельно
-                    $prizeAwarded = true;
+                } elseif ($winningSector->prize_type === 'secret_box' || $winningSector->prize_type === 'sponsor_gift') {
+                    // ВАЖНО: Секретный бокс или подарок от спонсора - НЕ начисляется автоматически!
+                    // Никакие призы не добавляются автоматически.
+                    // Только отмечаем выигрыш в статистике.
+                    // Пользователь должен связаться с администратором для получения приза.
+                    if (!$prizeAwarded) {
+                        $user->total_wins++;
+                        $user->save();
+                        $prizeAwarded = true;
+                    }
                     
-                    Log::info('Secret box prize awarded', [
+                    Log::info('Secret box or sponsor gift prize awarded (NOT automatically credited - user must contact admin)', [
                         'user_id' => $user->id,
                         'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
+                        'note' => 'Prize is NOT awarded automatically',
                     ]);
                 } else {
                     // Неизвестный тип приза или некорректное значение

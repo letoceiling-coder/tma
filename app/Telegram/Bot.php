@@ -639,5 +639,50 @@ class Bot extends TelegramClient
             'user_id' => $userId,
         ], $params));
     }
+
+    // ==========================================
+    // Menu Button
+    // ==========================================
+
+    /**
+     * Получить информацию о боте
+     */
+    public function getMe(): array
+    {
+        return $this->request('getMe');
+    }
+
+    /**
+     * Получить menu button для чата
+     */
+    public function getChatMenuButton(?int $chatId = null): array
+    {
+        $params = [];
+        if ($chatId) {
+            $params['chat_id'] = $chatId;
+        }
+        return $this->request('getChatMenuButton', $params);
+    }
+
+    /**
+     * Установить menu button для чата
+     * 
+     * @param array|null $menuButton Структура MenuButton:
+     *   - type: 'commands' | 'web_app' | 'default'
+     *   - text: string (для web_app)
+     *   - web_app: array { url: string } (для web_app)
+     * @param int|null $chatId ID чата (null для бота по умолчанию)
+     */
+    public function setChatMenuButton(?array $menuButton = null, ?int $chatId = null): array
+    {
+        $params = [];
+        if ($chatId) {
+            $params['chat_id'] = $chatId;
+        }
+        if ($menuButton) {
+            $params['menu_button'] = json_encode($menuButton);
+        }
+        return $this->request('setChatMenuButton', $params);
+    }
 }
 

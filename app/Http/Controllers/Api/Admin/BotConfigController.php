@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Telegram\Bot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 class BotConfigController extends Controller
 {
@@ -304,6 +306,127 @@ class BotConfigController extends Controller
             $response = \Http::post("https://api.telegram.org/bot{$token}/deleteWebhook");
             return response()->json($response->json());
         } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Получить текущую настройку menu button
+     */
+    public function getMenuButton()
+    {
+        try {
+            $bot = app(Bot::class);
+            $result = $bot->getChatMenuButton();
+            
+            return response()->json($result);
+        } catch (\Exception $e) {
+            Log::error('Error getting menu button', [
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Установить menu button "Старт"
+     * Создает кнопку в меню WebApp (три полоски), которая при нажатии отправляет команду /start
+     */
+    public function setMenuButton(Request $request)
+    {
+        try {
+            $token = config('telegram.bot_token');
+            if (!$token) {
+                return response()->json(['error' => 'Токен бота не установлен'], 400);
+            }
+            
+            // Получаем username бота
+            $botUsername = config('telegram.bot_username');
+            if (!$botUsername) {
+                try {
+                    $response = \Http::get("https://api.telegram.org/bot{$token}/getMe");
+                    $me = $response->json();
+                    $botUsername = $me['result']['username'] ?? null;
+                } catch (\Exception $e) {
+                    Log::warning('Failed to get bot username', ['error' => $e->getMessage()]);
+                }
+            }
+            
+            if (!$botUsername) {
+                return response()->json([
+                    'error' => 'Bot username не найден. Убедитесь, что TELEGRAM_BOT_USERNAME установлен в .env'
+                ], 400);
+            }
+            
+            // Убираем @ если есть
+            $botUsername = ltrim($botUsername, '@');
+            
+            // Создаем menu button типа "commands" - показывает список команд в меню
+            // Пользователь сможет выбрать /start из списка команд
+            $menuButton = [
+                'type' => 'commands',
+            ];
+            
+            $bot = app(Bot::class);
+            $result = $bot->setChatMenuButton($menuButton);
+            
+            if (!($result['ok'] ?? false)) {
+                return response()->json([
+                    'error' => $result['description'] ?? 'Не удалось установить menu button'
+                ], 400);
+            }
+            
+            // Устанавливаем команды бота - команда /start будет видна в меню
+            try {
+                $commands = [
+                    ['command' => 'start', 'description' => 'Перезапустить приложение'],
+                ];
+                
+                $commandsResponse = \Http::post("https://api.telegram.org/bot{$token}/setMyCommands", [
+                    'commands' => json_encode($commands),
+                ]);
+                
+                $commandsResult = $commandsResponse->json();
+                if (!($commandsResult['ok'] ?? false)) {
+                    Log::warning('Failed to set bot commands', ['response' => $commandsResult]);
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to set bot commands', ['error' => $e->getMessage()]);
+                // Продолжаем, так как команды могут быть уже установлены
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Menu button установлен успешно. Команда /start доступна в меню WebApp (три полоски)',
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error setting menu button', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Удалить menu button (восстановить default)
+     */
+    public function removeMenuButton()
+    {
+        try {
+            $bot = app(Bot::class);
+            $result = $bot->setChatMenuButton(['type' => 'default']);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Menu button удален (восстановлен default)',
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error removing menu button', [
+                'error' => $e->getMessage(),
+            ]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

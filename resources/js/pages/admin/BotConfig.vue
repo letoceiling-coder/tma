@@ -45,6 +45,43 @@
             </div>
 
             <div class="bg-card rounded-lg border border-border p-6">
+                <h2 class="text-xl font-semibold mb-4">Menu Button (Меню WebApp)</h2>
+                
+                <div class="space-y-4">
+                    <p class="text-sm text-muted-foreground">
+                        Настройка кнопки меню в WebApp (три полоски слева). При нажатии пользователь сможет выбрать команду /start для перезапуска приложения.
+                    </p>
+                    
+                    <div class="flex gap-4">
+                        <button
+                            type="button"
+                            @click="setMenuButton"
+                            :disabled="loadingMenuButton"
+                            class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {{ loadingMenuButton ? 'Установка...' : 'Установить кнопку Старт' }}
+                        </button>
+                        <button
+                            type="button"
+                            @click="removeMenuButton"
+                            :disabled="loadingMenuButton"
+                            class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {{ loadingMenuButton ? 'Удаление...' : 'Удалить кнопку' }}
+                        </button>
+                        <button
+                            type="button"
+                            @click="getMenuButtonInfo"
+                            :disabled="loadingMenuButton"
+                            class="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Информация о меню
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-card rounded-lg border border-border p-6">
                 <h2 class="text-xl font-semibold mb-4">Приветственное сообщение</h2>
                 
                 <div class="space-y-4">
@@ -135,6 +172,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
 const loading = ref(false)
+const loadingMenuButton = ref(false)
 const error = ref(null)
 const successMessage = ref(null)
 
@@ -230,6 +268,61 @@ const getWebhookInfo = async () => {
         error.value = err.response?.data?.error || 'Ошибка получения информации о webhook'
     } finally {
         loading.value = false
+    }
+}
+
+const setMenuButton = async () => {
+    loadingMenuButton.value = true
+    error.value = null
+    successMessage.value = null
+    try {
+        const response = await axios.post('/api/v1/settings/bot/menu-button')
+        if (response.data.success) {
+            successMessage.value = response.data.message || 'Menu button установлен успешно'
+        } else {
+            error.value = response.data.error || 'Ошибка установки menu button'
+        }
+    } catch (err) {
+        error.value = err.response?.data?.error || 'Ошибка установки menu button'
+    } finally {
+        loadingMenuButton.value = false
+    }
+}
+
+const removeMenuButton = async () => {
+    loadingMenuButton.value = true
+    error.value = null
+    successMessage.value = null
+    try {
+        const response = await axios.delete('/api/v1/settings/bot/menu-button')
+        if (response.data.success) {
+            successMessage.value = response.data.message || 'Menu button удален'
+        } else {
+            error.value = response.data.error || 'Ошибка удаления menu button'
+        }
+    } catch (err) {
+        error.value = err.response?.data?.error || 'Ошибка удаления menu button'
+    } finally {
+        loadingMenuButton.value = false
+    }
+}
+
+const getMenuButtonInfo = async () => {
+    loadingMenuButton.value = true
+    error.value = null
+    successMessage.value = null
+    try {
+        const response = await axios.get('/api/v1/settings/bot/menu-button')
+        if (response.data.ok) {
+            const info = response.data.result
+            successMessage.value = `Menu Button: ${info.type || 'default'}`
+        } else {
+            error.value = response.data.description || 'Ошибка получения информации'
+        }
+    } catch (err) {
+        error.value = err.response?.data?.error || 'Ошибка получения информации о menu button'
+    } finally {
+        loadingMenuButton.value = false
     }
 }
 

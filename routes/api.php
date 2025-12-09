@@ -109,6 +109,9 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::post('/test-connection', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'testConnection']);
                 Route::post('/set-webhook', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'setWebhook']);
                 Route::post('/delete-webhook', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'deleteWebhook']);
+                Route::get('/menu-button', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'getMenuButton']);
+                Route::post('/menu-button', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'setMenuButton']);
+                Route::delete('/menu-button', [\App\Http\Controllers\Api\Admin\BotConfigController::class, 'removeMenuButton']);
             });
             
             // WOW Рулетка - Админ панель
@@ -142,6 +145,9 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::delete('leaderboard-prizes/{id}', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'destroy']);
                 Route::post('leaderboard-prizes/bulk-update', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'bulkUpdate']);
                 Route::post('leaderboard-prizes/update-period', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'updatePeriod']);
+                
+                // Типы призов
+                Route::apiResource('prize-types', \App\Http\Controllers\Api\Admin\PrizeTypeController::class);
             });
         });
     });

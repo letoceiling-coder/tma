@@ -126,25 +126,18 @@
                 <div>
                     <label class="text-sm font-medium mb-1 block">Тип приза</label>
                     <select
-                        v-model="sector.prize_type"
+                        v-model="sector.prize_type_id"
+                        @change="onPrizeTypeChange(sector)"
                         class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
                     >
-                        <option value="empty">Пусто</option>
-                        <option value="money">Деньги</option>
-                        <option value="ticket">Билет</option>
-                        <option value="secret_box">Секретный бокс</option>
+                        <option :value="null">Выберите тип приза</option>
+                        <option v-for="prizeType in prizeTypes" :key="prizeType.id" :value="prizeType.id">
+                            {{ prizeType.name }} ({{ getTypeLabel(prizeType.type) }})
+                        </option>
                     </select>
-                </div>
-
-                <div v-if="sector.prize_type === 'money'">
-                    <label class="text-sm font-medium mb-1 block">Сумма (₽)</label>
-                    <input
-                        v-model.number="sector.prize_value"
-                        type="number"
-                        min="0"
-                        placeholder="300"
-                        class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
-                    />
+                    <p v-if="sector.prize_type_id" class="text-xs text-muted-foreground mt-1">
+                        {{ getSelectedPrizeTypeInfo(sector.prize_type_id) }}
+                    </p>
                 </div>
 
                 <div>
@@ -248,6 +241,7 @@ export default {
         const savingSettings = ref(false)
         const error = ref(null)
         const sectors = ref([])
+        const prizeTypes = ref([])
         const alwaysEmptyMode = ref(false)
         const ticketRestoreHours = ref(3)
         const adminUsername = ref('')
@@ -265,6 +259,18 @@ export default {
             return Math.abs(totalProbability.value - 100) < 0.01
         })
 
+        const fetchPrizeTypes = async () => {
+            try {
+                const response = await apiGet('/wow/prize-types')
+                if (response.ok) {
+                    const data = await response.json()
+                    prizeTypes.value = data.data || []
+                }
+            } catch (err) {
+                console.error('Ошибка загрузки типов призов:', err)
+            }
+        }
+
         const fetchSectors = async () => {
             loading.value = true
             error.value = null
@@ -278,6 +284,7 @@ export default {
                     ...sector,
                     probability_percent: parseFloat(sector.probability_percent) || 0,
                     prize_value: sector.prize_value || 0,
+                    prize_type_id: sector.prize_type_id || null,
                 }))
                 
                 // Загружаем настройки
@@ -290,6 +297,41 @@ export default {
                 error.value = err.message || 'Ошибка загрузки секторов'
             } finally {
                 loading.value = false
+            }
+        }
+
+        const getTypeLabel = (type) => {
+            const labels = {
+                money: 'Деньги',
+                ticket: 'Билет',
+                gift: 'Подарок',
+                secret_box: 'Секретный бокс',
+                empty: 'Пусто',
+                sponsor_gift: 'Подарок от спонсора',
+            }
+            return labels[type] || type
+        }
+
+        const getSelectedPrizeTypeInfo = (prizeTypeId) => {
+            const prizeType = prizeTypes.value.find(pt => pt.id === prizeTypeId)
+            if (!prizeType) return ''
+            let info = `Тип: ${getTypeLabel(prizeType.type)}`
+            if (prizeType.value) {
+                info += `, Значение: ${prizeType.value}`
+            }
+            if (prizeType.action !== 'none') {
+                info += `, Действие: ${prizeType.action === 'add_ticket' ? 'Добавить билет' : prizeType.action}`
+            }
+            return info
+        }
+
+        const onPrizeTypeChange = (sector) => {
+            const prizeType = prizeTypes.value.find(pt => pt.id === sector.prize_type_id)
+            if (prizeType) {
+                // Автоматически заполняем поля из типа приза
+                sector.prize_type = prizeType.type
+                sector.prize_value = prizeType.value || 0
+                sector.icon_url = prizeType.icon_url || sector.icon_url
             }
         }
 
@@ -314,6 +356,7 @@ export default {
                     icon_url: sector.icon_url || null,
                     probability_percent: parseFloat(sector.probability_percent) || 0,
                     is_active: sector.is_active !== false,
+                    prize_type_id: sector.prize_type_id || null,
                 }))
 
                 const response = await apiPost('/wow/wheel/bulk-update', {
@@ -417,8 +460,9 @@ export default {
             }
         }
 
-        onMounted(() => {
-            fetchSectors()
+        onMounted(async () => {
+            await fetchPrizeTypes()
+            await fetchSectors()
         })
 
         return {
@@ -441,6 +485,10 @@ export default {
             openMediaSelector,
             closeMediaModal,
             handleMediaFileSelected,
+            prizeTypes,
+            getTypeLabel,
+            getSelectedPrizeTypeInfo,
+            onPrizeTypeChange,
         }
     },
 }

@@ -16,6 +16,7 @@ class WheelSector extends Model
         'icon_url',
         'probability_percent',
         'is_active',
+        'prize_type_id',
     ];
 
     protected $casts = [
@@ -59,6 +60,14 @@ class WheelSector extends Model
 
         // Fallback - вернуть последний сектор
         return $sectors->last();
+    }
+
+    /**
+     * Связь с типом приза
+     */
+    public function prizeType()
+    {
+        return $this->belongsTo(PrizeType::class);
     }
 }
 
