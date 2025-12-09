@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class VerifyDeployToken
@@ -55,6 +56,17 @@ class VerifyDeployToken
         }
 
         if (!$token || $token !== $expectedToken) {
+            Log::warning('Попытка обновления с неверным секретным ключом', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'received_token' => $token ? substr($token, 0, 3) . '...' : 'null',
+                'expected_token' => $expectedToken ? substr($expectedToken, 0, 3) . '...' : 'null',
+                'headers' => [
+                    'X-Deploy-Token' => $request->header('X-Deploy-Token') ? 'present' : 'missing',
+                    'X-Deploy-Secret' => $request->header('X-Deploy-Secret') ? 'present' : 'missing',
+                ],
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Неверный секретный ключ',

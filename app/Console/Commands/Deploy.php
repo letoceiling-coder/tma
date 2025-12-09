@@ -433,6 +433,7 @@ class Deploy extends Command
 
         $this->line("  📡 URL: {$deployUrl}");
         $this->line("  🔑 Commit: " . substr($commitHash, 0, 7));
+        $this->line("  🔐 Token: " . (substr($deployToken, 0, 3) . '...' . substr($deployToken, -3)));
 
         try {
             $httpClient = Http::timeout(300); // 5 минут таймаут
