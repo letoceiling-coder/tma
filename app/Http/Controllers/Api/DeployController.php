@@ -469,7 +469,14 @@ class DeployController extends Controller
             return $composerPath;
         }
 
-        // 2. Попробовать найти composer через which (самый надежный способ)
+        // 2. Проверить локальный composer в директории проекта (приоритет!)
+        $localComposer = $this->basePath . '/bin/composer';
+        if (file_exists($localComposer)) {
+            Log::info("Composer найден локально в проекте: {$localComposer}");
+            return $localComposer;
+        }
+
+        // 3. Попробовать найти composer через which (самый надежный способ)
         // Добавляем пользовательский путь в PATH для поиска
         $userComposerPath = '/home/d/dsc23ytp/.local/bin';
         $pathEnv = getenv('PATH') ?: '';
@@ -488,7 +495,7 @@ class DeployController extends Controller
             Log::warning("Ошибка при поиске composer через which: " . $e->getMessage());
         }
         
-        // 3. Попробовать найти composer в стандартных местах
+        // 4. Попробовать найти composer в стандартных местах
         $possiblePaths = [
             '/home/d/dsc23ytp/.local/bin/composer', // Пользовательский путь (проверяем первым, так как он точно существует)
             '/usr/local/bin/composer',
@@ -508,7 +515,7 @@ class DeployController extends Controller
             }
         }
 
-        // 4. Если composer не найден, пробуем использовать через shell
+        // 5. Если composer не найден, пробуем использовать через shell
         // Проверяем, доступен ли composer как команда
         try {
             $testProcess = Process::run('composer --version 2>&1');
@@ -521,7 +528,7 @@ class DeployController extends Controller
             Log::warning("Composer не доступен как команда: " . $e->getMessage());
         }
 
-        // 5. Последний fallback - возвращаем пустую строку (будет ошибка при выполнении)
+        // 6. Последний fallback - возвращаем пустую строку (будет ошибка при выполнении)
         Log::error("Composer не найден нигде. Установите composer или укажите COMPOSER_PATH в .env");
         return '';
     }
