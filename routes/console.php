@@ -14,7 +14,9 @@ Schedule::command('wow:restore-tickets')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Персональные уведомления о доступности бесплатной прокрутки
+// Запускаем каждые 5 минут для проверки индивидуальных 24-часовых таймеров
 Schedule::command('wow:send-reminders')
-    ->dailyAt('10:00')
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->runInBackground();

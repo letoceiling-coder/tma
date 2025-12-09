@@ -122,6 +122,8 @@ class WheelController extends Controller
                 // Уменьшаем количество билетов
                 $user->tickets_available = max(0, $user->tickets_available - 1);
                 $user->last_spin_at = now();
+                // Сбрасываем флаг уведомления при новой прокрутке
+                $user->last_notification_sent_at = null;
                 $user->total_spins++;
                 
                 // Получаем интервал восстановления билетов из настроек

@@ -26,12 +26,19 @@ class TelegramNotificationService
         }
 
         try {
-            $response = Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+            $payload = [
                 'chat_id' => $telegramId,
                 'text' => $message,
                 'parse_mode' => $options['parse_mode'] ?? 'HTML',
                 'disable_web_page_preview' => $options['disable_web_page_preview'] ?? true,
-            ]);
+            ];
+
+            // Добавляем reply_markup, если передан
+            if (isset($options['reply_markup'])) {
+                $payload['reply_markup'] = $options['reply_markup'];
+            }
+
+            $response = Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", $payload);
 
             if ($response->successful()) {
                 Log::info('Telegram notification sent', [
@@ -101,8 +108,7 @@ class TelegramNotificationService
             $message .= "Вы выиграли <b>{$prizeValue} {$ticketWord}</b>! 🎫\n\n";
             $message .= "Билеты уже добавлены на ваш счет. Крутите колесо и выигрывайте призы!";
         } elseif ($prizeType === 'secret_box') {
-            $message .= "Вы выиграли <b>Секретный бокс</b>! 🎁\n\n";
-            $message .= "Для получения приза свяжитесь с администратором.";
+            $message = "Поздравляем! Вы выиграли подарок от спонсора 🎁 Свяжитесь с администратором для получения приза.";
         } else {
             // Пустой сектор или некорректный тип - не должно вызываться, но на всякий случай
             return false;
@@ -137,6 +143,42 @@ class TelegramNotificationService
         $message .= "Не упустите шанс выиграть призы! 🎰";
 
         return self::sendNotification($user->telegram_id, $message);
+    }
+
+    /**
+     * Уведомление о доступности бесплатной прокрутки (24 часа после последней прокрутки)
+     * 
+     * @param User $user
+     * @return bool
+     */
+    public static function notifyFreeSpinAvailable(User $user): bool
+    {
+        if (!$user->telegram_id) {
+            return false;
+        }
+
+        // Проверяем, что у пользователя есть билеты
+        if ($user->tickets_available <= 0) {
+            return false;
+        }
+
+        $message = "У тебя снова есть возможность бесплатно прокрутить рулетку🧡";
+
+        // Получаем URL Mini App
+        $miniAppUrl = config('telegram.mini_app_url');
+        
+        if (empty($miniAppUrl)) {
+            $miniAppUrl = config('app.url');
+        }
+
+        // Создаем клавиатуру с кнопкой Mini App
+        $keyboard = \App\Telegram\Keyboard::inline()
+            ->webApp('🎰 Крутить рулетку', $miniAppUrl)
+            ->get();
+
+        return self::sendNotification($user->telegram_id, $message, [
+            'reply_markup' => json_encode($keyboard),
+        ]);
     }
 
     /**
