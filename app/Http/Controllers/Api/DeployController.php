@@ -409,13 +409,23 @@ class DeployController extends Controller
             }
             Log::info("🔍 Команда composer: {$command}");
 
+            // Подготавливаем переменные окружения
+            $env = [
+                'HOME' => $homeDir,
+                'COMPOSER_HOME' => $homeDir . '/.composer',
+                'COMPOSER_DISABLE_XDEBUG_WARN' => '1',
+            ];
+            
+            // Если composer найден по полному пути, добавляем его директорию в PATH
+            if (!empty($composerPath) && $composerPath !== 'composer') {
+                $composerDir = dirname($composerPath);
+                $currentPath = getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin';
+                $env['PATH'] = $composerDir . ':' . $currentPath;
+            }
+            
             $process = Process::path($this->basePath)
                 ->timeout(600) // 10 минут
-                ->env([
-                    'HOME' => $homeDir,
-                    'COMPOSER_HOME' => $homeDir . '/.composer',
-                    'COMPOSER_DISABLE_XDEBUG_WARN' => '1',
-                ])
+                ->env($env)
                 ->run($command);
 
             if ($process->successful()) {
