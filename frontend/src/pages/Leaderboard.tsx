@@ -26,6 +26,7 @@ const Leaderboard = () => {
   const [loading, setLoading] = useState(true);
   const [topPrize, setTopPrize] = useState(1500); // По умолчанию
   const [referralLink, setReferralLink] = useState("https://t.me/wow_roulette_bot");
+  const [hasReferrals, setHasReferrals] = useState(false);
 
   // Загрузка лидерборда и реферальной ссылки с сервера
   useEffect(() => {
@@ -53,6 +54,7 @@ const Leaderboard = () => {
         if (leaderboardResponse.ok) {
           const leaderboardData = await leaderboardResponse.json();
           setLeaders(leaderboardData.leaderboard || []);
+          setHasReferrals(leaderboardData.has_referrals || false);
           
           // Устанавливаем приз за 1 место для баннера
           if (leaderboardData.leaderboard && leaderboardData.leaderboard.length > 0) {
@@ -382,7 +384,7 @@ const Leaderboard = () => {
         ) : leaders.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <p style={{ color: '#FFFFFF', fontSize: '14px', fontFamily: "'Nunito', sans-serif" }}>
-              Пока нет участников
+              {hasReferrals ? 'Топ формируется' : 'Пока нет участников'}
             </p>
           </div>
         ) : (

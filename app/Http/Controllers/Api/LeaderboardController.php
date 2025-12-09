@@ -32,6 +32,7 @@ class LeaderboardController extends Controller
             $period = $request->input('period', 'all'); // day, week, all
             
             $periodStartDate = null;
+            $periodMonths = null;
             if ($period === 'day') {
                 $periodStartDate = now()->startOfDay();
             } elseif ($period === 'week') {
@@ -49,12 +50,14 @@ class LeaderboardController extends Controller
             // Проверяем, есть ли данные в таблице referrals
             $referralsCount = Referral::count();
             $usersWithInvitedBy = User::whereNotNull('invited_by')->count();
+            $hasReferrals = $referralsCount > 0 || $usersWithInvitedBy > 0;
             
             Log::info('Leaderboard data check', [
                 'referrals_count' => $referralsCount,
                 'users_with_invited_by' => $usersWithInvitedBy,
-                'period_months' => $periodMonths,
-                'period_start_date' => $periodStartDate->toIso8601String(),
+                'has_referrals' => $hasReferrals,
+                'period' => $period,
+                'period_start_date' => $periodStartDate?->toIso8601String(),
             ]);
             
             if ($referralsCount > 0) {
@@ -138,6 +141,7 @@ class LeaderboardController extends Controller
                 'leaderboard' => $leaderboard,
                 'period' => $period,
                 'period_start_date' => $periodStartDate?->toIso8601String(),
+                'has_referrals' => $hasReferrals,
             ]);
 
         } catch (\Exception $e) {
@@ -148,6 +152,7 @@ class LeaderboardController extends Controller
 
             return response()->json([
                 'leaderboard' => [],
+                'has_referrals' => false,
             ]);
         }
     }

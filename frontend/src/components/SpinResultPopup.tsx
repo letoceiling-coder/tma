@@ -28,7 +28,7 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
         return `Поздравляем, вы выиграли ${prizeValue} дополнительных билетов`;
       }
     } else if (prizeType === 'secret_box') {
-      return `Поздравляем, вы выиграли подарок от спонсора. Свяжитесь с администратором.`;
+      return `Поздравляем, вы выиграли\nподарок от спонсора.\nСвяжитесь\nс администратором.`;
     }
     return '';
   };
@@ -41,7 +41,11 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   };
   
   const adminLink = getAdminLink();
-  const showContactButton = adminLink && prizeType !== 'empty' && (prizeType === 'money' || prizeType === 'secret_box');
+  // Кнопка показывается только для: 300 рублей, 500 рублей, Secret Box
+  // НЕ показывается для: пустого сектора, +1 билет
+  const showContactButton = adminLink && prizeType !== 'empty' && 
+    ((prizeType === 'money' && (prizeValue === 300 || prizeValue === 500)) || 
+     prizeType === 'secret_box');
 
   // Trigger haptic feedback when popup opens
   useEffect(() => {
@@ -137,13 +141,14 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
                   color: '#333333',
                   margin: '0 0 24px 0',
                   lineHeight: 1.5,
+                  whiteSpace: 'pre-line',
                   fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
                 }}
               >
                 {getPrizeMessage()}
               </p>
               
-              {/* Кнопка "Связаться" */}
+              {/* Кнопка "Получить" */}
               {showContactButton && adminLink && (
                 <a
                   href={adminLink}
@@ -179,7 +184,7 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
                     e.currentTarget.style.opacity = '1';
                   }}
                 >
-                  Связаться с администратором
+                  Получить
                 </a>
               )}
             </>
