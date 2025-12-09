@@ -68,9 +68,13 @@ const MainWheel = () => {
 
       const data = await response.json();
       
-      // Сохраняем admin_username из настроек
-      if (data.settings?.admin_username) {
-        setAdminUsername(data.settings.admin_username);
+      // Сохраняем admin_username из настроек (проверяем разные варианты структуры)
+      const adminUsernameValue = data.settings?.admin_username || data.admin_username || null;
+      if (adminUsernameValue && adminUsernameValue.trim() !== '') {
+        setAdminUsername(adminUsernameValue.trim());
+      } else {
+        // Если не загрузился, сбрасываем в null
+        setAdminUsername(null);
       }
       
       // Сортируем секторы по sector_number (1-12)

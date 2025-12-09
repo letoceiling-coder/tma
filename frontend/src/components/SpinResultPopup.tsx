@@ -35,32 +35,23 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   
   // Формируем ссылку на админа
   const getAdminLink = () => {
-    if (!adminUsername) return null;
-    const username = adminUsername.startsWith('@') ? adminUsername.slice(1) : adminUsername;
+    if (!adminUsername || adminUsername.trim() === '') return null;
+    const username = adminUsername.trim().startsWith('@') ? adminUsername.trim().slice(1) : adminUsername.trim();
+    if (!username || username === '') return null;
     return `https://t.me/${username}?text=${encodeURIComponent('Здравствуйте, я выиграл приз в WOW Spin')}`;
   };
   
   const adminLink = getAdminLink();
-  // Кнопка показывается только для: 300 рублей, 500 рублей, Secret Box
+  
+  // Кнопка показывается СТРОГО только для: 300 рублей, 500 рублей, Secret Box
   // НЕ показывается для: пустого сектора, +1 билет
   const prizeValueNum = Number(prizeValue);
-  const showContactButton = adminLink && prizeType !== 'empty' && 
+  const isEligiblePrize = prizeType !== 'empty' && 
     ((prizeType === 'money' && (prizeValueNum === 300 || prizeValueNum === 500)) || 
      prizeType === 'secret_box');
   
-  // Отладочное логирование (можно убрать после проверки)
-  useEffect(() => {
-    if (isOpen && isWin) {
-      console.log('SpinResultPopup Debug:', {
-        prizeType,
-        prizeValue,
-        prizeValueNum,
-        adminUsername,
-        adminLink: !!adminLink,
-        showContactButton,
-      });
-    }
-  }, [isOpen, isWin, prizeType, prizeValue, adminUsername, adminLink, showContactButton]);
+  // Кнопка показывается только если есть adminUsername (иначе некуда вести)
+  const showContactButton = isEligiblePrize && !!adminLink;
 
   // Trigger haptic feedback when popup opens
   useEffect(() => {
@@ -163,10 +154,10 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
                 {getPrizeMessage()}
               </p>
               
-              {/* Кнопка "Получить" */}
-              {showContactButton && adminLink && (
+              {/* Кнопка "Получить" - показывается СТРОГО при выигрыше 300/500/secret_box */}
+              {showContactButton && (
                 <a
-                  href={adminLink}
+                  href={adminLink!}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => haptic.lightTap()}
@@ -174,6 +165,7 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
                     display: 'inline-block',
                     width: '100%',
                     padding: '14px 24px',
+                    marginTop: '8px',
                     background: '#CC5C47',
                     color: '#FFFFFF',
                     borderRadius: '16px',
