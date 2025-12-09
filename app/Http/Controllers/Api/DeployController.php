@@ -45,12 +45,24 @@ class DeployController extends Controller
             // 0. Очистка файлов разработки в начале
             $this->cleanDevelopmentFiles();
 
+            // Получаем ветку из запроса или используем текущую ветку сервера
+            $requestedBranch = $request->input('branch');
+            if (!$requestedBranch) {
+                // Пытаемся определить текущую ветку на сервере
+                $currentBranchProcess = Process::path($this->basePath)
+                    ->run('git rev-parse --abbrev-ref HEAD 2>&1');
+                $requestedBranch = trim($currentBranchProcess->output()) ?: 'main';
+            }
+            
+            Log::info("🌿 Используется ветка для деплоя: {$requestedBranch}");
+
             // 1. Git pull
-            $gitPullResult = $this->handleGitPull();
+            $gitPullResult = $this->handleGitPull($requestedBranch);
             
             // Получаем текущий commit hash ПОСЛЕ настройки безопасной директории
             $oldCommitHash = $this->getCurrentCommitHash();
             $result['data']['git_pull'] = $gitPullResult['status'];
+            $result['data']['branch'] = $gitPullResult['branch'] ?? 'unknown';
             if (!$gitPullResult['success']) {
                 throw new \Exception("Ошибка git pull: {$gitPullResult['error']}");
             }
@@ -109,6 +121,7 @@ class DeployController extends Controller
             $result['data'] = array_merge($result['data'], [
                 'php_version' => $this->phpVersion,
                 'php_path' => $this->phpPath,
+                'branch' => $requestedBranch,
                 'old_commit_hash' => $oldCommitHash,
                 'new_commit_hash' => $newCommitHash,
                 'commit_changed' => $oldCommitHash !== $newCommitHash,
@@ -124,10 +137,16 @@ class DeployController extends Controller
             $result['data']['trace'] = config('app.debug') ? $e->getTraceAsString() : null;
             $result['data']['deployed_at'] = now()->toDateTimeString();
             $result['data']['duration_seconds'] = round(microtime(true) - $startTime, 2);
+            
+            // Добавляем информацию о ветке даже при ошибке
+            if (isset($requestedBranch)) {
+                $result['data']['branch'] = $requestedBranch;
+            }
 
             Log::error('❌ Ошибка деплоя', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
+                'branch' => $requestedBranch ?? 'unknown',
             ]);
         }
 
@@ -196,8 +215,10 @@ class DeployController extends Controller
 
     /**
      * Выполнить git pull
+     * 
+     * @param string $branch Ветка для обновления (если не указана, используется 'main')
      */
-    protected function handleGitPull(): array
+    protected function handleGitPull(string $branch = 'main'): array
     {
         try {
             // Логируем базовый путь для отладки
@@ -254,9 +275,7 @@ class DeployController extends Controller
             // Получаем текущий commit перед обновлением
             $beforeCommit = $this->getCurrentCommitHash();
             Log::info("📦 Commit до обновления: " . ($beforeCommit ?: 'не определен'));
-
-            // Используем жестко заданную ветку main (как в рабочем коде)
-            $branch = 'main';
+            Log::info("🌿 Обновляем ветку: {$branch}");
 
             // 1. Получаем последние изменения из репозитория
             Log::info("📥 Выполняем git fetch origin {$branch}...");
@@ -307,6 +326,7 @@ class DeployController extends Controller
                     'status' => 'success',
                     'output' => $process->output(),
                     'had_local_changes' => $hasChanges,
+                    'branch' => $branch,
                 ];
             }
 
@@ -314,6 +334,7 @@ class DeployController extends Controller
                 'success' => false,
                 'status' => 'error',
                 'error' => $process->errorOutput() ?: $process->output(),
+                'branch' => $branch,
             ];
         } catch (\Exception $e) {
             Log::error('Исключение в handleGitPull', [
