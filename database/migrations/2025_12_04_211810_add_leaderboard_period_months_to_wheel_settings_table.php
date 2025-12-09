@@ -12,7 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('wheel_settings', function (Blueprint $table) {
-            $table->integer('leaderboard_period_months')->default(1)->after('ticket_restore_hours')
+            // Добавляем после always_empty_mode, так как ticket_restore_hours добавляется позже
+            $table->integer('leaderboard_period_months')->default(1)->after('always_empty_mode')
                 ->comment('Период отображения лидерборда в месяцах (1, 2, 3, 4, 5, 6, 12)');
         });
     }

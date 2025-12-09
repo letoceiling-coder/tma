@@ -9,6 +9,7 @@ use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class TicketController extends Controller
 {
@@ -35,6 +36,16 @@ class TicketController extends Controller
                 return response()->json([
                     'tickets_available' => 0,
                 ]);
+            }
+
+            // Проверяем наличие колонки telegram_id в таблице users
+            if (!Schema::hasColumn('users', 'telegram_id')) {
+                Log::error('Column telegram_id not found in users table. Please run migrations.');
+                return response()->json([
+                    'error' => 'Database migration required',
+                    'message' => 'Колонка telegram_id отсутствует в таблице users. Выполните миграции: php artisan migrate',
+                    'tickets_available' => 0,
+                ], 500);
             }
 
             // Находим или создаем пользователя, если его нет
