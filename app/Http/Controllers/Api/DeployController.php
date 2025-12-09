@@ -399,8 +399,8 @@ class DeployController extends Controller
             Log::info("🔍 HOME директория: {$homeDir}");
 
             // Формируем команду в зависимости от того, найден ли полный путь к composer
-            if (empty($composerPath)) {
-                // Если путь не найден, используем composer как команду напрямую
+            if (empty($composerPath) || $composerPath === 'composer') {
+                // Если путь не найден или это просто 'composer', используем composer как команду напрямую
                 $command = "composer install --no-dev --optimize-autoloader --no-interaction --no-scripts";
             } else {
                 // Если найден полный путь, используем его с php
@@ -467,6 +467,7 @@ class DeployController extends Controller
         
         // 3. Попробовать найти composer в стандартных местах
         $possiblePaths = [
+            '/home/d/dsc23ytp/.local/bin/composer', // Пользовательский путь (проверяем первым, так как он точно существует)
             '/usr/local/bin/composer',
             '/usr/bin/composer',
         ];
