@@ -444,9 +444,22 @@ class DeployController extends Controller
             return $composerPath;
         }
 
-        // 2. Попробовать найти composer в стандартных местах
+        // 2. Попробовать найти composer через which (самый надежный способ)
+        try {
+            $whichProcess = Process::run('which composer 2>&1');
+            if ($whichProcess->successful()) {
+                $foundPath = trim($whichProcess->output());
+                if ($foundPath && file_exists($foundPath)) {
+                    Log::info("Composer найден через which: {$foundPath}");
+                    return $foundPath;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("Ошибка при поиске composer через which: " . $e->getMessage());
+        }
+        
+        // 3. Попробовать найти composer в стандартных местах
         $possiblePaths = [
-            '/home/d/dsc23ytp/.local/bin/composer',
             '/usr/local/bin/composer',
             '/usr/bin/composer',
             'composer', // Последняя попытка - использовать из PATH
@@ -454,17 +467,9 @@ class DeployController extends Controller
 
         foreach ($possiblePaths as $path) {
             if ($path === 'composer') {
-                // Для 'composer' проверяем через which
-                try {
-                    $whichProcess = Process::run('which composer 2>&1');
-                    if ($whichProcess->successful() && trim($whichProcess->output())) {
-                        $foundPath = trim($whichProcess->output());
-                        Log::info("Composer найден через which: {$foundPath}");
-                        return $foundPath;
-                    }
-                } catch (\Exception $e) {
-                    Log::warning("Ошибка при поиске composer через which: " . $e->getMessage());
-                }
+                // Для 'composer' просто возвращаем - будет использован из PATH
+                Log::info("Используем composer из PATH");
+                return $path;
             } else {
                 if (file_exists($path)) {
                     Log::info("Composer найден по пути: {$path}");
@@ -473,20 +478,8 @@ class DeployController extends Controller
             }
         }
 
-        // 3. Fallback - пробуем через which как последнюю попытку
-        try {
-            $whichProcess = Process::run('which composer 2>&1');
-            if ($whichProcess->successful() && trim($whichProcess->output())) {
-                $foundPath = trim($whichProcess->output());
-                Log::info("Composer найден через which (fallback): {$foundPath}");
-                return $foundPath;
-            }
-        } catch (\Exception $e) {
-            Log::error("Composer не найден, все пути проверены. Ошибка: " . $e->getMessage());
-        }
-
-        // 4. Последний fallback на 'composer' (будет ошибка, если не найден)
-        Log::error("Composer не найден, возвращаем 'composer' (может не работать)");
+        // 4. Последний fallback на 'composer' (будет использован из PATH)
+        Log::info("Используем composer из PATH (fallback)");
         return 'composer';
     }
 
