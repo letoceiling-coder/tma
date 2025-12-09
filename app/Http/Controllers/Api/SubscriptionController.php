@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class SubscriptionController extends Controller
 {
@@ -67,7 +68,8 @@ class SubscriptionController extends Controller
             }
 
             $userId = $userData['user']['id'];
-            $botToken = config('services.telegram.bot_token');
+            // Исправляем путь к токену - используем config('telegram.bot_token') вместо config('services.telegram.bot_token')
+            $botToken = config('telegram.bot_token') ?? config('services.telegram.bot_token');
 
             // Если токен бота не настроен, блокируем доступ
             if (!$botToken) {
@@ -81,16 +83,56 @@ class SubscriptionController extends Controller
             // Проверяем подписку через Telegram Bot API
             $chatId = '@' . ltrim($channelUsername, '@');
             
+            // Кешируем результат проверки на 30 секунд, чтобы избежать частых запросов к API
+            $cacheKey = "subscription_check_{$userId}_{$channelUsername}";
+            $cachedResult = Cache::get($cacheKey);
+            
+            if ($cachedResult !== null) {
+                Log::info('Using cached subscription result', [
+                    'channel' => $channelUsername,
+                    'user_id' => $userId,
+                    'is_subscribed' => $cachedResult,
+                ]);
+                return response()->json([
+                    'is_subscribed' => $cachedResult,
+                    'status' => 'cached',
+                ]);
+            }
+            
             Log::info('Checking subscription', [
                 'chat_id' => $chatId,
                 'user_id' => $userId,
                 'channel' => $channelUsername,
             ]);
             
-            $response = Http::get("https://api.telegram.org/bot{$botToken}/getChatMember", [
-                'chat_id' => $chatId,
-                'user_id' => $userId,
-            ]);
+            // Добавляем retry для временных ошибок API
+            $maxRetries = 2;
+            $retryDelay = 500; // миллисекунды
+            $response = null;
+            
+            for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+                if ($attempt > 0) {
+                    usleep($retryDelay * 1000 * $attempt); // Увеличиваем задержку с каждой попыткой
+                }
+                
+                $response = Http::timeout(10)->get("https://api.telegram.org/bot{$botToken}/getChatMember", [
+                    'chat_id' => $chatId,
+                    'user_id' => $userId,
+                ]);
+                
+                // Если запрос успешен или ошибка не временная, выходим из цикла
+                if ($response->successful() || ($response->failed() && $response->status() !== 429 && $response->status() !== 500 && $response->status() !== 502 && $response->status() !== 503)) {
+                    break;
+                }
+                
+                if ($attempt < $maxRetries) {
+                    Log::warning('Retrying subscription check', [
+                        'attempt' => $attempt + 1,
+                        'status' => $response->status(),
+                        'channel' => $channelUsername,
+                    ]);
+                }
+            }
 
             if ($response->failed()) {
                 $errorBody = $response->body();
@@ -161,6 +203,9 @@ class SubscriptionController extends Controller
             // Статусы: member, administrator, creator, restricted - подписан
             $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
 
+            // Кешируем результат на 30 секунд
+            Cache::put($cacheKey, $isSubscribed, 30);
+
             Log::info('Subscription check result', [
                 'channel' => $channelUsername,
                 'user_id' => $userId,
@@ -227,21 +272,56 @@ class SubscriptionController extends Controller
             
             $results = [];
             $allSubscribed = true;
-            $botToken = config('services.telegram.bot_token');
+            // Исправляем путь к токену
+            $botToken = config('telegram.bot_token') ?? config('services.telegram.bot_token');
 
             foreach ($channels as $channel) {
                 $chatId = '@' . ltrim($channel->username, '@');
                 
+                // Проверяем кеш
+                $cacheKey = "subscription_check_{$userId}_{$channel->username}";
+                $cachedResult = Cache::get($cacheKey);
+                
+                if ($cachedResult !== null) {
+                    $results[] = [
+                        'username' => $channel->username,
+                        'title' => $channel->title,
+                        'is_subscribed' => $cachedResult,
+                        'status' => 'cached',
+                    ];
+                    if (!$cachedResult) {
+                        $allSubscribed = false;
+                    }
+                    continue;
+                }
+                
                 try {
-                    $response = Http::get("https://api.telegram.org/bot{$botToken}/getChatMember", [
-                        'chat_id' => $chatId,
-                        'user_id' => $userId,
-                    ]);
+                    // Retry логика для временных ошибок
+                    $maxRetries = 2;
+                    $response = null;
+                    
+                    for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+                        if ($attempt > 0) {
+                            usleep(500000 * $attempt); // 500ms, 1000ms
+                        }
+                        
+                        $response = Http::timeout(10)->get("https://api.telegram.org/bot{$botToken}/getChatMember", [
+                            'chat_id' => $chatId,
+                            'user_id' => $userId,
+                        ]);
+                        
+                        if ($response->successful() || ($response->failed() && $response->status() !== 429 && $response->status() !== 500 && $response->status() !== 502 && $response->status() !== 503)) {
+                            break;
+                        }
+                    }
 
                     if ($response->successful()) {
                         $result = $response->json();
                         $status = $result['result']['status'] ?? null;
                         $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
+                        
+                        // Кешируем результат
+                        Cache::put($cacheKey, $isSubscribed, 30);
                         
                         $results[] = [
                             'username' => $channel->username,
@@ -254,6 +334,7 @@ class SubscriptionController extends Controller
                             $allSubscribed = false;
                         }
                     } else {
+                        // При ошибке не кешируем, чтобы при следующем запросе попробовать снова
                         $results[] = [
                             'username' => $channel->username,
                             'title' => $channel->title,
