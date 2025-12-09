@@ -101,25 +101,25 @@ class TelegramNotificationService
         
         // Правильные шаблоны сообщений для каждого типа приза
         if ($prizeType === 'money' && $prizeValue > 0) {
-            $message = "Поздравляем! Вы выиграли {$prizeValue} рублей!";
+            $message = "Поздравляем, вы выиграли {$prizeValue} рублей";
         } elseif ($prizeType === 'ticket' && $prizeValue > 0) {
             // Правильное склонение для билетов
             if ($prizeValue === 1) {
-                $message = "Поздравляем! Вы выиграли 1 дополнительный билет!";
+                $message = "Поздравляем, вы выиграли 1 дополнительный билет";
             } else {
-                $message = "Поздравляем! Вы выиграли {$prizeValue} дополнительных билетов!";
+                $message = "Поздравляем, вы выиграли {$prizeValue} дополнительных билетов";
             }
         } elseif ($prizeType === 'secret_box') {
-            $message = "Поздравляем! Вы выиграли подарок от спонсора. Свяжитесь с администратором.";
+            $message = "Поздравляем, вы выиграли подарок от спонсора. Свяжитесь с администратором.";
         } else {
             // Пустой сектор или некорректный тип - не отправляем сообщение
             return false;
         }
         
-        // Добавляем кнопку "Связаться" только для денег и секретного бокса (не для билетов)
-        if ($adminLink && ($prizeType === 'money' || $prizeType === 'secret_box')) {
+        // Добавляем кнопку "Связаться с администратором" для всех непустых призов (кроме билетов)
+        if ($adminLink && $prizeType !== 'empty' && ($prizeType === 'money' || $prizeType === 'secret_box')) {
             $keyboard = \App\Telegram\Keyboard::inline()
-                ->url('Связаться', $adminLink)
+                ->url('Связаться с администратором', $adminLink)
                 ->get();
         }
 

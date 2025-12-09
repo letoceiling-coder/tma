@@ -19,16 +19,16 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   // Формируем сообщение о призе
   const getPrizeMessage = () => {
     if (prizeType === 'money' && prizeValue > 0) {
-      return `Поздравляем! Вы выиграли ${prizeValue} рублей!`;
+      return `Поздравляем, вы выиграли ${prizeValue} рублей`;
     } else if (prizeType === 'ticket' && prizeValue > 0) {
       // Правильное склонение для билетов
       if (prizeValue === 1) {
-        return `Поздравляем! Вы выиграли 1 дополнительный билет!`;
+        return `Поздравляем, вы выиграли 1 дополнительный билет`;
       } else {
-        return `Поздравляем! Вы выиграли ${prizeValue} дополнительных билетов!`;
+        return `Поздравляем, вы выиграли ${prizeValue} дополнительных билетов`;
       }
     } else if (prizeType === 'secret_box') {
-      return `Поздравляем! Вы выиграли подарок от спонсора. Свяжитесь с администратором.`;
+      return `Поздравляем, вы выиграли подарок от спонсора. Свяжитесь с администратором.`;
     }
     return '';
   };
@@ -179,7 +179,7 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
                     e.currentTarget.style.opacity = '1';
                   }}
                 >
-                  Связаться
+                  Связаться с администратором
                 </a>
               )}
             </>
@@ -215,7 +215,7 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
                 }}
               >
                 {hasMoreTickets 
-                  ? 'У тебя еще есть билеты — попробуй снова!'
+                  ? 'У тебя ещё есть попытки!'
                   : 'Пригласи друзей, чтобы получить больше билетов!'
                 }
               </p>

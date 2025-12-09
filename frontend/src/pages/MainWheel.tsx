@@ -435,35 +435,65 @@ const MainWheel = () => {
       }
       
       // Показываем попап только если есть выигрыш (не пустой сектор)
+      // ИЛИ если пустой сектор - показываем плашку "Не расстраивайся"
       if (prizeType !== 'empty' && data.prize_awarded) {
+        setShowResultPopup(true);
+      } else if (prizeType === 'empty') {
+        // Пустой сектор - показываем только попап с плашкой
         setShowResultPopup(true);
       }
         
-        // Показываем сообщение о призе, если он был начислен
-        // Исправляем шаблоны сообщений для каждого типа приза
-        if (data.prize_awarded) {
-          if (prizeType === 'money' && prizeValue > 0) {
-            toast.success(`Поздравляем! Вы выиграли ${prizeValue} рублей!`, { duration: 3000 });
-          } else if (prizeType === 'ticket' && prizeValue > 0) {
-            toast.success(`Поздравляем! Вы выиграли ${prizeValue} дополнительный билет!`, { duration: 3000 });
-          } else if (prizeType === 'secret_box') {
-            toast.success(`Поздравляем! Вы выиграли подарок от спонсора. Свяжитесь с администратором.`, { duration: 3000 });
-          }
-        }
-        // Пустой сектор - не показываем сообщение
+        // УБРАНО: Дублирующие toast сообщения
+        // Теперь сообщения показываются только в попапе (SpinResultPopup)
+        // и в Telegram (через SpinNotificationController)
         
-        // Отправляем уведомление после завершения анимации
+        // Отправляем верификацию и уведомление после завершения анимации
+        // Передаем финальный угол для верификации сектора
         try {
           const notifyPath = apiUrl ? `${apiUrl}/api/spin/notify` : `/api/spin/notify`;
-          await fetch(notifyPath, {
+          
+          // Получаем финальный угол поворота из rotation
+          const finalRotation = data.rotation || rotation;
+          
+          const response = await fetch(notifyPath, {
             method: 'POST',
             headers: {
               'X-Telegram-Init-Data': telegramInitData,
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: JSON.stringify({ spin_id: spinId }),
+            body: JSON.stringify({ 
+              spin_id: spinId,
+              final_rotation: finalRotation, // Передаем угол для верификации
+            }),
           });
+          
+          if (response.ok) {
+            const notifyData = await response.json();
+            
+            // Если верификация выявила несоответствие, обновляем данные
+            if (notifyData.sector && notifyData.sector.prize_type !== prizeType) {
+              console.warn('Sector verification detected mismatch, updating prize data', {
+                expected: { prizeType, prizeValue },
+                actual: notifyData.sector,
+              });
+              
+              // Обновляем данные о призе для попапа
+              setLastPrizeType(notifyData.sector.prize_type);
+              setLastPrizeValue(notifyData.sector.prize_value);
+              
+              // Пересчитываем resultValue
+              let newResultValue = 0;
+              if (notifyData.sector.prize_type === 'money') {
+                newResultValue = notifyData.sector.prize_value;
+              } else if (notifyData.sector.prize_type === 'ticket') {
+                newResultValue = notifyData.sector.prize_value;
+              } else if (notifyData.sector.prize_type === 'secret_box') {
+                newResultValue = -1;
+              }
+              setLastResult(newResultValue);
+            }
+          }
         } catch (notifyError) {
           console.error('Ошибка отправки уведомления:', notifyError);
           // Не блокируем работу приложения при ошибке уведомления
@@ -792,3 +822,4 @@ const MainWheel = () => {
 };
 
 export default MainWheel;
+
