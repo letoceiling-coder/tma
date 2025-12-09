@@ -41,7 +41,7 @@ const StartMenu = ({ channelUsernames, onStartGame }: StartMenuProps) => {
   const handleSubscribe = () => {
     haptic.lightTap();
     setShowSubscription(true);
-    checkSubscriptions();
+    checkSubscriptions(true); // Принудительная проверка
   };
 
   const handleHowToPlay = () => {
@@ -103,6 +103,7 @@ const StartMenu = ({ channelUsernames, onStartGame }: StartMenuProps) => {
               onClick={() => {
                 haptic.lightTap();
                 openChannel(channel.username);
+                // Проверка произойдет автоматически через openChannel
               }}
               style={{
                 width: "100%",
@@ -132,7 +133,7 @@ const StartMenu = ({ channelUsernames, onStartGame }: StartMenuProps) => {
         <button
           onClick={() => {
             haptic.lightTap();
-            checkSubscriptions();
+            checkSubscriptions(true); // Принудительная проверка (инвалидация кеша)
           }}
           disabled={isChecking}
           style={{

@@ -14,8 +14,9 @@ interface ChannelSubscriptionResult {
   isChecking: boolean;
   channels: ChannelStatus[];
   allSubscribed: boolean; // Все ли каналы подписаны
-  checkSubscriptions: () => void;
+  checkSubscriptions: (force?: boolean) => void;
   openChannel: (username: string) => void;
+  copyChannelLink: (username: string) => Promise<boolean>;
 }
 
 export const useChannelSubscription = ({
@@ -30,7 +31,7 @@ export const useChannelSubscription = ({
     }))
   );
 
-  const checkSubscriptions = useCallback(async () => {
+  const checkSubscriptions = useCallback(async (force: boolean = false) => {
     const tg = window.Telegram?.WebApp;
     
     if (!tg) {
@@ -59,10 +60,12 @@ export const useChannelSubscription = ({
           // Вызываем backend API для проверки подписки
           try {
             const apiUrl = import.meta.env.VITE_API_URL || '';
-            const apiPath = apiUrl ? `${apiUrl}/api/check-subscription/${username}` 
-                                   : `/api/check-subscription/${username}`;
+            // Добавляем параметр force для принудительной проверки (инвалидация кеша)
+            const forceParam = force ? '?force=1' : '';
+            const apiPath = apiUrl ? `${apiUrl}/api/check-subscription/${username}${forceParam}` 
+                                   : `/api/check-subscription/${username}${forceParam}`;
             
-            console.log(`Проверка подписки на @${username} через API: ${apiPath}`);
+            console.log(`Проверка подписки на @${username} через API: ${apiPath}${force ? ' (force)' : ''}`);
             console.log(`InitData присутствует: ${!!tg.initData}`);
             
             const response = await fetch(apiPath, {
@@ -146,20 +149,101 @@ export const useChannelSubscription = ({
     }
   }, [channelUsernames, onSubscriptionConfirmed]);
 
+  const copyChannelLink = useCallback(async (username: string): Promise<boolean> => {
+    const channelUrl = `https://t.me/${username}`;
+    
+    try {
+      // Пробуем использовать Clipboard API
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(channelUrl);
+        return true;
+      } else {
+        // Fallback для старых браузеров
+        const textArea = document.createElement('textarea');
+        textArea.value = channelUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          return true;
+        } catch (e) {
+          document.body.removeChild(textArea);
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('Error copying link:', error);
+      return false;
+    }
+  }, []);
+
   const openChannel = useCallback((username: string) => {
     const tg = window.Telegram?.WebApp;
     const channelUrl = `https://t.me/${username}`;
+    const platform = tg?.platform || 'web';
     
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(channelUrl);
-    } else {
-      window.open(channelUrl, "_blank");
+    // Определяем, является ли это десктопной версией
+    const isDesktop = platform === 'tdesktop' || platform === 'web' || platform === 'macos' || platform === 'windows' || platform === 'linux';
+    
+    let opened = false;
+    
+    try {
+      if (tg) {
+        // Для мобильных платформ используем openTelegramLink
+        if (!isDesktop && tg.openTelegramLink) {
+          try {
+            tg.openTelegramLink(channelUrl);
+            opened = true;
+          } catch (e) {
+            console.warn('openTelegramLink failed on mobile, trying openLink:', e);
+            if (tg.openLink) {
+              tg.openLink(channelUrl);
+              opened = true;
+            }
+          }
+        } else {
+          // Для десктопа используем openLink (более надежно, чем openTelegramLink)
+          if (tg.openLink) {
+            try {
+              tg.openLink(channelUrl);
+              opened = true;
+            } catch (e) {
+              console.warn('openLink failed, trying window.open:', e);
+            }
+          } else if (tg.openTelegramLink) {
+            // Если openLink недоступен, пробуем openTelegramLink
+            try {
+              tg.openTelegramLink(channelUrl);
+              opened = true;
+            } catch (e) {
+              console.warn('openTelegramLink failed on desktop:', e);
+            }
+          }
+        }
+      }
+      
+      // Если ничего не сработало, используем window.open как последний fallback
+      if (!opened) {
+        window.open(channelUrl, "_blank");
+        opened = true;
+      }
+    } catch (error) {
+      console.error('Error opening channel:', error);
+      // Fallback на обычное открытие
+      if (!opened) {
+        window.open(channelUrl, "_blank");
+      }
     }
 
-    // После открытия канала, через некоторое время проверяем подписку снова
+    // После открытия канала, проверяем подписку с задержкой
+    // Даем время Telegram API обновиться после подписки
+    const delay = isDesktop ? 3500 : 2500; // 2.5-3.5 секунды для обновления API
     setTimeout(() => {
-      checkSubscriptions();
-    }, 3000);
+      checkSubscriptions(true); // Принудительная проверка (инвалидация кеша)
+    }, delay);
   }, [checkSubscriptions]);
 
   // Автоматическая проверка при монтировании
@@ -175,5 +259,6 @@ export const useChannelSubscription = ({
     allSubscribed,
     checkSubscriptions,
     openChannel,
+    copyChannelLink,
   };
 };

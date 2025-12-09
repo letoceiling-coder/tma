@@ -1,7 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useChannelSubscription } from "@/hooks/useChannelSubscription";
 import { haptic } from "@/lib/haptic";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Copy, Check } from "lucide-react";
 
 interface ChannelSubscriptionCheckProps {
   channelUsernames: string[]; // Массив каналов
@@ -12,11 +12,13 @@ const ChannelSubscriptionCheck = ({
   channelUsernames,
   onSubscribed,
 }: ChannelSubscriptionCheckProps) => {
-  const { isChecking, channels, allSubscribed, checkSubscriptions, openChannel } =
+  const { isChecking, channels, allSubscribed, checkSubscriptions, openChannel, copyChannelLink } =
     useChannelSubscription({
       channelUsernames,
       onSubscriptionConfirmed: onSubscribed,
     });
+  
+  const [copiedChannel, setCopiedChannel] = useState<string | null>(null);
 
   // Автоматически вызываем onSubscribed когда все каналы подписаны
   useEffect(() => {
@@ -148,47 +150,105 @@ const ChannelSubscriptionCheck = ({
               </div>
             )}
 
-            {/* Кнопка "Открыть канал" */}
-            <button
-              onClick={() => {
-                haptic.mediumTap();
-                openChannel(channel.username);
-                // Повторная проверка через 3 секунды после открытия
-                setTimeout(() => {
-                  checkSubscriptions();
-                }, 3000);
-              }}
+            {/* Кнопки действий */}
+            <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                flexDirection: "column",
                 gap: "8px",
-                padding: "12px 24px",
-                backgroundColor: "#E98A65",
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: "12px",
-                fontSize: "14px",
-                fontWeight: 600,
-                cursor: "pointer",
-                boxShadow: "0px 4px 8px rgba(233, 138, 101, 0.3)",
-                transition: "all 0.2s ease",
                 width: "100%",
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "#D77A55";
-                e.currentTarget.style.transform = "translateY(-2px)";
-                e.currentTarget.style.boxShadow = "0px 6px 12px rgba(233, 138, 101, 0.4)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "#E98A65";
-                e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0px 4px 8px rgba(233, 138, 101, 0.3)";
-              }}
             >
-              <ExternalLink size={18} />
-              Открыть канал
-            </button>
+              {/* Кнопка "Открыть канал" */}
+              <button
+                onClick={() => {
+                  haptic.mediumTap();
+                  openChannel(channel.username);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "12px 24px",
+                  backgroundColor: "#E98A65",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  boxShadow: "0px 4px 8px rgba(233, 138, 101, 0.3)",
+                  transition: "all 0.2s ease",
+                  width: "100%",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#D77A55";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0px 6px 12px rgba(233, 138, 101, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#E98A65";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0px 4px 8px rgba(233, 138, 101, 0.3)";
+                }}
+              >
+                <ExternalLink size={18} />
+                Открыть канал
+              </button>
+              
+              {/* Кнопка "Скопировать ссылку" */}
+              <button
+                onClick={async () => {
+                  haptic.lightTap();
+                  const success = await copyChannelLink(channel.username);
+                  if (success) {
+                    setCopiedChannel(channel.username);
+                    setTimeout(() => {
+                      setCopiedChannel(null);
+                    }, 2000);
+                  }
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  padding: "10px 24px",
+                  backgroundColor: "transparent",
+                  color: copiedChannel === channel.username ? "#4CAF50" : "#CC5C47",
+                  border: `2px solid ${copiedChannel === channel.username ? "#4CAF50" : "#CC5C47"}`,
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                  width: "100%",
+                }}
+                onMouseEnter={(e) => {
+                  if (copiedChannel !== channel.username) {
+                    e.currentTarget.style.backgroundColor = "#FFE0C5";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (copiedChannel !== channel.username) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
+                }}
+              >
+                {copiedChannel === channel.username ? (
+                  <>
+                    <Check size={16} />
+                    Скопировано!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={16} />
+                    Скопировать ссылку
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -197,7 +257,7 @@ const ChannelSubscriptionCheck = ({
       <button
         onClick={() => {
           haptic.lightTap();
-          checkSubscriptions();
+          checkSubscriptions(true); // Принудительная проверка (инвалидация кеша)
         }}
         style={{
           padding: "10px 24px",

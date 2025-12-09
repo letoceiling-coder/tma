@@ -83,11 +83,15 @@ class SubscriptionController extends Controller
             // Проверяем подписку через Telegram Bot API
             $chatId = '@' . ltrim($channelUsername, '@');
             
+            // Проверяем параметр force для принудительной проверки (инвалидация кеша)
+            $force = $request->query('force', false) || $request->input('force', false);
+            
             // Кешируем результат проверки: положительные результаты на 5 минут, отрицательные на 30 секунд
             $cacheKey = "subscription_check_{$userId}_{$channelUsername}";
             $cachedResult = Cache::get($cacheKey);
             
-            if ($cachedResult !== null) {
+            // Если не принудительная проверка и есть кеш - используем его
+            if (!$force && $cachedResult !== null) {
                 Log::info('Using cached subscription result', [
                     'channel' => $channelUsername,
                     'user_id' => $userId,
@@ -96,6 +100,16 @@ class SubscriptionController extends Controller
                 return response()->json([
                     'is_subscribed' => $cachedResult,
                     'status' => 'cached',
+                ]);
+            }
+            
+            // Если принудительная проверка - инвалидируем кеш
+            if ($force) {
+                Cache::forget($cacheKey);
+                Cache::forget("subscription_check_positive_{$userId}_{$channelUsername}");
+                Log::info('Force check requested, cache invalidated', [
+                    'channel' => $channelUsername,
+                    'user_id' => $userId,
                 ]);
             }
             
@@ -165,8 +179,9 @@ class SubscriptionController extends Controller
                 if (str_contains($errorDescription, 'user not found') || 
                     str_contains($errorDescription, 'chat not found') ||
                     str_contains($errorDescription, 'user is not a member')) {
-                    // Кешируем отрицательный результат на 30 секунд
-                    Cache::put($cacheKey, false, 30);
+                    // Кешируем отрицательный результат на 15 секунд (или меньше при принудительной проверке)
+                    $cacheTime = $force ? 10 : 15;
+                    Cache::put($cacheKey, false, $cacheTime);
                     return response()->json([
                         'is_subscribed' => false,
                         'message' => 'User not found or not a member',
@@ -256,8 +271,9 @@ class SubscriptionController extends Controller
             // Статусы: member, administrator, creator, restricted - подписан
             $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
 
-            // Кешируем результат: положительные на 5 минут, отрицательные на 30 секунд
-            $cacheTime = $isSubscribed ? 300 : 30; // 5 минут для подписанных, 30 секунд для неподписанных
+            // Кешируем результат: положительные на 5 минут, отрицательные на 15 секунд (быстрее обновление)
+            // Если была принудительная проверка и результат отрицательный - кешируем на меньшее время
+            $cacheTime = $isSubscribed ? 300 : ($force ? 10 : 15); // 5 минут для подписанных, 10-15 секунд для неподписанных
             Cache::put($cacheKey, $isSubscribed, $cacheTime);
             
             // Дополнительно кешируем положительные результаты отдельно для использования при ошибках API
