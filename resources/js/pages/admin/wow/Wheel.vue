@@ -373,15 +373,24 @@ export default {
             saving.value = true
             error.value = null
             try {
-                const sectorsData = sectors.value.map(sector => ({
-                    id: sector.id,
-                    prize_type: sector.prize_type,
-                    prize_value: sector.prize_value || 0,
-                    icon_url: sector.icon_url || null,
-                    probability_percent: parseFloat(sector.probability_percent) || 0,
-                    is_active: sector.is_active !== false,
-                    prize_type_id: sector.prize_type_id || null,
-                }))
+                const sectorsData = sectors.value.map(sector => {
+                    // Извлекаем строковое значение prize_type
+                    // Если это объект (с полем type), используем его, иначе используем как строку
+                    let prizeType = sector.prize_type;
+                    if (prizeType && typeof prizeType === 'object') {
+                        prizeType = prizeType.type || prizeType.prize_type || null;
+                    }
+                    
+                    return {
+                        id: sector.id,
+                        prize_type: prizeType || 'empty', // Fallback на 'empty' если не определен
+                        prize_value: sector.prize_value || 0,
+                        icon_url: sector.icon_url || null,
+                        probability_percent: parseFloat(sector.probability_percent) || 0,
+                        is_active: sector.is_active !== false,
+                        prize_type_id: sector.prize_type_id || null,
+                    };
+                })
 
                 const response = await apiPost('/wow/wheel/bulk-update', {
                     sectors: sectorsData,

@@ -106,6 +106,50 @@ class WheelController extends Controller
                 'first_sector' => $request->input('sectors.0', []),
             ]);
 
+            // Нормализуем данные перед валидацией
+            // Если prize_type пришел как объект, извлекаем строковое значение
+            $normalizedSectors = [];
+            foreach ($request->input('sectors', []) as $index => $sector) {
+                $normalizedSector = is_array($sector) ? $sector : [];
+                
+                // Если prize_type - объект/массив, извлекаем строковое значение
+                $prizeType = $sector['prize_type'] ?? null;
+                if (is_array($prizeType)) {
+                    // Если это объект с полем 'type', используем его
+                    $normalizedSector['prize_type'] = $prizeType['type'] ?? $prizeType['prize_type'] ?? 'empty';
+                } elseif (is_string($prizeType)) {
+                    // Если это уже строка, оставляем как есть
+                    $normalizedSector['prize_type'] = $prizeType;
+                } else {
+                    // Если prize_type не определен, используем значение из prizeType relation или 'empty'
+                    // Если есть prize_type_id, пытаемся получить тип из связанного PrizeType
+                    if (isset($sector['prize_type_id']) && $sector['prize_type_id']) {
+                        $prizeTypeModel = \App\Models\PrizeType::find($sector['prize_type_id']);
+                        $normalizedSector['prize_type'] = $prizeTypeModel ? $prizeTypeModel->type : 'empty';
+                    } else {
+                        $normalizedSector['prize_type'] = 'empty';
+                    }
+                }
+                
+                // Сохраняем остальные поля
+                $normalizedSector['id'] = $sector['id'] ?? null;
+                $normalizedSector['prize_value'] = $sector['prize_value'] ?? 0;
+                $normalizedSector['icon_url'] = $sector['icon_url'] ?? null;
+                $normalizedSector['probability_percent'] = $sector['probability_percent'] ?? 0;
+                $normalizedSector['is_active'] = $sector['is_active'] ?? true;
+                $normalizedSector['prize_type_id'] = $sector['prize_type_id'] ?? null;
+                
+                $normalizedSectors[] = $normalizedSector;
+            }
+            
+            // Заменяем sectors в request на нормализованные данные
+            $request->merge(['sectors' => $normalizedSectors]);
+            
+            // Логируем нормализованные данные для отладки
+            Log::debug('Normalized sectors for validation', [
+                'first_sector_normalized' => $normalizedSectors[0] ?? null,
+            ]);
+
             // Валидация с проверкой максимального значения билетов
             $validator = Validator::make($request->all(), [
                 'sectors' => 'required|array',
