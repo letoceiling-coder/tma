@@ -162,3 +162,8 @@ Route::post('/deploy', [DeployController::class, 'deploy'])
 Route::post('/seed', [DeployController::class, 'seed'])
     ->middleware('deploy.token');
 
+// Публичные роуты для просмотра логов
+Route::get('/logs', [\App\Http\Controllers\LogController::class, 'getLogs']);
+Route::get('/logs/files', [\App\Http\Controllers\LogController::class, 'getLogFilesList']);
+Route::post('/logs/clear', [\App\Http\Controllers\LogController::class, 'clearLogs']);
+

@@ -48,8 +48,11 @@ Route::get('/admin/{any?}', function () {
     return view('admin');
 })->where('any', '.*')->name('admin');
 
+// Публичный роут для просмотра логов
+Route::get('/logs', [\App\Http\Controllers\LogController::class, 'index'])->name('logs.index');
+
 // Маршруты для основного приложения (React)
-// Все остальные маршруты (кроме admin, api, storage, build, frontend, assets) отдаются React приложению
+// Все остальные маршруты (кроме admin, api, storage, build, frontend, assets, logs) отдаются React приложению
 Route::get('/{any?}', function ($any = null) {
     // Перед отдачей React view проверяем, не запрашивается ли статический файл
     if ($any && preg_match('/\.(js|css|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$/i', $any)) {
@@ -60,4 +63,4 @@ Route::get('/{any?}', function ($any = null) {
     }
     
     return view('react');
-})->where('any', '^(?!admin|api|storage|build|frontend|assets).*')->name('react');
+})->where('any', '^(?!admin|api|storage|build|frontend|assets|logs).*')->name('react');
