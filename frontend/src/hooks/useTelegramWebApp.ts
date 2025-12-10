@@ -181,14 +181,22 @@ export const useTelegramWebApp = () => {
   // Get initData - real or mock
   const getInitData = useCallback(() => {
     const tg = window.Telegram?.WebApp;
-    if (tg?.initData) {
+    if (tg?.initData && tg.initData.trim() !== '') {
       return tg.initData;
     }
     
     // Mock initData for development (outside Telegram)
     // В продакшене backend проверяет APP_DEBUG и пропускает валидацию
-    return 'mock_init_data_for_development';
-  }, []);
+    // Только если мы действительно не в Telegram
+    if (!isTelegram) {
+      return 'mock_init_data_for_development';
+    }
+    
+    // Если мы в Telegram, но initData нет - возвращаем пустую строку
+    // Это вызовет ошибку на фронтенде, что лучше чем молчаливый сбой
+    console.warn('Telegram WebApp initData is missing');
+    return '';
+  }, [isTelegram]);
 
   return {
     isReady,

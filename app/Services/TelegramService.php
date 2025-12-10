@@ -102,8 +102,39 @@ class TelegramService
      */
     public static function getTelegramId(string $initData): ?int
     {
-        $data = self::parseInitData($initData);
-        return $data['user']['id'] ?? null;
+        try {
+            if (empty($initData) || trim($initData) === '') {
+                Log::warning('Empty initData provided to getTelegramId');
+                return null;
+            }
+
+            $data = self::parseInitData($initData);
+            
+            if (!$data) {
+                Log::warning('Failed to parse initData', [
+                    'init_data_preview' => substr($initData, 0, 50) . '...',
+                    'init_data_length' => strlen($initData),
+                ]);
+                return null;
+            }
+
+            $telegramId = $data['user']['id'] ?? null;
+            
+            if (!$telegramId) {
+                Log::warning('Telegram ID not found in initData', [
+                    'data_keys' => array_keys($data),
+                    'has_user' => isset($data['user']),
+                ]);
+            }
+
+            return $telegramId ? (int) $telegramId : null;
+        } catch (\Exception $e) {
+            Log::error('Error getting Telegram ID from initData', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return null;
+        }
     }
 }
 

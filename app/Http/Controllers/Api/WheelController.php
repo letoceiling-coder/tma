@@ -52,20 +52,46 @@ class WheelController extends Controller
      */
     public function spin(Request $request): JsonResponse
     {
+        $startTime = microtime(true);
+        $requestId = uniqid('spin_', true);
+        
         try {
             $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
             
-            if (!$initData) {
+            // Улучшенное логирование запроса
+            Log::info('Spin request received', [
+                'request_id' => $requestId,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'has_init_data' => !empty($initData),
+                'init_data_length' => $initData ? strlen($initData) : 0,
+                'timestamp' => now()->toIso8601String(),
+            ]);
+            
+            if (!$initData || trim($initData) === '') {
+                Log::warning('Spin request without initData', [
+                    'request_id' => $requestId,
+                    'ip' => $request->ip(),
+                ]);
                 return response()->json([
-                    'error' => 'Init data not provided'
+                    'success' => false,
+                    'error' => 'Init data not provided',
+                    'message' => 'Ошибка авторизации. Пожалуйста, перезагрузите приложение.'
                 ], 401);
             }
 
             $telegramId = TelegramService::getTelegramId($initData);
             
             if (!$telegramId) {
+                Log::warning('Spin request with invalid initData', [
+                    'request_id' => $requestId,
+                    'ip' => $request->ip(),
+                    'init_data_preview' => substr($initData, 0, 50) . '...',
+                ]);
                 return response()->json([
-                    'error' => 'User ID not found'
+                    'success' => false,
+                    'error' => 'User ID not found',
+                    'message' => 'Ошибка авторизации. Пожалуйста, перезагрузите приложение.'
                 ], 401);
             }
 
@@ -84,7 +110,8 @@ class WheelController extends Controller
             );
 
             // Логируем начальное состояние билетов
-            Log::info('Spin request received', [
+            Log::info('Spin request processing', [
+                'request_id' => $requestId,
                 'user_id' => $user->id,
                 'telegram_id' => $telegramId,
                 'tickets_before_spin' => $user->tickets_available,
@@ -427,12 +454,18 @@ class WheelController extends Controller
 
                 // Логируем финальное состояние билетов после всех операций
                 $user->refresh(); // Обновляем данные из БД для точности
+                $duration = round((microtime(true) - $startTime) * 1000, 2); // в миллисекундах
+                
                 Log::info('Spin transaction completed', [
+                    'request_id' => $requestId,
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
                     'spin_id' => $spin->id ?? null,
                     'tickets_final' => $user->tickets_available,
                     'prize_awarded' => $prizeAwarded,
+                    'sector_number' => $winningSector->sector_number,
+                    'prize_type' => $winningSector->prize_type,
+                    'duration_ms' => $duration,
                     'timestamp' => now()->toIso8601String(),
                 ]);
                 
@@ -572,16 +605,23 @@ class WheelController extends Controller
             }
 
         } catch (\Exception $e) {
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+            
             // Логируем в отдельный файл для ошибок пользовательской части
             Log::channel('wheel-errors')->error('Error in wheel spin', [
+                'request_id' => $requestId,
                 'telegram_id' => $telegramId ?? null,
                 'user_id' => $user->id ?? null,
                 'error' => $e->getMessage(),
+                'error_class' => get_class($e),
                 'trace' => $e->getTraceAsString(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
+                'duration_ms' => $duration,
                 'request_data' => [
+                    'ip' => $request->ip() ?? null,
                     'init_data_provided' => !empty($initData),
+                    'init_data_length' => $initData ? strlen($initData) : 0,
                     'tickets_available' => $user->tickets_available ?? null,
                 ],
             ]);

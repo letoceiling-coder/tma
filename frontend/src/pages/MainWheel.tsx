@@ -56,6 +56,8 @@ const MainWheel = () => {
   // Ref для защиты от двойных запросов
   const isSpinningRef = useRef(false);
   const spinAbortControllerRef = useRef<AbortController | null>(null);
+  const lastSpinAttemptRef = useRef<number>(0);
+  const DEBOUNCE_DELAY = 500; // Минимальная задержка между попытками (мс)
 
   // Загрузка секторов с сервера
   const loadWheelConfig = useCallback(async () => {
@@ -358,16 +360,42 @@ const MainWheel = () => {
   }, [tickets, timeLeft]); // Добавили timeLeft в зависимости, чтобы таймер перезапускался при изменении времени
 
   const handleSpin = async () => {
-    // Защита от повторных кликов
+    // Защита от повторных кликов с дебаунсом
+    const now = Date.now();
     if (isSpinningRef.current || isSpinning) {
+      console.log('Spin already in progress, ignoring click');
       return;
     }
+
+    // Дебаунс: предотвращаем слишком частые клики
+    if (now - lastSpinAttemptRef.current < DEBOUNCE_DELAY) {
+      console.log('Debounce: too soon after last attempt');
+      return;
+    }
+    lastSpinAttemptRef.current = now;
 
     // Проверка наличия билетов
     if (tickets <= 0) {
       haptic.warning();
       setSpinError('У тебя закончились билеты. Пригласи друга и получи бесплатный прокрут.');
       navigate("/friends");
+      return;
+    }
+
+    // Проверка наличия initData
+    if (!telegramInitData || telegramInitData.trim() === '' || telegramInitData === 'mock_init_data_for_development') {
+      console.error('Telegram initData is missing or invalid');
+      setSpinError('Ошибка авторизации. Пожалуйста, перезагрузите приложение.');
+      toast.error('Ошибка авторизации. Перезагрузите приложение.');
+      haptic.error();
+      return;
+    }
+
+    // Проверка состояния сети
+    if (!navigator.onLine) {
+      setSpinError('Нет подключения к интернету. Проверьте соединение и попробуйте снова.');
+      toast.error('Нет подключения к интернету');
+      haptic.error();
       return;
     }
 
@@ -391,52 +419,95 @@ const MainWheel = () => {
     // Heavy haptic feedback for spin start
     haptic.heavyTap();
 
-    try {
+    // Функция для выполнения запроса с retry логикой
+    const performSpinRequest = async (retryCount = 0): Promise<Response> => {
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const apiPath = apiUrl ? `${apiUrl}/api/spin` : `/api/spin`;
 
-      // Таймаут для запроса (30 секунд)
+      // Таймаут для запроса (20 секунд - уменьшен для более быстрой реакции)
       const timeoutId = setTimeout(() => {
         abortController.abort();
-      }, 30000);
+      }, 20000);
 
-      const response = await fetch(apiPath, {
-        method: 'POST',
-        headers: {
-          'X-Telegram-Init-Data': telegramInitData,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        signal: abortController.signal,
-      });
+      try {
+        const response = await fetch(apiPath, {
+          method: 'POST',
+          headers: {
+            'X-Telegram-Init-Data': telegramInitData,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          signal: abortController.signal,
+          // Добавляем keepalive для более стабильного соединения
+          keepalive: false,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
+        return response;
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Если это ошибка сети и у нас есть попытки, повторяем
+        if (
+          (fetchError.name === 'TypeError' || fetchError.name === 'NetworkError' || fetchError.name === 'Failed to fetch') &&
+          retryCount < 2 && // Максимум 2 повтора (всего 3 попытки)
+          !abortController.signal.aborted
+        ) {
+          console.log(`Network error, retrying... (attempt ${retryCount + 1}/3)`);
+          // Ждем перед повтором: 1 секунда для первой попытки, 2 секунды для второй
+          await new Promise(resolve => setTimeout(resolve, (retryCount + 1) * 1000));
+          return performSpinRequest(retryCount + 1);
+        }
+        
+        throw fetchError;
+      }
+    };
+
+    try {
+      const response = await performSpinRequest();
 
       // Обработка ошибок HTTP
       if (!response.ok) {
-        let errorMessage = 'Ошибка соединения. Попробуйте снова через несколько секунд.';
+        let errorMessage = 'Ошибка соединения. Попробуйте позже.';
+        let errorData: any = null;
         
         try {
-          const errorData = await response.json();
-          if (errorData.message) {
-            errorMessage = errorData.message;
+          const responseText = await response.text();
+          if (responseText) {
+            errorData = JSON.parse(responseText);
+            if (errorData?.message) {
+              errorMessage = errorData.message;
+            }
           }
         } catch (e) {
           // Если не удалось распарсить JSON, используем стандартное сообщение
+          console.warn('Failed to parse error response:', e);
         }
 
         // Специальная обработка для ошибки отсутствия билетов
-        if (response.status === 400 && errorMessage.includes('билет')) {
+        if (response.status === 400 && (errorMessage.includes('билет') || errorMessage.includes('ticket'))) {
           setSpinError('У тебя закончились билеты. Пригласи друга и получи бесплатный прокрут.');
           setIsSpinning(false);
           isSpinningRef.current = false;
+          spinAbortControllerRef.current = null;
           navigate("/friends");
           return;
         }
 
-        // Для других ошибок показываем общее сообщение
-        if (response.status >= 500) {
-          errorMessage = 'Ошибка соединения. Попробуйте снова через несколько секунд.';
+        // Обработка ошибок авторизации
+        if (response.status === 401) {
+          errorMessage = 'Ошибка авторизации. Пожалуйста, перезагрузите приложение.';
+          console.error('Authorization error:', errorData);
+        }
+        // Обработка ошибок сервера
+        else if (response.status >= 500) {
+          errorMessage = 'Ошибка соединения. Попробуйте позже.';
+          console.error('Server error:', response.status, errorData);
+        }
+        // Обработка ошибок клиента (кроме 400)
+        else if (response.status >= 400) {
+          errorMessage = errorMessage || 'Ошибка запроса. Попробуйте позже.';
+          console.error('Client error:', response.status, errorData);
         }
 
         throw new Error(errorMessage);
@@ -625,31 +696,53 @@ const MainWheel = () => {
     } catch (error: any) {
       // Игнорируем ошибки отмены запроса
       if (error.name === 'AbortError') {
-        console.log('Spin request was aborted');
+        console.log('Spin request was aborted (timeout or manual cancel)');
+        // Если это был таймаут, показываем сообщение
+        if (spinAbortControllerRef.current?.signal.aborted) {
+          setSpinError('Превышено время ожидания. Проверьте соединение и попробуйте снова.');
+          toast.error('Превышено время ожидания', { duration: 4000 });
+          haptic.error();
+        }
+        // Сбрасываем флаги
+        setIsSpinning(false);
+        isSpinningRef.current = false;
+        spinAbortControllerRef.current = null;
         return;
       }
 
-      console.error('Ошибка прокрута:', error);
+      console.error('Ошибка прокрута:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
       
       // Сбрасываем флаги
       setIsSpinning(false);
       isSpinningRef.current = false;
       spinAbortControllerRef.current = null;
 
-      // Определяем сообщение об ошибке
-      let errorMessage = 'Ошибка соединения. Попробуйте снова через несколько секунд.';
+      // Определяем сообщение об ошибке на основе типа ошибки
+      let errorMessage = 'Ошибка соединения. Попробуйте позже.';
       
       if (error.message) {
         errorMessage = error.message;
-      } else if (error.name === 'TypeError' && error.message?.includes('fetch')) {
+      } else if (error.name === 'TypeError') {
+        if (error.message?.includes('fetch') || error.message?.includes('network')) {
+          errorMessage = 'Ошибка соединения. Проверьте интернет-соединение и попробуйте снова.';
+        } else {
+          errorMessage = 'Ошибка соединения. Попробуйте позже.';
+        }
+      } else if (error.name === 'NetworkError' || error.name === 'Failed to fetch') {
         errorMessage = 'Ошибка соединения. Проверьте интернет-соединение и попробуйте снова.';
+      } else if (error.name === 'TimeoutError') {
+        errorMessage = 'Превышено время ожидания. Проверьте соединение и попробуйте снова.';
       }
 
       // Устанавливаем ошибку для отображения
       setSpinError(errorMessage);
       
-      // Показываем toast только для критических ошибок
-      if (!errorMessage.includes('билет')) {
+      // Показываем toast только для критических ошибок (не для ошибок билетов)
+      if (!errorMessage.includes('билет') && !errorMessage.includes('ticket')) {
         toast.error(errorMessage, { duration: 4000 });
       }
 
