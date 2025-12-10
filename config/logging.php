@@ -127,6 +127,14 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'wheel-errors' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/wheel-errors.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_WHEEL_ERRORS_DAYS', 30), // Хранить логи 30 дней
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

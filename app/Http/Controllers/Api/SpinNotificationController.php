@@ -96,6 +96,22 @@ class SpinNotificationController extends Controller
                         ]);
                     } else {
                         // КРИТИЧЕСКАЯ ОШИБКА: Несоответствие приза
+                        Log::channel('wheel-errors')->error('Prize mismatch detected', [
+                            'telegram_id' => $telegramId,
+                            'user_id' => $user->id,
+                            'spin_id' => $spin->id,
+                            'expected_sector' => [
+                                'sector_number' => $verifiedSector->sector_number,
+                                'prize_type' => $verifiedSector->prize_type,
+                                'prize_value' => $verifiedSector->prize_value,
+                            ],
+                            'actual_spin' => [
+                                'sector_number' => $spin->sector_number,
+                                'prize_type' => $spin->prize_type,
+                                'prize_value' => $spin->prize_value,
+                            ],
+                            'final_rotation' => $finalRotation,
+                        ]);
                         Log::error('Prize mismatch detected', [
                             'spin_id' => $spin->id,
                             'expected_sector' => [
@@ -132,6 +148,15 @@ class SpinNotificationController extends Controller
                             ]);
                         } catch (\Exception $e) {
                             DB::rollBack();
+                            Log::channel('wheel-errors')->error('Error correcting prize', [
+                                'telegram_id' => $telegramId,
+                                'user_id' => $user->id,
+                                'spin_id' => $spin->id,
+                                'error' => $e->getMessage(),
+                                'trace' => $e->getTraceAsString(),
+                                'file' => $e->getFile(),
+                                'line' => $e->getLine(),
+                            ]);
                             Log::error('Error correcting prize', [
                                 'spin_id' => $spin->id,
                                 'error' => $e->getMessage(),
@@ -140,6 +165,14 @@ class SpinNotificationController extends Controller
                     }
                 } else {
                     // Сектор не совпадает
+                    Log::channel('wheel-errors')->warning('Sector verification failed', [
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id,
+                        'spin_id' => $spin->id,
+                        'expected_sector_number' => $verifiedSector ? $verifiedSector->sector_number : null,
+                        'actual_sector_number' => $spin->sector_number,
+                        'final_rotation' => $finalRotation,
+                    ]);
                     Log::warning('Sector verification failed', [
                         'spin_id' => $spin->id,
                         'expected_sector_number' => $verifiedSector ? $verifiedSector->sector_number : null,
@@ -255,6 +288,13 @@ class SpinNotificationController extends Controller
                 ]);
             } else {
                 // Неизвестный тип приза - не отправляем
+                Log::channel('wheel-errors')->warning('Unknown prize type, no notification sent', [
+                    'telegram_id' => $telegramId,
+                    'user_id' => $user->id,
+                    'spin_id' => $spin->id,
+                    'prize_type' => $spin->prize_type,
+                    'prize_value' => $spin->prize_value,
+                ]);
                 Log::warning('Unknown prize type, no notification sent', [
                     'spin_id' => $spin->id,
                     'prize_type' => $spin->prize_type,
@@ -274,6 +314,21 @@ class SpinNotificationController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            // Логируем в отдельный файл для ошибок пользовательской части
+            Log::channel('wheel-errors')->error('Error in spin notification/verification', [
+                'telegram_id' => $telegramId ?? null,
+                'user_id' => $user->id ?? null,
+                'spin_id' => $spinId ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request_data' => [
+                    'spin_id' => $request->input('spin_id'),
+                    'final_rotation' => $request->input('final_rotation'),
+                    'init_data_provided' => !empty($initData),
+                ],
+            ]);
             Log::error('Error in spin notification/verification', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

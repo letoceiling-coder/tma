@@ -5,6 +5,7 @@ import BottomNav from "@/components/BottomNav";
 import SecretGiftPopup from "@/components/SecretGiftPopup";
 import SpinResultPopup from "@/components/SpinResultPopup";
 import NoTicketsBanner from "@/components/NoTicketsBanner";
+import ReferralPopup from "@/components/ReferralPopup";
 import wowBunny from "@/assets/wow-bunny.png";
 import { toast } from "sonner";
 import { haptic } from "@/lib/haptic";
@@ -37,6 +38,8 @@ const MainWheel = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [showGiftPopup, setShowGiftPopup] = useState(false);
   const [showResultPopup, setShowResultPopup] = useState(false);
+  const [showReferralPopup, setShowReferralPopup] = useState(false);
+  const [referralPopupShown, setReferralPopupShown] = useState(false);
   const [lastResult, setLastResult] = useState(0);
   const [lastPrizeType, setLastPrizeType] = useState<'money' | 'ticket' | 'secret_box' | 'empty' | null>(null);
   const [lastPrizeValue, setLastPrizeValue] = useState(0);
@@ -140,6 +143,7 @@ const MainWheel = () => {
 
       const data = await response.json();
       const newTickets = data.tickets_available || 0;
+      const prevTickets = tickets;
       setTickets(newTickets);
       
       // Сохраняем интервал восстановления
@@ -148,6 +152,18 @@ const MainWheel = () => {
       }
       if (data.restore_interval_hours) {
         setRestoreIntervalHours(data.restore_interval_hours);
+      }
+      
+      // Проверяем, нужно ли показать pop-up о приглашении друга
+      // Используем информацию с сервера, который проверяет все условия
+      if (data.should_show_referral_popup && !referralPopupShown) {
+        setShowReferralPopup(true);
+      }
+      
+      // Если билеты стали больше 0, сбрасываем флаг показа pop-up
+      // (это означает, что пользователь получил новый билет и цикл обнуления завершен)
+      if (newTickets > 0 && prevTickets === 0) {
+        setReferralPopupShown(false);
       }
       
       // Устанавливаем таймер только если билетов нет (0)
@@ -372,7 +388,20 @@ const MainWheel = () => {
 
       // Обновляем билеты
       const newTickets = data.tickets_available || 0;
+      const prevTickets = tickets;
       setTickets(newTickets);
+      
+      // Проверяем, нужно ли показать pop-up о приглашении друга
+      // Используем информацию с сервера, который проверяет все условия
+      if (data.should_show_referral_popup && !referralPopupShown) {
+        setShowReferralPopup(true);
+      }
+      
+      // Если билеты стали больше 0, сбрасываем флаг показа pop-up
+      // (это означает, что пользователь получил новый билет и цикл обнуления завершен)
+      if (newTickets > 0 && prevTickets === 0) {
+        setReferralPopupShown(false);
+      }
       
       // Обновляем таймер только если билетов нет (0)
       if (newTickets === 0) {
@@ -524,6 +553,38 @@ const MainWheel = () => {
     setTickets(tickets + ticketsReceived);
     // Обновляем билеты с сервера
     loadTickets();
+  };
+
+  // Отметить, что pop-up был показан
+  const markReferralPopupShown = useCallback(async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const apiPath = apiUrl ? `${apiUrl}/api/referral/popup-shown` : `/api/referral/popup-shown`;
+      
+      await fetch(apiPath, {
+        method: 'POST',
+        headers: {
+          'X-Telegram-Init-Data': telegramInitData,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+      
+      setReferralPopupShown(true);
+    } catch (error) {
+      console.error('Ошибка отметки показа pop-up:', error);
+    }
+  }, [telegramInitData]);
+
+  const handleReferralPopupClose = () => {
+    setShowReferralPopup(false);
+    // Отмечаем, что pop-up был показан (даже если пользователь закрыл его)
+    markReferralPopupShown();
+  };
+
+  const handleReferralPopupShare = () => {
+    // Отмечаем, что pop-up был показан и пользователь нажал на кнопку
+    markReferralPopupShown();
   };
 
   // Common button styles
@@ -824,6 +885,12 @@ const MainWheel = () => {
         prizeValue={lastPrizeValue}
         adminUsername={adminUsername}
         hasMoreTickets={tickets > 0}
+      />
+      
+      <ReferralPopup
+        isOpen={showReferralPopup}
+        onClose={handleReferralPopupClose}
+        onShare={handleReferralPopupShare}
       />
     </div>
   );

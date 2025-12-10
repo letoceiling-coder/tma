@@ -102,6 +102,13 @@ class WheelController extends Controller
                     ->get();
                 
                 if ($emptySectors->isEmpty()) {
+                    Log::channel('wheel-errors')->error('No empty sectors configured in always_empty_mode', [
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id,
+                        'settings' => [
+                            'always_empty_mode' => $settings->always_empty_mode,
+                        ],
+                    ]);
                     return response()->json([
                         'error' => 'No empty sectors configured'
                     ], 500);
@@ -114,6 +121,13 @@ class WheelController extends Controller
             }
             
             if (!$winningSector) {
+                Log::channel('wheel-errors')->error('No active sectors configured', [
+                    'telegram_id' => $telegramId,
+                    'user_id' => $user->id,
+                    'settings' => [
+                        'always_empty_mode' => $settings->always_empty_mode,
+                    ],
+                ]);
                 return response()->json([
                     'error' => 'No active sectors configured'
                 ], 500);
@@ -220,6 +234,13 @@ class WheelController extends Controller
                     
                     // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Если значение больше 10, логируем предупреждение
                     if ($ticketsToAdd > 10) {
+                        Log::channel('wheel-errors')->warning('Unusual ticket prize value detected', [
+                            'telegram_id' => $telegramId,
+                            'user_id' => $user->id,
+                            'sector_number' => $winningSector->sector_number,
+                            'prize_value' => $ticketsToAdd,
+                            'note' => 'Prize value exceeds recommended maximum of 10 tickets',
+                        ]);
                         Log::warning('Unusual ticket prize value detected', [
                             'user_id' => $user->id,
                             'sector_number' => $winningSector->sector_number,
@@ -234,10 +255,12 @@ class WheelController extends Controller
                     // Ограничиваем максимальное количество билетов (если есть лимит)
                     // Пока без лимита, но можно добавить
                     
-                    // Если билеты стали больше 0, сбрасываем точку восстановления
+                    // Если билеты стали больше 0, сбрасываем точку восстановления и флаг показа pop-up
                     // (потому что билеты больше не закончились)
                     if ($user->tickets_available > 0) {
                         $user->tickets_depleted_at = null;
+                        // Сбрасываем флаг показа pop-up, чтобы он мог появиться снова при следующем обнулении
+                        $user->referral_popup_shown_at = null;
                     }
                     
                     $user->save();
@@ -270,6 +293,14 @@ class WheelController extends Controller
                     ]);
                 } else {
                     // Неизвестный тип приза или некорректное значение
+                    Log::channel('wheel-errors')->warning('Unknown prize type or invalid value', [
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id,
+                        'spin_id' => $spin->id ?? null,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
+                        'prize_value' => $winningSector->prize_value,
+                    ]);
                     Log::warning('Unknown prize type or invalid value', [
                         'user_id' => $user->id,
                         'sector_number' => $winningSector->sector_number,
@@ -379,10 +410,34 @@ class WheelController extends Controller
 
             } catch (\Exception $e) {
                 DB::rollBack();
+                // Логируем ошибку транзакции
+                Log::channel('wheel-errors')->error('Transaction error in wheel spin', [
+                    'telegram_id' => $telegramId ?? null,
+                    'user_id' => $user->id ?? null,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]);
                 throw $e;
             }
 
         } catch (\Exception $e) {
+            // Логируем в отдельный файл для ошибок пользовательской части
+            Log::channel('wheel-errors')->error('Error in wheel spin', [
+                'telegram_id' => $telegramId ?? null,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request_data' => [
+                    'init_data_provided' => !empty($initData),
+                    'tickets_available' => $user->tickets_available ?? null,
+                ],
+            ]);
+
+            // Также логируем в общий лог для совместимости
             Log::error('Error in wheel spin', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

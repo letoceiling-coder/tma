@@ -78,15 +78,20 @@ class TelegramWebhookController extends Controller
     {
         Log::info('handleStartCommand called', ['chat_id' => $chatId]);
         
-        // Извлекаем параметр из команды /start ref{TELEGRAM_ID}
+        // Извлекаем параметр из команды /start ref_telegramId или /start reftelegramId (для обратной совместимости)
         $text = $message['text'] ?? '';
         $referrerTelegramId = null;
         
         if (str_starts_with($text, '/start ref')) {
-            // Извлекаем telegram_id реферера из команды /start ref{TELEGRAM_ID}
+            // Извлекаем telegram_id реферера из команды /start ref_telegramId или /start reftelegramId
             $parts = explode(' ', $text);
             if (count($parts) >= 2 && str_starts_with($parts[1], 'ref')) {
+                // Поддерживаем оба формата: ref_telegramId и reftelegramId
                 $refParam = substr($parts[1], 3); // Убираем префикс "ref"
+                // Если есть подчеркивание, убираем его
+                if (str_starts_with($refParam, '_')) {
+                    $refParam = substr($refParam, 1);
+                }
                 if (is_numeric($refParam)) {
                     $referrerTelegramId = (int) $refParam;
                     Log::info('Referral link detected', [

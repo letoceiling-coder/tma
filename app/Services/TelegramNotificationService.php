@@ -46,6 +46,13 @@ class TelegramNotificationService
                 ]);
                 return true;
             } else {
+                // Логируем в отдельный файл для ошибок пользовательской части (если это уведомление о призе или билете)
+                Log::channel('wheel-errors')->error('Failed to send Telegram notification', [
+                    'telegram_id' => $telegramId,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'message_preview' => substr($message, 0, 100),
+                ]);
                 Log::error('Failed to send Telegram notification', [
                     'telegram_id' => $telegramId,
                     'status' => $response->status(),
@@ -54,6 +61,15 @@ class TelegramNotificationService
                 return false;
             }
         } catch (\Exception $e) {
+            // Логируем в отдельный файл для ошибок пользовательской части
+            Log::channel('wheel-errors')->error('Error sending Telegram notification', [
+                'telegram_id' => $telegramId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'message_preview' => substr($message, 0, 100),
+            ]);
             Log::error('Error sending Telegram notification', [
                 'telegram_id' => $telegramId,
                 'error' => $e->getMessage(),

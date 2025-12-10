@@ -197,6 +197,18 @@ class StarExchangeController extends Controller
             }
 
         } catch (\Exception $e) {
+            // Логируем в отдельный файл для ошибок пользовательской части
+            Log::channel('wheel-errors')->error('Error processing star exchange webhook', [
+                'exchange_id' => $exchangeId ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request_data' => [
+                    'query_id' => $queryId ?? null,
+                    'user_id' => $exchange->user_id ?? null,
+                ],
+            ]);
             Log::error('Error processing star exchange webhook', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -300,6 +312,17 @@ class StarExchangeController extends Controller
                 
                 $exchange->status = 'failed';
                 $exchange->save();
+
+                // Логируем ошибку транзакции
+                Log::channel('wheel-errors')->error('Error in star exchange transaction (confirmExchange)', [
+                    'telegram_id' => $telegramId ?? null,
+                    'user_id' => $exchange->user_id ?? null,
+                    'exchange_id' => $exchangeId ?? null,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]);
 
                 throw $e;
             }
@@ -419,10 +442,38 @@ class StarExchangeController extends Controller
 
             } catch (\Exception $e) {
                 DB::rollBack();
+                // Логируем ошибку транзакции
+                Log::channel('wheel-errors')->error('Error in star exchange transaction', [
+                    'telegram_id' => $telegramId ?? null,
+                    'user_id' => $user->id ?? null,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'exchange_data' => [
+                        'stars_amount' => $starsAmount,
+                        'tickets_amount' => $ticketsAmount,
+                    ],
+                ]);
                 throw $e;
             }
 
         } catch (\Exception $e) {
+            // Логируем в отдельный файл для ошибок пользовательской части
+            Log::channel('wheel-errors')->error('Error exchanging stars', [
+                'telegram_id' => $telegramId ?? null,
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request_data' => [
+                    'stars_amount' => $starsAmount ?? 50,
+                    'tickets_amount' => $ticketsAmount ?? 20,
+                    'init_data_provided' => !empty($initData),
+                    'stars_balance' => $user->stars_balance ?? null,
+                ],
+            ]);
             Log::error('Error exchanging stars', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

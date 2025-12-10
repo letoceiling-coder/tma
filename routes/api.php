@@ -44,6 +44,7 @@ Route::middleware(['telegram.initdata'])->group(function () {
     Route::get('/referral/link', [ReferralController::class, 'getLink']);
     Route::post('/referral/register', [ReferralController::class, 'register']);
     Route::get('/referral/stats', [ReferralController::class, 'getStats']);
+    Route::post('/referral/popup-shown', [ReferralController::class, 'markPopupShown']);
     
     // Лидерборд
     Route::get('/leaderboard', [LeaderboardController::class, 'index']);

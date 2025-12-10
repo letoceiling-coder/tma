@@ -77,7 +77,8 @@ class ReferralController extends Controller
             // Убираем @ если оно есть
             $botUsername = ltrim($botUsername, '@');
             
-            $referralLink = "https://t.me/{$botUsername}?start=ref{$user->telegram_id}";
+            // Формат ссылки: https://t.me/имя_бота?start=ref_telegramId
+            $referralLink = "https://t.me/{$botUsername}?start=ref_{$user->telegram_id}";
 
             return response()->json([
                 'referral_link' => $referralLink,
@@ -270,6 +271,59 @@ class ReferralController extends Controller
                 'total_invites' => 0,
                 'current_month_invites' => 0,
             ]);
+        }
+    }
+
+    /**
+     * Отметить, что pop-up был показан
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function markPopupShown(Request $request): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            if (!$initData) {
+                return response()->json([
+                    'error' => 'Init data not provided'
+                ], 401);
+            }
+
+            $telegramId = TelegramService::getTelegramId($initData);
+            
+            if (!$telegramId) {
+                return response()->json([
+                    'error' => 'User ID not found'
+                ], 401);
+            }
+
+            $user = User::where('telegram_id', $telegramId)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'error' => 'User not found'
+                ], 404);
+            }
+
+            // Отмечаем, что pop-up был показан
+            $user->referral_popup_shown_at = now();
+            $user->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Popup marked as shown',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error marking popup as shown', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Internal server error'
+            ], 500);
         }
     }
 }

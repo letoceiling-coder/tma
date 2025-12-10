@@ -68,10 +68,26 @@ class TicketController extends Controller
 
             // ВАЖНО: Если у пользователя 0 билетов, но tickets_depleted_at не установлен,
             // устанавливаем его на текущий момент (для запуска таймера)
-            if ($user->tickets_available === 0 && !$user->tickets_depleted_at) {
+            // НО: если referral_popup_shown_at уже установлен, это означает, что билеты уже были 0 ранее
+            // и pop-up уже был показан, поэтому не устанавливаем tickets_depleted_at заново
+            if ($user->tickets_available === 0 && !$user->tickets_depleted_at && !$user->referral_popup_shown_at) {
+                // Это первый раз, когда билеты стали 0 - устанавливаем точку отсчета
                 $user->tickets_depleted_at = now();
                 $user->save();
                 Log::info('Ticket timer started', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
+                ]);
+            } elseif ($user->tickets_available === 0 && !$user->tickets_depleted_at && $user->referral_popup_shown_at) {
+                // Билеты 0, pop-up уже был показан, но tickets_depleted_at не установлен
+                // Это означает, что билеты были восстановлены и снова стали 0
+                // Устанавливаем новую точку отсчета
+                $user->tickets_depleted_at = now();
+                // Сбрасываем флаг показа pop-up, чтобы он мог появиться снова
+                $user->referral_popup_shown_at = null;
+                $user->save();
+                Log::info('Ticket timer restarted after new depletion', [
                     'user_id' => $user->id,
                     'telegram_id' => $user->telegram_id,
                     'tickets_depleted_at' => $user->tickets_depleted_at->toIso8601String(),
@@ -110,11 +126,22 @@ class TicketController extends Controller
             } elseif ($user->tickets_available === 0 && !$user->tickets_depleted_at) {
                 // Если билетов 0, но tickets_depleted_at не установлен, это не должно происходить
                 // но на всякий случай логируем
+                Log::channel('wheel-errors')->warning('User has 0 tickets but tickets_depleted_at is not set', [
+                    'telegram_id' => $user->telegram_id,
+                    'user_id' => $user->id,
+                    'tickets_available' => $user->tickets_available,
+                ]);
                 Log::warning('User has 0 tickets but tickets_depleted_at is not set', [
                     'user_id' => $user->id,
                     'tickets_available' => $user->tickets_available,
                 ]);
             }
+
+            // Проверяем, нужно ли показать pop-up о приглашении друга
+            // Pop-up показывается только если:
+            // 1. Билеты = 0
+            // 2. Pop-up еще не был показан в этом цикле (referral_popup_shown_at === null)
+            $shouldShowReferralPopup = $user->tickets_available === 0 && !$user->referral_popup_shown_at;
 
             return response()->json([
                 'tickets_available' => $user->tickets_available,
@@ -123,9 +150,21 @@ class TicketController extends Controller
                 'restore_interval_seconds' => $restoreIntervalSeconds,
                 'next_ticket_at' => $nextTicketAt,
                 'seconds_until_next_ticket' => $secondsUntilNextTicket,
+                'should_show_referral_popup' => $shouldShowReferralPopup,
             ]);
 
         } catch (\Exception $e) {
+            // Логируем в отдельный файл для ошибок пользовательской части
+            Log::channel('wheel-errors')->error('Error getting tickets', [
+                'telegram_id' => $telegramId ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request_data' => [
+                    'init_data_provided' => !empty($initData),
+                ],
+            ]);
             Log::error('Error getting tickets', [
                 'error' => $e->getMessage(),
             ]);
@@ -150,10 +189,17 @@ class TicketController extends Controller
      */
     private function checkTicketRestore(User $user): void
     {
-        // Если билетов больше 0, сбрасываем точку восстановления
+        // Если билетов больше 0, сбрасываем точку восстановления и флаг показа pop-up
         if ($user->tickets_available > 0) {
             if ($user->tickets_depleted_at) {
                 $user->tickets_depleted_at = null;
+            }
+            // Сбрасываем флаг показа pop-up, чтобы он мог появиться снова при следующем обнулении
+            if ($user->referral_popup_shown_at) {
+                $user->referral_popup_shown_at = null;
+            }
+            if ($user->tickets_depleted_at !== $user->getOriginal('tickets_depleted_at') || 
+                $user->referral_popup_shown_at !== $user->getOriginal('referral_popup_shown_at')) {
                 $user->save();
             }
             return;
@@ -192,10 +238,12 @@ class TicketController extends Controller
                 'new_tickets' => $user->tickets_available,
             ]);
             
-            // Если билеты > 0, сбрасываем точку восстановления
+            // Если билеты > 0, сбрасываем точку восстановления и флаг показа pop-up
             // Новая точка отсчета установится только когда билеты снова станут 0
             if ($user->tickets_available > 0) {
                 $user->tickets_depleted_at = null;
+                // Сбрасываем флаг показа pop-up, чтобы он мог появиться снова при следующем обнулении
+                $user->referral_popup_shown_at = null;
             } else {
                 // Если билеты все еще 0, обновляем точку отсчета на текущий момент
                 // Это нужно для восстановления следующего билета через интервал
