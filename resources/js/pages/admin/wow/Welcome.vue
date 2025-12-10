@@ -260,7 +260,17 @@ export default {
 
                 if (!response.ok) {
                     const errorData = await response.json()
-                    throw new Error(errorData.message || 'Ошибка сохранения настроек')
+                    let errorMessage = errorData.message || 'Ошибка сохранения настроек'
+                    
+                    // Если есть ошибки валидации, показываем их
+                    if (errorData.errors) {
+                        const errorMessages = Object.values(errorData.errors).flat()
+                        if (errorMessages.length > 0) {
+                            errorMessage = errorMessages.join('\n')
+                        }
+                    }
+                    
+                    throw new Error(errorMessage)
                 }
 
                 await Swal.fire({

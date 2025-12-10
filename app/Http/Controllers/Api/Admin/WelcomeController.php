@@ -36,15 +36,65 @@ class WelcomeController extends Controller
      */
     public function update(Request $request): JsonResponse
     {
-        $validator = Validator::make($request->all(), [
+        // Нормализуем данные перед валидацией
+        $data = $request->all();
+        
+        // Обрабатываем welcome_buttons - если это null или пустой массив, не валидируем
+        if (isset($data['welcome_buttons']) && (is_null($data['welcome_buttons']) || (is_array($data['welcome_buttons']) && empty($data['welcome_buttons'])))) {
+            $data['welcome_buttons'] = null;
+        }
+        
+        // Фильтруем пустые кнопки перед валидацией
+        if (isset($data['welcome_buttons']) && is_array($data['welcome_buttons'])) {
+            $data['welcome_buttons'] = array_values(array_filter($data['welcome_buttons'], function($button) {
+                return !empty($button['label']) && !empty($button['url']);
+            }));
+            
+            // Если после фильтрации массив пуст, устанавливаем null
+            if (empty($data['welcome_buttons'])) {
+                $data['welcome_buttons'] = null;
+            }
+        }
+        
+        $validator = Validator::make($data, [
             'welcome_text' => 'nullable|string|max:4096',
-            'welcome_banner_url' => 'nullable|string|max:500|url',
+            'welcome_banner_url' => [
+                'nullable',
+                'string',
+                'max:500',
+                function ($attribute, $value, $fail) {
+                    if (empty($value)) {
+                        return;
+                    }
+                    // Проверяем, что это либо полный URL, либо относительный путь
+                    if (!filter_var($value, FILTER_VALIDATE_URL) && !preg_match('/^\/[^\/]/', $value)) {
+                        $fail('Поле :attribute должно быть валидным URL или относительным путем.');
+                    }
+                },
+            ],
             'welcome_buttons' => 'nullable|array|max:5',
-            'welcome_buttons.*.label' => 'required_with:welcome_buttons|string|max:64',
-            'welcome_buttons.*.url' => 'required_with:welcome_buttons|string|max:500|url',
+            'welcome_buttons.*.label' => 'required|string|max:64',
+            'welcome_buttons.*.url' => [
+                'required',
+                'string',
+                'max:500',
+                function ($attribute, $value, $fail) {
+                    if (empty($value)) {
+                        return;
+                    }
+                    // Проверяем, что это валидный URL
+                    if (!filter_var($value, FILTER_VALIDATE_URL)) {
+                        $fail('Поле :attribute должно быть валидным URL.');
+                    }
+                },
+            ],
         ]);
 
         if ($validator->fails()) {
+            Log::warning('Welcome settings validation failed', [
+                'errors' => $validator->errors()->toArray(),
+                'data' => $data,
+            ]);
             return response()->json([
                 'message' => 'Ошибка валидации',
                 'errors' => $validator->errors(),
@@ -54,7 +104,7 @@ class WelcomeController extends Controller
         $updateData = [];
         
         if ($request->has('welcome_text')) {
-            $updateData['welcome_text'] = $request->welcome_text;
+            $updateData['welcome_text'] = $request->welcome_text ?: null;
         }
         
         if ($request->has('welcome_banner_url')) {
@@ -62,19 +112,7 @@ class WelcomeController extends Controller
         }
         
         if ($request->has('welcome_buttons')) {
-            // Валидация и нормализация кнопок
-            $buttons = $request->welcome_buttons;
-            if (is_array($buttons) && !empty($buttons)) {
-                // Фильтруем пустые кнопки
-                $buttons = array_filter($buttons, function($button) {
-                    return !empty($button['label']) && !empty($button['url']);
-                });
-                // Переиндексируем массив
-                $buttons = array_values($buttons);
-            } else {
-                $buttons = null;
-            }
-            $updateData['welcome_buttons'] = $buttons;
+            $updateData['welcome_buttons'] = $data['welcome_buttons'];
         }
 
         if (empty($updateData)) {
