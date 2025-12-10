@@ -50,6 +50,11 @@ const MainWheel = () => {
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [restoreIntervalSeconds, setRestoreIntervalSeconds] = useState(10800); // 3 часа по умолчанию
   const [restoreIntervalHours, setRestoreIntervalHours] = useState(3); // Часы для отображения
+  const [spinError, setSpinError] = useState<string | null>(null);
+  
+  // Ref для защиты от двойных запросов
+  const isSpinningRef = useRef(false);
+  const spinAbortControllerRef = useRef<AbortController | null>(null);
 
   // Загрузка секторов с сервера
   const loadWheelConfig = useCallback(async () => {
@@ -145,6 +150,11 @@ const MainWheel = () => {
       const newTickets = data.tickets_available || 0;
       const prevTickets = tickets;
       setTickets(newTickets);
+      
+      // Очищаем ошибку при успешной загрузке билетов (если билеты появились)
+      if (newTickets > 0 && prevTickets === 0) {
+        setSpinError(null);
+      }
       
       // Сохраняем интервал восстановления
       if (data.restore_interval_seconds) {
@@ -347,24 +357,47 @@ const MainWheel = () => {
   }, [tickets, timeLeft]); // Добавили timeLeft в зависимости, чтобы таймер перезапускался при изменении времени
 
   const handleSpin = async () => {
+    // Защита от повторных кликов
+    if (isSpinningRef.current || isSpinning) {
+      return;
+    }
+
+    // Проверка наличия билетов
     if (tickets <= 0) {
       haptic.warning();
+      setSpinError('У тебя закончились билеты. Пригласи друга и получи бесплатный прокрут.');
       navigate("/friends");
       return;
     }
 
-    if (isSpinning) return;
+    // Отменяем предыдущий запрос, если он существует
+    if (spinAbortControllerRef.current) {
+      spinAbortControllerRef.current.abort();
+    }
+
+    // Создаем новый AbortController для этого запроса
+    const abortController = new AbortController();
+    spinAbortControllerRef.current = abortController;
+
+    // Устанавливаем флаги
+    isSpinningRef.current = true;
+    setIsSpinning(true);
+    setSpinError(null);
+    setWinningSectorNumber(null); // Сбрасываем подсветку при новом спине
 
     const tg = window.Telegram?.WebApp;
 
     // Heavy haptic feedback for spin start
     haptic.heavyTap();
-    setIsSpinning(true);
-    setWinningSectorNumber(null); // Сбрасываем подсветку при новом спине
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const apiPath = apiUrl ? `${apiUrl}/api/spin` : `/api/spin`;
+
+      // Таймаут для запроса (30 секунд)
+      const timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, 30000);
 
       const response = await fetch(apiPath, {
         method: 'POST',
@@ -373,17 +406,62 @@ const MainWheel = () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        signal: abortController.signal,
       });
 
+      clearTimeout(timeoutId);
+
+      // Обработка ошибок HTTP
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Ошибка прокрута рулетки');
+        let errorMessage = 'Ошибка соединения. Попробуйте снова через несколько секунд.';
+        
+        try {
+          const errorData = await response.json();
+          if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (e) {
+          // Если не удалось распарсить JSON, используем стандартное сообщение
+        }
+
+        // Специальная обработка для ошибки отсутствия билетов
+        if (response.status === 400 && errorMessage.includes('билет')) {
+          setSpinError('У тебя закончились билеты. Пригласи друга и получи бесплатный прокрут.');
+          setIsSpinning(false);
+          isSpinningRef.current = false;
+          navigate("/friends");
+          return;
+        }
+
+        // Для других ошибок показываем общее сообщение
+        if (response.status >= 500) {
+          errorMessage = 'Ошибка соединения. Попробуйте снова через несколько секунд.';
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
 
+      // Валидация ответа от API
       if (!data.success) {
         throw new Error(data.message || 'Ошибка прокрута рулетки');
+      }
+
+      // Валидация обязательных полей в ответе
+      if (!data.sector) {
+        console.error('API returned invalid response: missing sector', data);
+        throw new Error('Некорректный ответ от сервера. Попробуйте снова.');
+      }
+
+      if (!data.sector.sector_number || !data.sector.prize_type) {
+        console.error('API returned invalid response: missing sector data', data);
+        throw new Error('Некорректный ответ от сервера. Попробуйте снова.');
+      }
+
+      if (data.rotation === undefined || data.rotation === null) {
+        console.error('API returned invalid response: missing rotation', data);
+        throw new Error('Некорректный ответ от сервера. Попробуйте снова.');
       }
 
       // Обновляем билеты
@@ -425,6 +503,9 @@ const MainWheel = () => {
         setRestoreIntervalHours(data.restore_interval_hours);
       }
 
+      // Очищаем ошибку при успешном спине
+      setSpinError(null);
+
       // Устанавливаем ротацию от сервера
       if (data.rotation !== undefined) {
         setLastSpinRotation(data.rotation);
@@ -457,6 +538,8 @@ const MainWheel = () => {
       // Ждем завершения анимации (4 секунды)
     setTimeout(async () => {
       setIsSpinning(false);
+      isSpinningRef.current = false;
+      spinAbortControllerRef.current = null;
         setLastResult(resultValue);
       
       // Different haptic feedback based on result
@@ -535,15 +618,38 @@ const MainWheel = () => {
     }, 4100);
 
     } catch (error: any) {
-      console.error('Ошибка прокрута:', error);
-      setIsSpinning(false);
-      
-      if (error.message?.includes('No tickets available')) {
-        toast.error('У вас нет доступных билетов');
-        navigate("/friends");
-      } else {
-        toast.error(error.message || 'Ошибка при прокруте рулетки');
+      // Игнорируем ошибки отмены запроса
+      if (error.name === 'AbortError') {
+        console.log('Spin request was aborted');
+        return;
       }
+
+      console.error('Ошибка прокрута:', error);
+      
+      // Сбрасываем флаги
+      setIsSpinning(false);
+      isSpinningRef.current = false;
+      spinAbortControllerRef.current = null;
+
+      // Определяем сообщение об ошибке
+      let errorMessage = 'Ошибка соединения. Попробуйте снова через несколько секунд.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.name === 'TypeError' && error.message?.includes('fetch')) {
+        errorMessage = 'Ошибка соединения. Проверьте интернет-соединение и попробуйте снова.';
+      }
+
+      // Устанавливаем ошибку для отображения
+      setSpinError(errorMessage);
+      
+      // Показываем toast только для критических ошибок
+      if (!errorMessage.includes('билет')) {
+        toast.error(errorMessage, { duration: 4000 });
+      }
+
+      // Haptic feedback для ошибки
+      haptic.error();
     }
   };
 
@@ -827,27 +933,59 @@ const MainWheel = () => {
         {/* No Tickets Banner - показывается когда билеты закончились */}
         <NoTicketsBanner isVisible={!loadingTickets && tickets === 0} />
 
+        {/* Error message */}
+        {spinError && !isSpinning && (
+          <div
+            style={{
+              width: 'auto',
+              minWidth: '280px',
+              maxWidth: 'min(340px, calc(100vw - 32px))',
+              background: 'linear-gradient(135deg, #FFE4D6 0%, #FFD4C0 100%)',
+              borderRadius: '16px',
+              padding: '12px 20px',
+              boxShadow: '0 4px 16px rgba(224, 124, 99, 0.25)',
+              border: '2px solid rgba(224, 124, 99, 0.2)',
+              marginBottom: '8px',
+            }}
+          >
+            <p
+              style={{
+                fontSize: '14px',
+                fontWeight: 500,
+                color: '#E07C63',
+                margin: 0,
+                lineHeight: '1.4',
+                textAlign: 'center',
+              }}
+            >
+              {spinError}
+            </p>
+          </div>
+        )}
+
         {/* Spin Button */}
         <button
           onClick={handleSpin}
-          disabled={isSpinning || loadingTickets || tickets <= 0}
+          disabled={isSpinning || loadingTickets || tickets <= 0 || isSpinningRef.current}
           style={{
             ...buttonBaseStyle,
             width: 'auto',
             minWidth: '280px',
             maxWidth: 'min(340px, calc(100vw - 32px))',
             height: '56px',
-            background: 'linear-gradient(135deg, #E8B5A0 0%, #D89A85 50%, #C98570 100%)',
-            boxShadow: isSpinning 
-              ? '0 3px 12px rgba(224, 124, 99, 0.35), inset 0 -2px 4px rgba(0,0,0,0.1)' 
+            background: isSpinning || isSpinningRef.current
+              ? 'linear-gradient(135deg, #B8B8B8 0%, #A0A0A0 100%)'
+              : 'linear-gradient(135deg, #E8B5A0 0%, #D89A85 50%, #C98570 100%)',
+            boxShadow: isSpinning || isSpinningRef.current
+              ? '0 3px 12px rgba(0, 0, 0, 0.2), inset 0 -2px 4px rgba(0,0,0,0.1)' 
               : '0 6px 20px rgba(224, 124, 99, 0.4), inset 0 -2px 4px rgba(0,0,0,0.1)',
             borderRadius: '16px',
             fontSize: '18px',
             fontWeight: 700,
             color: '#FFFFFF',
             border: 'none',
-            cursor: (isSpinning || loadingTickets || tickets <= 0) ? 'not-allowed' : 'pointer',
-            opacity: (isSpinning || loadingTickets || tickets <= 0) ? 0.85 : 1,
+            cursor: (isSpinning || loadingTickets || tickets <= 0 || isSpinningRef.current) ? 'not-allowed' : 'pointer',
+            opacity: (isSpinning || loadingTickets || tickets <= 0 || isSpinningRef.current) ? 0.85 : 1,
             letterSpacing: '0.3px',
             textShadow: '0 2px 3px rgba(0,0,0,0.2)',
             textAlign: 'center',
@@ -855,16 +993,34 @@ const MainWheel = () => {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '0 32px',
-            transform: `scale(${isSpinning ? 0.97 : 1})`,
+            transform: `scale(${isSpinning || isSpinningRef.current ? 0.97 : 1})`,
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             boxSizing: 'border-box',
             margin: 0
           }}
-          onMouseDown={(e) => !isSpinning && !loadingTickets && tickets > 0 && (e.currentTarget.style.transform = 'scale(0.95)')}
-          onMouseUp={(e) => !isSpinning && !loadingTickets && tickets > 0 && (e.currentTarget.style.transform = 'scale(1)')}
-          onMouseLeave={(e) => !isSpinning && !loadingTickets && tickets > 0 && (e.currentTarget.style.transform = 'scale(1)')}
+          onMouseDown={(e) => {
+            if (!isSpinning && !loadingTickets && tickets > 0 && !isSpinningRef.current) {
+              e.currentTarget.style.transform = 'scale(0.95)';
+            }
+          }}
+          onMouseUp={(e) => {
+            if (!isSpinning && !loadingTickets && tickets > 0 && !isSpinningRef.current) {
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isSpinning && !loadingTickets && tickets > 0 && !isSpinningRef.current) {
+              e.currentTarget.style.transform = 'scale(1)';
+            }
+          }}
         >
-          {isSpinning ? "Вращаем..." : loadingTickets ? "Загрузка..." : tickets <= 0 ? "Нет билетов" : "Вращать колесо"}
+          {isSpinning || isSpinningRef.current 
+            ? "Вращаем..." 
+            : loadingTickets 
+            ? "Загрузка..." 
+            : tickets <= 0 
+            ? "Нет билетов" 
+            : "Вращать колесо"}
         </button>
       </div>
 

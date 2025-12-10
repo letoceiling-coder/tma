@@ -128,8 +128,34 @@ class WheelController extends Controller
                         'always_empty_mode' => $settings->always_empty_mode,
                     ],
                 ]);
+                Log::error('No active sectors configured', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                ]);
                 return response()->json([
-                    'error' => 'No active sectors configured'
+                    'success' => false,
+                    'error' => 'No active sectors configured',
+                    'message' => 'Ошибка конфигурации рулетки. Обратитесь к администратору.'
+                ], 500);
+            }
+
+            // Валидация сектора перед использованием
+            if (!$winningSector->sector_number || !$winningSector->prize_type) {
+                Log::channel('wheel-errors')->error('Invalid sector data', [
+                    'telegram_id' => $telegramId,
+                    'user_id' => $user->id,
+                    'sector_id' => $winningSector->id,
+                    'sector_number' => $winningSector->sector_number,
+                    'prize_type' => $winningSector->prize_type,
+                ]);
+                Log::error('Invalid sector data', [
+                    'user_id' => $user->id,
+                    'sector_id' => $winningSector->id,
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Invalid sector data',
+                    'message' => 'Ошибка конфигурации сектора. Обратитесь к администратору.'
                 ], 500);
             }
 
@@ -382,6 +408,26 @@ class WheelController extends Controller
                     'verification_index' => floor((360 - $normalizedRotation + 15) / 30) % 12, // Должно быть равно $sectorIndex
                 ]);
 
+                // Финальная валидация данных перед отправкой
+                if (!$spin->id) {
+                    Log::channel('wheel-errors')->error('Spin ID is missing after creation', [
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                    ]);
+                    throw new \Exception('Failed to create spin record');
+                }
+
+                if ($targetRotation === null || !is_numeric($targetRotation)) {
+                    Log::channel('wheel-errors')->error('Invalid rotation calculated', [
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'target_rotation' => $targetRotation,
+                    ]);
+                    throw new \Exception('Failed to calculate rotation');
+                }
+
                 return response()->json([
                     'success' => true,
                     'spin_id' => $spin->id,
@@ -443,10 +489,23 @@ class WheelController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
+            // Определяем тип ошибки для более точного сообщения
+            $errorMessage = 'Произошла ошибка при прокруте рулетки';
+            $statusCode = 500;
+
+            if (str_contains($e->getMessage(), 'ticket')) {
+                $errorMessage = 'У вас нет доступных билетов';
+                $statusCode = 400;
+            } elseif (str_contains($e->getMessage(), 'sector') || str_contains($e->getMessage(), 'configuration')) {
+                $errorMessage = 'Ошибка конфигурации рулетки. Обратитесь к администратору.';
+                $statusCode = 500;
+            }
+
             return response()->json([
+                'success' => false,
                 'error' => 'Internal server error',
-                'message' => 'Произошла ошибка при прокруте рулетки'
-            ], 500);
+                'message' => $errorMessage
+            ], $statusCode);
         }
     }
 }
