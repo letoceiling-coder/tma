@@ -167,20 +167,15 @@ class TelegramWebhookController extends Controller
             
             $bot = new Bot();
             
-            // 1. Отправляем баннер (если указан)
+            // 1. Отправляем баннер (если указан) БЕЗ кнопок
+            // Кнопки будут только в текстовом сообщении, чтобы избежать дублирования
             if (!empty($welcomeBannerUrl)) {
                 try {
                     $photoParams = [
                         'parse_mode' => 'HTML',
                     ];
                     
-                    // Если есть кнопки, добавляем их к баннеру
-                    if (!empty($welcomeButtons) || !empty($rouletteMiniAppUrl)) {
-                        $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $rouletteMiniAppUrl);
-                        if ($keyboard) {
-                            $photoParams['reply_markup'] = json_encode($keyboard);
-                        }
-                    }
+                    // НЕ добавляем кнопки к баннеру - они будут только в текстовом сообщении
                     
                     $bot->sendPhoto($chatId, $welcomeBannerUrl, $photoParams);
                     
