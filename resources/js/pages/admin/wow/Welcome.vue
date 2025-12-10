@@ -306,9 +306,8 @@ export default {
             selectedMediaFile.value = null
         }
 
-        const handleMediaFileSelected = (files) => {
-            if (files && files.length > 0) {
-                const file = files[0]
+        const handleMediaFileSelected = (file) => {
+            if (file) {
                 const url = file.url || (file.metadata?.path ? '/' + file.metadata.path : '')
                 welcomeBannerUrl.value = url || ''
                 selectedMediaFile.value = file
