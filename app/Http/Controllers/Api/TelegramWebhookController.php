@@ -117,28 +117,61 @@ class TelegramWebhookController extends Controller
 
         // Получаем URL баннера
         $welcomeBannerUrl = $settings->welcome_banner_url;
+        
+        // Преобразуем относительный путь в полный URL для Telegram API
+        if (!empty($welcomeBannerUrl)) {
+            // Если это относительный путь (начинается с /), преобразуем в полный URL
+            if (str_starts_with($welcomeBannerUrl, '/')) {
+                $appUrl = rtrim(config('app.url', ''), '/');
+                $welcomeBannerUrl = $appUrl . $welcomeBannerUrl;
+            }
+        }
 
         // Получаем кнопки (из БД или дефолтные)
         $welcomeButtons = $settings->welcome_buttons;
         if (empty($welcomeButtons) || !is_array($welcomeButtons)) {
-            // Дефолтные кнопки
+            // Дефолтные кнопки (вторая строка)
             $welcomeButtons = [
                 ['label' => 'Наш канал', 'url' => 'https://t.me/WowSpin_news'],
                 ['label' => 'Менеджер', 'url' => 'https://t.me/wows_manager'],
             ];
         }
 
-        // Получаем URL Mini App для кнопки (если нужно)
-        $miniAppUrl = config('telegram.mini_app_url');
-        if (empty($miniAppUrl)) {
-            $miniAppUrl = rtrim(config('app.url', ''), '/');
+        // Получаем username бота для формирования URL Mini App
+        $botUsername = config('telegram.bot_username');
+        if (empty($botUsername)) {
+            // Пытаемся получить из API, если не задан в конфиге
+            try {
+                $token = config('telegram.bot_token');
+                if ($token) {
+                    $response = \Http::get("https://api.telegram.org/bot{$token}/getMe");
+                    $me = $response->json();
+                    $botUsername = $me['result']['username'] ?? null;
+                }
+            } catch (\Exception $e) {
+                Log::warning('Failed to get bot username', ['error' => $e->getMessage()]);
+            }
+        }
+        
+        // Формируем URL Mini App для кнопки рулетки
+        $rouletteMiniAppUrl = null;
+        if ($botUsername) {
+            $botUsername = ltrim($botUsername, '@');
+            $rouletteMiniAppUrl = "https://t.me/{$botUsername}/spin";
+        } else {
+            // Fallback на обычный Mini App URL
+            $rouletteMiniAppUrl = config('telegram.mini_app_url');
+            if (empty($rouletteMiniAppUrl)) {
+                $rouletteMiniAppUrl = rtrim(config('app.url', ''), '/');
+            }
         }
 
         Log::info('Preparing to send welcome message', [
             'chat_id' => $chatId,
             'has_banner' => !empty($welcomeBannerUrl),
             'buttons_count' => count($welcomeButtons),
-            'has_mini_app_url' => !empty($miniAppUrl),
+            'has_roulette_mini_app_url' => !empty($rouletteMiniAppUrl),
+            'roulette_url' => $rouletteMiniAppUrl,
         ]);
 
         try {
@@ -159,8 +192,8 @@ class TelegramWebhookController extends Controller
                     ];
                     
                     // Если есть кнопки, добавляем их к баннеру
-                    if (!empty($welcomeButtons)) {
-                        $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $miniAppUrl);
+                    if (!empty($welcomeButtons) || !empty($rouletteMiniAppUrl)) {
+                        $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $rouletteMiniAppUrl);
                         if ($keyboard) {
                             $photoParams['reply_markup'] = json_encode($keyboard);
                         }
@@ -188,8 +221,8 @@ class TelegramWebhookController extends Controller
             ];
 
             // Добавляем inline-кнопки
-            if (!empty($welcomeButtons)) {
-                $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $miniAppUrl);
+            if (!empty($welcomeButtons) || !empty($rouletteMiniAppUrl)) {
+                $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $rouletteMiniAppUrl);
                 if ($keyboard) {
                     $messageParams['reply_markup'] = json_encode($keyboard);
                 }
@@ -403,38 +436,62 @@ class TelegramWebhookController extends Controller
     /**
      * Построить клавиатуру для приветственного сообщения
      * 
-     * @param array $buttons Массив кнопок [['label' => '...', 'url' => '...'], ...]
-     * @param string|null $miniAppUrl URL Mini App (опционально, добавляется как первая кнопка)
+     * Структура:
+     * - Первая строка: одна широкая кнопка "🧡 ПЕРЕЙТИ В РУЛЕТКУ 🧡" (WebApp)
+     * - Вторая строка: две URL кнопки из настроек
+     * 
+     * @param array $buttons Массив кнопок [['label' => '...', 'url' => '...'], ...] (для второй строки)
+     * @param string|null $rouletteMiniAppUrl URL Mini App для кнопки рулетки
      * @return array|null
      */
-    protected function buildWelcomeKeyboard(array $buttons, ?string $miniAppUrl = null): ?array
+    protected function buildWelcomeKeyboard(array $buttons, ?string $rouletteMiniAppUrl = null): ?array
     {
-        if (empty($buttons) && empty($miniAppUrl)) {
+        if (empty($buttons) && empty($rouletteMiniAppUrl)) {
             return null;
         }
         
-        $keyboard = Keyboard::inline();
+        $inlineKeyboard = [];
         
-        // Добавляем кнопку Mini App первой, если URL указан
-        if (!empty($miniAppUrl)) {
-            $keyboard->webApp('🚀 Открыть приложение', $miniAppUrl);
+        // Первая строка: одна широкая кнопка "🧡 ПЕРЕЙТИ В РУЛЕТКУ 🧡"
+        if (!empty($rouletteMiniAppUrl)) {
+            $inlineKeyboard[] = [
+                [
+                    'text' => '🧡 ПЕРЕЙТИ В РУЛЕТКУ 🧡',
+                    'web_app' => ['url' => $rouletteMiniAppUrl]
+                ]
+            ];
         }
         
-        // Добавляем остальные кнопки
-        foreach ($buttons as $button) {
-            if (isset($button['label']) && isset($button['url']) && !empty($button['label']) && !empty($button['url'])) {
-                $keyboard->url($button['label'], $button['url']);
+        // Вторая строка: две URL кнопки
+        if (!empty($buttons) && is_array($buttons)) {
+            $urlButtons = [];
+            foreach ($buttons as $button) {
+                if (isset($button['label']) && isset($button['url']) && !empty($button['label']) && !empty($button['url'])) {
+                    $urlButtons[] = [
+                        'text' => $button['label'],
+                        'url' => $button['url']
+                    ];
+                    // Ограничиваем максимум 2 кнопки во второй строке
+                    if (count($urlButtons) >= 2) {
+                        break;
+                    }
+                }
+            }
+            
+            // Добавляем кнопки второй строки
+            if (!empty($urlButtons)) {
+                $inlineKeyboard[] = $urlButtons;
             }
         }
         
-        $result = $keyboard->get();
-        
         // Если клавиатура пустая, возвращаем null
-        if (empty($result['inline_keyboard']) || empty($result['inline_keyboard'][0])) {
+        if (empty($inlineKeyboard)) {
             return null;
         }
         
-        return $result;
+        return [
+            'inline_keyboard' => $inlineKeyboard
+        ];
     }
 }
 
