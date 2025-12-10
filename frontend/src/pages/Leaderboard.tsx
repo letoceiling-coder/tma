@@ -27,6 +27,8 @@ const Leaderboard = () => {
   const [topPrize, setTopPrize] = useState(1500); // По умолчанию
   const [referralLink, setReferralLink] = useState("https://t.me/wow_roulette_bot");
   const [hasReferrals, setHasReferrals] = useState(false);
+  const [currentUser, setCurrentUser] = useState<LeaderEntry | null>(null);
+  const [currentUserRank, setCurrentUserRank] = useState<number | null>(null);
 
   // Загрузка лидерборда и реферальной ссылки с сервера
   useEffect(() => {
@@ -53,12 +55,95 @@ const Leaderboard = () => {
 
         if (leaderboardResponse.ok) {
           const leaderboardData = await leaderboardResponse.json();
-          setLeaders(leaderboardData.leaderboard || []);
+          const leaderboard = leaderboardData.leaderboard || [];
+          
+          // Применяем визуальные призы для топ-3 (только отображение)
+          const leadersWithPrizes = leaderboard.map((leader: LeaderEntry) => {
+            let visualPrize = 0;
+            if (leader.rank === 1) {
+              visualPrize = 1500;
+            } else if (leader.rank === 2) {
+              visualPrize = 1000;
+            } else if (leader.rank === 3) {
+              visualPrize = 500;
+            }
+            return {
+              ...leader,
+              prize_amount: visualPrize, // Визуальное отображение приза
+            };
+          });
+          
+          setLeaders(leadersWithPrizes);
           setHasReferrals(leaderboardData.has_referrals || false);
           
           // Устанавливаем приз за 1 место для баннера
-          if (leaderboardData.leaderboard && leaderboardData.leaderboard.length > 0) {
-            setTopPrize(leaderboardData.leaderboard[0].prize_amount || 1500);
+          if (leadersWithPrizes.length > 0) {
+            setTopPrize(1500); // Всегда 1500 для первого места
+          }
+
+          // Загружаем статистику текущего пользователя для расчета позиции
+          if (initData && user?.id) {
+            const statsPath = apiUrl ? `${apiUrl}/api/referral/stats` : `/api/referral/stats`;
+            const statsResponse = await fetch(statsPath, {
+              method: 'GET',
+              headers: {
+                'X-Telegram-Init-Data': initData,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+            });
+
+            if (statsResponse.ok) {
+              const statsData = await statsResponse.json();
+              const currentUserInvites = statsData.total_invites || 0;
+              
+              // Проверяем, есть ли пользователь уже в топе
+              const userInTop = leadersWithPrizes.find((leader: LeaderEntry) => leader.telegram_id === user.id);
+              
+              if (userInTop) {
+                // Пользователь уже в топе
+                setCurrentUserRank(userInTop.rank);
+              } else if (currentUserInvites > 0) {
+                // Рассчитываем позицию пользователя на основе количества приглашенных
+                // Позиция = количество пользователей с большим количеством приглашений + 1
+                let userRank = leadersWithPrizes.length + 1;
+                
+                // Находим правильную позицию, сравнивая количество приглашенных
+                // Если у пользователя больше приглашенных, чем у кого-то в топе, он должен быть выше
+                for (let i = 0; i < leadersWithPrizes.length; i++) {
+                  if (currentUserInvites >= leadersWithPrizes[i].invites_count) {
+                    // У пользователя больше или равно приглашенных - он должен быть на этой позиции или выше
+                    userRank = i + 1;
+                    break;
+                  }
+                }
+                
+                // Если у пользователя больше приглашенных, чем у всех в топе, он на первом месте
+                if (leadersWithPrizes.length > 0 && currentUserInvites > leadersWithPrizes[0].invites_count) {
+                  userRank = 1;
+                }
+                
+                // Определяем визуальный приз для текущего пользователя (только для топ-3)
+                let visualPrize = 0;
+                if (userRank === 1) {
+                  visualPrize = 1500;
+                } else if (userRank === 2) {
+                  visualPrize = 1000;
+                } else if (userRank === 3) {
+                  visualPrize = 500;
+                }
+                
+                setCurrentUser({
+                  rank: userRank,
+                  telegram_id: user.id,
+                  username: user.username || userName || `User ${user.id}`,
+                  avatar_url: user.photo_url || null,
+                  invites_count: currentUserInvites,
+                  prize_amount: visualPrize,
+                });
+                setCurrentUserRank(userRank);
+              }
+            }
           }
         }
 
@@ -467,8 +552,8 @@ const Leaderboard = () => {
               </span>
             </div>
 
-            {/* Prize */}
-            {leader.prize_amount > 0 && (
+            {/* Prize - показываем только для топ-3 */}
+            {leader.rank <= 3 && leader.prize_amount > 0 && (
               <div 
                 className="px-4 py-2 rounded-xl flex-shrink-0"
                 style={{
@@ -485,6 +570,116 @@ const Leaderboard = () => {
             )}
           </div>
           ))
+        )}
+
+        {/* Отображение текущего пользователя, если он не в топ-3 */}
+        {currentUser && !leaders.some(leader => leader.telegram_id === currentUser.telegram_id) && (
+          <>
+            {/* Разделитель */}
+            <div 
+              style={{
+                height: '1px',
+                background: 'rgba(255, 255, 255, 0.3)',
+                margin: '16px 0',
+              }}
+            />
+            
+            {/* Строка текущего пользователя */}
+            <div 
+              className="flex items-center gap-3 px-4 py-3 rounded-xl"
+              style={{
+                background: 'rgba(232, 139, 114, 0.85)', // Выделенный фон для текущего пользователя
+                backdropFilter: 'blur(8px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                border: '2px solid rgba(255, 255, 255, 0.4)', // Дополнительное выделение
+              }}
+            >
+              {/* Avatar with rank */}
+              <div className="relative flex-shrink-0">
+                <div 
+                  className="w-12 h-12 rounded-full overflow-hidden"
+                  style={{ 
+                    border: '2px solid #FFFFFF',
+                    background: currentUser.avatar_url ? 'transparent' : '#A8D5BA'
+                  }}
+                >
+                  {currentUser.avatar_url ? (
+                    <img 
+                      src={currentUser.avatar_url} 
+                      alt={currentUser.username}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span style={{ fontSize: '24px' }}>👤</span>
+                  )}
+                </div>
+                <div 
+                  className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center"
+                  style={{
+                    background: '#E88B72',
+                    color: 'white',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    border: '2px solid white',
+                    fontFamily: "'Nunito', sans-serif"
+                  }}
+                >
+                  {currentUser.rank}
+                </div>
+              </div>
+
+              {/* Name */}
+              <div className="flex-1 min-w-0">
+                <span 
+                  style={{
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    color: '#FFFFFF',
+                    fontFamily: "'Nunito', sans-serif"
+                  }}
+                >
+                  {currentUser.username || `User ${currentUser.telegram_id}`}
+                </span>
+              </div>
+
+              {/* Referrals */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+                <span 
+                  style={{
+                    fontSize: '14px',
+                    color: '#FFFFFF',
+                    fontWeight: 600,
+                    fontFamily: "'Nunito', sans-serif"
+                  }}
+                >
+                  {currentUser.invites_count}
+                </span>
+              </div>
+
+              {/* Prize - показываем только если пользователь в топ-3 */}
+              {currentUser.rank <= 3 && currentUser.prize_amount > 0 && (
+                <div 
+                  className="px-4 py-2 rounded-xl flex-shrink-0"
+                  style={{
+                    background: 'linear-gradient(135deg, #FFFFFF 0%, #F5F5F5 100%)',
+                    color: '#E88B72',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                    fontFamily: "'Nunito', sans-serif"
+                  }}
+                >
+                  {currentUser.prize_amount} ₽
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
