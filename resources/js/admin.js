@@ -298,6 +298,12 @@ const routes = [
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
+                path: 'wow/welcome',
+                name: 'admin.wow.welcome',
+                component: () => import('./pages/admin/wow/Welcome.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
+            },
+            {
                 path: 'settings/bot',
                 name: 'admin.settings.bot',
                 component: () => import('./pages/admin/BotConfig.vue'),

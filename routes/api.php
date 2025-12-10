@@ -149,6 +149,10 @@ Route::middleware('auth:sanctum')->group(function () {
                 
                 // Типы призов
                 Route::apiResource('prize-types', \App\Http\Controllers\Api\Admin\PrizeTypeController::class);
+                
+                // Настройки приветствия
+                Route::get('welcome', [\App\Http\Controllers\Api\Admin\WelcomeController::class, 'index']);
+                Route::post('welcome', [\App\Http\Controllers\Api\Admin\WelcomeController::class, 'update']);
             });
         });
     });

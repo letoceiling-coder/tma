@@ -15,6 +15,9 @@ class WheelSetting extends Model
         'leaderboard_period_months',
         'admin_username',
         'initial_tickets_count',
+        'welcome_text',
+        'welcome_banner_url',
+        'welcome_buttons',
     ];
 
     protected $casts = [
@@ -22,6 +25,7 @@ class WheelSetting extends Model
         'ticket_restore_hours' => 'integer',
         'leaderboard_period_months' => 'integer',
         'initial_tickets_count' => 'integer',
+        'welcome_buttons' => 'array',
     ];
 
     /**

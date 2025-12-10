@@ -7,6 +7,7 @@ use App\Telegram\Bot;
 use App\Telegram\Keyboard;
 use App\Models\User;
 use App\Models\Referral;
+use App\Models\WheelSetting;
 use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -105,26 +106,39 @@ class TelegramWebhookController extends Controller
             }
         }
         
-        $config = config('telegram.welcome_message');
+        // Получаем настройки приветствия из БД
+        $settings = WheelSetting::getSettings();
         
-        Log::info('Welcome message config', [
-            'config' => $config,
-            'enabled' => $config['enabled'] ?? true,
-        ]);
-
-        // Проверяем, включено ли приветственное сообщение
-        if (!($config['enabled'] ?? true)) {
-            Log::info('Welcome message is disabled');
-            return;
+        // Получаем текст приветствия (из БД или дефолтный)
+        $welcomeText = $settings->welcome_text;
+        if (empty($welcomeText)) {
+            $welcomeText = "Добро пожаловать в WOW Spin!\n\nКрути рулетку, зови друзей и выигрывай подарки каждый день 🎁";
         }
 
-        $welcomeText = $config['text'] ?? '<b>Добро пожаловать!</b>';
-        $miniAppButton = $config['mini_app_button'] ?? [];
+        // Получаем URL баннера
+        $welcomeBannerUrl = $settings->welcome_banner_url;
 
-        Log::info('Preparing to send message', [
+        // Получаем кнопки (из БД или дефолтные)
+        $welcomeButtons = $settings->welcome_buttons;
+        if (empty($welcomeButtons) || !is_array($welcomeButtons)) {
+            // Дефолтные кнопки
+            $welcomeButtons = [
+                ['label' => 'Наш канал', 'url' => 'https://t.me/WowSpin_news'],
+                ['label' => 'Менеджер', 'url' => 'https://t.me/wows_manager'],
+            ];
+        }
+
+        // Получаем URL Mini App для кнопки (если нужно)
+        $miniAppUrl = config('telegram.mini_app_url');
+        if (empty($miniAppUrl)) {
+            $miniAppUrl = rtrim(config('app.url', ''), '/');
+        }
+
+        Log::info('Preparing to send welcome message', [
             'chat_id' => $chatId,
-            'welcome_text' => $welcomeText,
-            'mini_app_button' => $miniAppButton,
+            'has_banner' => !empty($welcomeBannerUrl),
+            'buttons_count' => count($welcomeButtons),
+            'has_mini_app_url' => !empty($miniAppUrl),
         ]);
 
         try {
@@ -137,51 +151,57 @@ class TelegramWebhookController extends Controller
             
             $bot = new Bot();
             
-            $params = [
+            // 1. Отправляем баннер (если указан)
+            if (!empty($welcomeBannerUrl)) {
+                try {
+                    $photoParams = [
+                        'parse_mode' => 'HTML',
+                    ];
+                    
+                    // Если есть кнопки, добавляем их к баннеру
+                    if (!empty($welcomeButtons)) {
+                        $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $miniAppUrl);
+                        if ($keyboard) {
+                            $photoParams['reply_markup'] = json_encode($keyboard);
+                        }
+                    }
+                    
+                    $bot->sendPhoto($chatId, $welcomeBannerUrl, $photoParams);
+                    
+                    Log::info('Welcome banner sent', [
+                        'chat_id' => $chatId,
+                        'banner_url' => $welcomeBannerUrl,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send welcome banner', [
+                        'chat_id' => $chatId,
+                        'banner_url' => $welcomeBannerUrl,
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Продолжаем отправку текстового сообщения даже если баннер не отправился
+                }
+            }
+            
+            // 2. Отправляем текстовое сообщение
+            $messageParams = [
                 'parse_mode' => 'HTML',
             ];
 
-            // Добавляем кнопку Mini App, если включена
-            if (!empty($miniAppButton['enabled'])) {
-                // Используем URL из настроек кнопки, если он задан, иначе из общих настроек
-                $buttonUrl = !empty($miniAppButton['url']) 
-                    ? $miniAppButton['url'] 
-                    : config('telegram.mini_app_url');
-                
-                // Если URL все еще пустой, пробуем использовать APP_URL
-                if (empty($buttonUrl)) {
-                    $buttonUrl = rtrim(config('app.url', ''), '/');
-                }
-                
-                Log::info('Mini App button enabled', [
-                    'button_url' => $buttonUrl,
-                    'button_text' => $miniAppButton['text'] ?? '🚀 Открыть приложение',
-                    'mini_app_url_config' => config('telegram.mini_app_url'),
-                    'app_url' => config('app.url'),
-                ]);
-                
-                if (!empty($buttonUrl)) {
-                    $keyboard = Keyboard::inline()
-                        ->webApp(
-                            $miniAppButton['text'] ?? '🚀 Открыть приложение',
-                            $buttonUrl
-                        )
-                        ->get();
-
-                    $params['reply_markup'] = json_encode($keyboard);
-                    
-                    Log::info('Keyboard created', ['keyboard' => $params['reply_markup']]);
-                } else {
-                    Log::warning('Mini App button enabled but URL is empty - no URL available from config');
+            // Добавляем inline-кнопки
+            if (!empty($welcomeButtons)) {
+                $keyboard = $this->buildWelcomeKeyboard($welcomeButtons, $miniAppUrl);
+                if ($keyboard) {
+                    $messageParams['reply_markup'] = json_encode($keyboard);
                 }
             }
 
-            Log::info('Sending message', [
+            Log::info('Sending welcome message', [
                 'chat_id' => $chatId,
-                'params' => $params,
+                'text_length' => strlen($welcomeText),
+                'has_keyboard' => !empty($messageParams['reply_markup']),
             ]);
 
-            $result = $bot->sendMessage($chatId, $welcomeText, $params);
+            $result = $bot->sendMessage($chatId, $welcomeText, $messageParams);
 
             Log::info('Welcome message sent successfully', [
                 'chat_id' => $chatId,
@@ -378,6 +398,43 @@ class TelegramWebhookController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
         }
+    }
+
+    /**
+     * Построить клавиатуру для приветственного сообщения
+     * 
+     * @param array $buttons Массив кнопок [['label' => '...', 'url' => '...'], ...]
+     * @param string|null $miniAppUrl URL Mini App (опционально, добавляется как первая кнопка)
+     * @return array|null
+     */
+    protected function buildWelcomeKeyboard(array $buttons, ?string $miniAppUrl = null): ?array
+    {
+        if (empty($buttons) && empty($miniAppUrl)) {
+            return null;
+        }
+        
+        $keyboard = Keyboard::inline();
+        
+        // Добавляем кнопку Mini App первой, если URL указан
+        if (!empty($miniAppUrl)) {
+            $keyboard->webApp('🚀 Открыть приложение', $miniAppUrl);
+        }
+        
+        // Добавляем остальные кнопки
+        foreach ($buttons as $button) {
+            if (isset($button['label']) && isset($button['url']) && !empty($button['label']) && !empty($button['url'])) {
+                $keyboard->url($button['label'], $button['url']);
+            }
+        }
+        
+        $result = $keyboard->get();
+        
+        // Если клавиатура пустая, возвращаем null
+        if (empty($result['inline_keyboard']) || empty($result['inline_keyboard'][0])) {
+            return null;
+        }
+        
+        return $result;
     }
 }
 

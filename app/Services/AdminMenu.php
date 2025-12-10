@@ -93,6 +93,12 @@ class AdminMenu
                                'icon' => 'award',
                                'roles' => ['admin', 'manager'],
                            ],
+                           [
+                               'title' => 'Приветствие / Баннер',
+                               'route' => 'admin.wow.welcome',
+                               'icon' => 'message-square',
+                               'roles' => ['admin', 'manager'],
+                           ],
                 ],
             ],
             [
