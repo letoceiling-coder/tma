@@ -137,33 +137,16 @@ class TelegramWebhookController extends Controller
             ];
         }
 
-        // Получаем username бота для формирования URL Mini App
-        $botUsername = config('telegram.bot_username');
-        if (empty($botUsername)) {
-            // Пытаемся получить из API, если не задан в конфиге
-            try {
-                $token = config('telegram.bot_token');
-                if ($token) {
-                    $response = \Http::get("https://api.telegram.org/bot{$token}/getMe");
-                    $me = $response->json();
-                    $botUsername = $me['result']['username'] ?? null;
-                }
-            } catch (\Exception $e) {
-                Log::warning('Failed to get bot username', ['error' => $e->getMessage()]);
-            }
+        // Получаем URL Mini App для кнопки рулетки
+        // WebApp кнопки требуют HTTPS URL, а не t.me ссылки
+        $rouletteMiniAppUrl = config('telegram.mini_app_url');
+        if (empty($rouletteMiniAppUrl)) {
+            $rouletteMiniAppUrl = rtrim(config('app.url', ''), '/');
         }
         
-        // Формируем URL Mini App для кнопки рулетки
-        $rouletteMiniAppUrl = null;
-        if ($botUsername) {
-            $botUsername = ltrim($botUsername, '@');
-            $rouletteMiniAppUrl = "https://t.me/{$botUsername}/spin";
-        } else {
-            // Fallback на обычный Mini App URL
-            $rouletteMiniAppUrl = config('telegram.mini_app_url');
-            if (empty($rouletteMiniAppUrl)) {
-                $rouletteMiniAppUrl = rtrim(config('app.url', ''), '/');
-            }
+        // Убеждаемся, что URL заканчивается на / (для корректной работы Mini App)
+        if (!empty($rouletteMiniAppUrl) && !str_ends_with($rouletteMiniAppUrl, '/')) {
+            $rouletteMiniAppUrl .= '/';
         }
 
         Log::info('Preparing to send welcome message', [
