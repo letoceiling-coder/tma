@@ -32,6 +32,7 @@ class WheelController extends Controller
                 'always_empty_mode' => $settings->always_empty_mode,
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
+                'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
             ],
         ]);
     }
@@ -254,6 +255,7 @@ class WheelController extends Controller
             'always_empty_mode' => 'nullable|boolean',
             'ticket_restore_hours' => 'nullable|integer|min:1|max:24',
             'admin_username' => 'nullable|string|max:255',
+            'initial_tickets_count' => 'nullable|integer|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -276,6 +278,10 @@ class WheelController extends Controller
         if ($request->has('admin_username')) {
             $updateData['admin_username'] = $request->admin_username;
         }
+        
+        if ($request->has('initial_tickets_count')) {
+            $updateData['initial_tickets_count'] = $request->initial_tickets_count;
+        }
 
         if (empty($updateData)) {
             return response()->json([
@@ -291,6 +297,7 @@ class WheelController extends Controller
                 'always_empty_mode' => $settings->always_empty_mode,
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
+                'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
             ],
         ]);
     }

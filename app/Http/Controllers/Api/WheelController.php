@@ -7,6 +7,7 @@ use App\Models\WheelSector;
 use App\Models\WheelSetting;
 use App\Models\Spin;
 use App\Models\User;
+use App\Models\UserTicket;
 use App\Services\TelegramService;
 use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
@@ -95,6 +96,10 @@ class WheelController extends Controller
                 ], 401);
             }
 
+            // Получаем настройки для определения количества стартовых билетов
+            $settings = WheelSetting::getSettings();
+            $initialTicketsCount = $settings->initial_tickets_count ?? 1; // По умолчанию 1 билет
+
             // Найти или создать пользователя
             $user = User::firstOrCreate(
                 ['telegram_id' => $telegramId],
@@ -102,12 +107,28 @@ class WheelController extends Controller
                     'name' => 'Telegram User',
                     'email' => "telegram_{$telegramId}@telegram.local",
                     'password' => bcrypt(str()->random(32)),
-                    'tickets_available' => 3, // Начальное количество билетов для нового пользователя
+                    'tickets_available' => $initialTicketsCount, // Используем настройку из админки
                     'stars_balance' => 0,
                     'total_spins' => 0,
                     'total_wins' => 0,
                 ]
             );
+            
+            // Если это новый пользователь, создаем запись в user_tickets
+            if ($user->wasRecentlyCreated) {
+                UserTicket::create([
+                    'user_id' => $user->id,
+                    'tickets_count' => $initialTicketsCount,
+                    'restored_at' => null,
+                    'source' => 'initial_bonus',
+                ]);
+                
+                Log::info('Initial tickets granted to new user (from spin)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'initial_tickets_count' => $initialTicketsCount,
+                ]);
+            }
 
             // Логируем начальное состояние билетов
             Log::info('Spin request processing', [

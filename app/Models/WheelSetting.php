@@ -14,12 +14,14 @@ class WheelSetting extends Model
         'ticket_restore_hours',
         'leaderboard_period_months',
         'admin_username',
+        'initial_tickets_count',
     ];
 
     protected $casts = [
         'always_empty_mode' => 'boolean',
         'ticket_restore_hours' => 'integer',
         'leaderboard_period_months' => 'integer',
+        'initial_tickets_count' => 'integer',
     ];
 
     /**
@@ -33,6 +35,7 @@ class WheelSetting extends Model
                 'always_empty_mode' => false,
                 'ticket_restore_hours' => 3, // По умолчанию 3 часа
                 'leaderboard_period_months' => 1, // По умолчанию 1 месяц
+                'initial_tickets_count' => 1, // По умолчанию 1 билет
             ]
         );
     }

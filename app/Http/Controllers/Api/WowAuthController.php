@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\UserTicket;
+use App\Models\WheelSetting;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -63,6 +65,10 @@ class WowAuthController extends Controller
             DB::beginTransaction();
 
             try {
+                // Получаем настройки для определения количества стартовых билетов
+                $settings = WheelSetting::getSettings();
+                $initialTicketsCount = $settings->initial_tickets_count ?? 1; // По умолчанию 1 билет
+
                 // Находим или создаем пользователя
                 $user = User::firstOrCreate(
                     ['telegram_id' => $telegramId],
@@ -72,7 +78,7 @@ class WowAuthController extends Controller
                         'password' => bcrypt(str()->random(32)),
                         'username' => $telegramUser['username'] ?? null,
                         'avatar_url' => $telegramUser['photo_url'] ?? null,
-                        'tickets_available' => 3, // Начальное количество билетов
+                        'tickets_available' => $initialTicketsCount, // Используем настройку из админки
                         'stars_balance' => 0,
                         'total_spins' => 0,
                         'total_wins' => 0,
@@ -100,9 +106,23 @@ class WowAuthController extends Controller
                     $updateData['avatar_url'] = $telegramUser['photo_url'];
                 }
 
-                // Если это новый пользователь и у него нет билетов, даем начальные билеты
-                if ($isNewUser && $user->tickets_available == 0) {
-                    $updateData['tickets_available'] = 3; // Начальное количество билетов для нового пользователя
+                // Если это новый пользователь, начисляем стартовые билеты
+                if ($isNewUser) {
+                    $updateData['tickets_available'] = $initialTicketsCount;
+                    
+                    // Создаем запись в user_tickets для отслеживания источника
+                    UserTicket::create([
+                        'user_id' => $user->id,
+                        'tickets_count' => $initialTicketsCount,
+                        'restored_at' => null, // Стартовые билеты доступны сразу
+                        'source' => 'initial_bonus',
+                    ]);
+                    
+                    Log::info('Initial tickets granted to new user', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'initial_tickets_count' => $initialTicketsCount,
+                    ]);
                 }
 
                 if (!empty($updateData)) {

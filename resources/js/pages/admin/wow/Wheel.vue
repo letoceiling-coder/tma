@@ -92,6 +92,28 @@
                     />
                 </div>
             </div>
+
+            <!-- Количество стартовых билетов -->
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h3 class="text-base font-medium mb-1">Стартовые билеты</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Количество билетов, которые получает новый пользователь при первом входе (от 0 до 100)
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model.number="initialTicketsCount"
+                        @change="saveSettings"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        class="w-24 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent text-center"
+                    />
+                    <span class="text-sm text-muted-foreground">билетов</span>
+                </div>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -245,6 +267,7 @@ export default {
         const alwaysEmptyMode = ref(false)
         const ticketRestoreHours = ref(3)
         const adminUsername = ref('')
+        const initialTicketsCount = ref(1)
         const showMediaModal = ref(false)
         const currentSector = ref(null)
         const selectedMediaFile = ref(null)
@@ -292,6 +315,7 @@ export default {
                     alwaysEmptyMode.value = data.settings.always_empty_mode || false
                     ticketRestoreHours.value = data.settings.ticket_restore_hours || 3
                     adminUsername.value = data.settings.admin_username || ''
+                    initialTicketsCount.value = data.settings.initial_tickets_count || 1
                 }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки секторов'
@@ -431,6 +455,7 @@ export default {
                     always_empty_mode: alwaysEmptyMode.value,
                     ticket_restore_hours: ticketRestoreHours.value,
                     admin_username: adminUsername.value,
+                    initial_tickets_count: initialTicketsCount.value,
                 })
 
                 if (!response.ok) {
