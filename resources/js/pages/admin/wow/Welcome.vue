@@ -164,7 +164,7 @@
                         ✕
                     </button>
                 </div>
-                <div class="flex-1 overflow-hidden">
+                <div class="flex-1 overflow-y-auto min-h-0">
                     <Media
                         :selectionMode="true"
                         :countFile="1"
