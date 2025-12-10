@@ -206,7 +206,8 @@ class SpinNotificationController extends Controller
             $settings = \App\Models\WheelSetting::getSettings();
             if ($settings->admin_username) {
                 $adminUsername = ltrim($settings->admin_username, '@');
-                $adminLink = "https://t.me/{$adminUsername}?text=" . urlencode("Здравствуйте, я выиграл приз в WOW Spin");
+                // Используем rawurlencode() вместо urlencode() для правильного кодирования пробелов как %20
+                $adminLink = "https://t.me/{$adminUsername}?text=" . rawurlencode("Здравствуйте, я выиграл приз в WOW Spin");
             }
 
             // УНИФИЦИРОВАННАЯ ЛОГИКА: Отправляем уведомление в зависимости от типа приза
