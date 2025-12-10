@@ -50,6 +50,17 @@ class RestoreTickets extends Command
                 DB::beginTransaction();
                 try {
                     $oldTickets = $user->tickets_available;
+                    
+                    // Логируем восстановление билета ДО изменения
+                    Log::info('Restoring ticket via command (before)', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $user->telegram_id,
+                        'tickets_before' => $oldTickets,
+                        'tickets_to_add' => 1,
+                        'tickets_depleted_at' => $user->tickets_depleted_at?->toIso8601String(),
+                        'current_time' => now()->toIso8601String(),
+                    ]);
+                    
                     $user->tickets_available = $user->tickets_available + 1;
                     
                     // Если билеты > 0, сбрасываем точку восстановления
@@ -62,6 +73,16 @@ class RestoreTickets extends Command
                     }
                     
                     $user->save();
+                    
+                    // Логируем восстановление билета ПОСЛЕ изменения
+                    Log::info('Restoring ticket via command (after)', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $user->telegram_id,
+                        'tickets_before' => $oldTickets,
+                        'tickets_after' => $user->tickets_available,
+                        'tickets_added' => 1,
+                        'timestamp' => now()->toIso8601String(),
+                    ]);
 
                     // Отправляем уведомление о восстановлении билета
                     if ($user->tickets_available > $oldTickets) {

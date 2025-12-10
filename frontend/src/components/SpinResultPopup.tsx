@@ -11,33 +11,20 @@ interface SpinResultPopupProps {
   prizeValue: number;
   adminUsername: string | null;
   hasMoreTickets: boolean;
+  prizeMessage: string | null; // Сообщение из типа приза (админка)
 }
 
-const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, adminUsername, hasMoreTickets }: SpinResultPopupProps) => {
+const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, adminUsername, hasMoreTickets, prizeMessage }: SpinResultPopupProps) => {
   const isWin = result > 0 || result === -1;
   
-  // Формируем сообщение о призе
+  // Используем сообщение из типа приза (админка), если оно указано
+  // Если сообщение пустое или не указано - не показываем текст
   const getPrizeMessage = () => {
-    const prizeValueNum = Number(prizeValue);
-    
-    // ВАЖНО: Для 300, 500 рублей, секретного бокса и подарка от спонсора - единое сообщение
-    if (prizeType === 'money' && (prizeValueNum === 300 || prizeValueNum === 500)) {
-      return `Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.`;
-    } else if (prizeType === 'money' && prizeValue > 0) {
-      // Для других денежных призов (если есть)
-      return `Поздравляем, вы выиграли ${prizeValue} рублей`;
-    } else if (prizeType === 'ticket' && prizeValue > 0) {
-      // Правильное склонение для билетов
-      if (prizeValue === 1) {
-        return `Поздравляем! Вы выиграли 1 дополнительный билет!`;
-      } else {
-        return `Поздравляем, вы выиграли ${prizeValue} дополнительных билетов`;
-      }
-    } else if (prizeType === 'secret_box') {
-      return `Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.`;
-    } else if (prizeType === 'sponsor_gift') {
-      return `Поздравляем! Вы выиграли приз. Свяжитесь с администратором для получения.`;
+    // Если есть сообщение из типа приза - используем его
+    if (prizeMessage && prizeMessage.trim() !== '') {
+      return prizeMessage.trim();
     }
+    // Если сообщение не указано - возвращаем пустую строку (не показываем текст)
     return '';
   };
   
@@ -149,19 +136,21 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
               >
                 🎉
               </div>
-              <p
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  color: '#333333',
-                  margin: '0 0 24px 0',
-                  lineHeight: 1.5,
-                  whiteSpace: 'pre-line',
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
-                }}
-              >
-                {getPrizeMessage()}
-              </p>
+              {getPrizeMessage() && (
+                <p
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#333333',
+                    margin: '0 0 24px 0',
+                    lineHeight: 1.5,
+                    whiteSpace: 'pre-line',
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
+                  }}
+                >
+                  {getPrizeMessage()}
+                </p>
+              )}
               
               {/* Кнопка "Получить" - показывается СТРОГО при выигрыше 300/500/secret_box */}
               {showContactButton && (

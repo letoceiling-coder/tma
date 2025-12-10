@@ -43,6 +43,7 @@ const MainWheel = () => {
   const [lastResult, setLastResult] = useState(0);
   const [lastPrizeType, setLastPrizeType] = useState<'money' | 'ticket' | 'secret_box' | 'empty' | null>(null);
   const [lastPrizeValue, setLastPrizeValue] = useState(0);
+  const [lastPrizeMessage, setLastPrizeMessage] = useState<string | null>(null);
   const [adminUsername, setAdminUsername] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [wheelSegments, setWheelSegments] = useState<WheelSegment[]>([]);
@@ -521,10 +522,12 @@ const MainWheel = () => {
       const prizeValue = data.sector?.prize_value || 0;
       const prizeType = data.sector?.prize_type;
       const spinId = data.spin_id;
+      const prizeMessage = data.prize_message || null; // Сообщение из типа приза (админка)
       
       // Сохраняем данные о призе
       setLastPrizeType(prizeType);
       setLastPrizeValue(prizeValue);
+      setLastPrizeMessage(prizeMessage);
       
       let resultValue = 0;
       if (prizeType === 'money') {
@@ -598,6 +601,8 @@ const MainWheel = () => {
               // Обновляем данные о призе для попапа
               setLastPrizeType(notifyData.sector.prize_type);
               setLastPrizeValue(notifyData.sector.prize_value);
+              // Сообщение из типа приза не приходит в notify, используем null
+              setLastPrizeMessage(null);
               
               // Пересчитываем resultValue
               let newResultValue = 0;
@@ -1041,6 +1046,7 @@ const MainWheel = () => {
         prizeValue={lastPrizeValue}
         adminUsername={adminUsername}
         hasMoreTickets={tickets > 0}
+        prizeMessage={lastPrizeMessage}
       />
       
       <ReferralPopup

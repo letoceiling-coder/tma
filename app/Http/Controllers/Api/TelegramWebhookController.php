@@ -312,6 +312,18 @@ class TelegramWebhookController extends Controller
             $user->save();
 
             // Начисляем 1 билет рефереру за приглашение
+            $ticketsBefore = $referrer->tickets_available;
+            
+            // Логируем начисление билетов ДО изменения
+            Log::info('Adding ticket for referral', [
+                'referrer_id' => $referrer->id,
+                'referrer_telegram_id' => $referrer->telegram_id,
+                'new_user_id' => $user->id,
+                'new_user_telegram_id' => $chatId,
+                'tickets_before' => $ticketsBefore,
+                'tickets_to_add' => 1,
+            ]);
+            
             $referrer->tickets_available = $referrer->tickets_available + 1;
             
             // Если билеты стали больше 0, сбрасываем точку восстановления
@@ -320,6 +332,18 @@ class TelegramWebhookController extends Controller
             }
             
             $referrer->save();
+            
+            // Логируем начисление билетов ПОСЛЕ изменения
+            Log::info('Ticket added for referral', [
+                'referrer_id' => $referrer->id,
+                'referrer_telegram_id' => $referrer->telegram_id,
+                'new_user_id' => $user->id,
+                'new_user_telegram_id' => $chatId,
+                'tickets_before' => $ticketsBefore,
+                'tickets_after' => $referrer->tickets_available,
+                'tickets_added' => 1,
+                'timestamp' => now()->toIso8601String(),
+            ]);
 
             DB::commit();
 

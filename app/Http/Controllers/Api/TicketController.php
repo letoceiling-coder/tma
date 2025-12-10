@@ -230,12 +230,27 @@ class TicketController extends Controller
         // Если текущее время >= момента восстановления → билет готов
         if (now() >= $restoreTime) {
             $oldTickets = $user->tickets_available;
+            
+            // Логируем восстановление билета ДО изменения
+            Log::info('Restoring ticket (before)', [
+                'user_id' => $user->id,
+                'telegram_id' => $user->telegram_id,
+                'tickets_before' => $oldTickets,
+                'tickets_to_add' => 1,
+                'restore_time' => $restoreTime->toIso8601String(),
+                'current_time' => now()->toIso8601String(),
+            ]);
+            
             $user->tickets_available = $user->tickets_available + 1;
             
-            Log::info('Restoring ticket', [
+            // Логируем восстановление билета ПОСЛЕ изменения
+            Log::info('Restoring ticket (after)', [
                 'user_id' => $user->id,
-                'old_tickets' => $oldTickets,
-                'new_tickets' => $user->tickets_available,
+                'telegram_id' => $user->telegram_id,
+                'tickets_before' => $oldTickets,
+                'tickets_after' => $user->tickets_available,
+                'tickets_added' => 1,
+                'timestamp' => now()->toIso8601String(),
             ]);
             
             // Если билеты > 0, сбрасываем точку восстановления и флаг показа pop-up

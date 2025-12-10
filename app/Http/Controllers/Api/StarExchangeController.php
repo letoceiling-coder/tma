@@ -159,10 +159,33 @@ class StarExchangeController extends Controller
 
                 // Начисляем билеты пользователю
                 $user = $exchange->user;
+                $ticketsBefore = $user->tickets_available;
+                $ticketsToAdd = $exchange->tickets_received;
+                
+                // Логируем начисление билетов ДО изменения
+                Log::info('Adding tickets from star exchange (before)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'exchange_id' => $exchange->id,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_to_add' => $ticketsToAdd,
+                ]);
+                
                 $user->tickets_available += $exchange->tickets_received;
                 $user->tickets_available = min($user->tickets_available, 20); // Максимум билетов можно увеличить при обмене
                 $user->stars_balance += $exchange->stars_amount; // Увеличиваем баланс звёзд
                 $user->save();
+                
+                // Логируем начисление билетов ПОСЛЕ изменения
+                Log::info('Adding tickets from star exchange (after)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'exchange_id' => $exchange->id,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_after' => $user->tickets_available,
+                    'tickets_added' => $ticketsToAdd,
+                    'timestamp' => now()->toIso8601String(),
+                ]);
 
                 // Создаем записи в user_tickets для отслеживания источника
                 \App\Models\UserTicket::create([
@@ -285,10 +308,33 @@ class StarExchangeController extends Controller
 
                 // Начисляем билеты пользователю
                 $user = $exchange->user;
+                $ticketsBefore = $user->tickets_available;
+                $ticketsToAdd = $exchange->tickets_received;
+                
+                // Логируем начисление билетов ДО изменения
+                Log::info('Adding tickets from star exchange confirm (before)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'exchange_id' => $exchange->id,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_to_add' => $ticketsToAdd,
+                ]);
+                
                 $user->tickets_available += $exchange->tickets_received;
                 $user->tickets_available = min($user->tickets_available, 20); // Можно увеличить максимум при обмене
                 $user->stars_balance += $exchange->stars_amount;
                 $user->save();
+                
+                // Логируем начисление билетов ПОСЛЕ изменения
+                Log::info('Adding tickets from star exchange confirm (after)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'exchange_id' => $exchange->id,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_after' => $user->tickets_available,
+                    'tickets_added' => $ticketsToAdd,
+                    'timestamp' => now()->toIso8601String(),
+                ]);
 
                 // Создаем записи в user_tickets
                 \App\Models\UserTicket::create([
@@ -390,6 +436,17 @@ class StarExchangeController extends Controller
             DB::beginTransaction();
 
             try {
+                $ticketsBefore = $user->tickets_available;
+                
+                // Логируем начисление билетов ДО изменения
+                Log::info('Adding tickets from star exchange direct (before)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_to_add' => $ticketsAmount,
+                    'stars_to_spend' => $starsAmount,
+                ]);
+                
                 // Списываем звезды
                 $user->stars_balance -= $starsAmount;
                 
@@ -422,6 +479,16 @@ class StarExchangeController extends Controller
 
                 DB::commit();
 
+                // Логируем начисление билетов ПОСЛЕ изменения
+                Log::info('Adding tickets from star exchange direct (after)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_after' => $user->tickets_available,
+                    'tickets_added' => $ticketsAmount,
+                    'timestamp' => now()->toIso8601String(),
+                ]);
+                
                 Log::info('Star exchange completed', [
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,

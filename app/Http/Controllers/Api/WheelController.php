@@ -83,8 +83,21 @@ class WheelController extends Controller
                 ]
             );
 
+            // Логируем начальное состояние билетов
+            Log::info('Spin request received', [
+                'user_id' => $user->id,
+                'telegram_id' => $telegramId,
+                'tickets_before_spin' => $user->tickets_available,
+                'timestamp' => now()->toIso8601String(),
+            ]);
+
             // Проверка наличия билетов
             if ($user->tickets_available <= 0) {
+                Log::warning('Spin attempt with no tickets', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'tickets_available' => $user->tickets_available,
+                ]);
                 return response()->json([
                     'error' => 'No tickets available',
                     'message' => 'У вас нет доступных билетов'
@@ -163,8 +176,41 @@ class WheelController extends Controller
             DB::beginTransaction();
             
             try {
+                // ВАЖНО: Блокируем строку пользователя для защиты от race condition
+                // Это предотвращает параллельное списание билетов при одновременных запросах
+                $user = User::where('id', $user->id)->lockForUpdate()->first();
+                
+                if (!$user) {
+                    DB::rollBack();
+                    Log::channel('wheel-errors')->error('User not found after lock', [
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id ?? null,
+                    ]);
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'User not found',
+                        'message' => 'Ошибка при обработке запроса'
+                    ], 404);
+                }
+                
+                // Повторная проверка билетов после блокировки (на случай параллельных запросов)
+                $ticketsBeforeDeduction = $user->tickets_available;
+                if ($ticketsBeforeDeduction <= 0) {
+                    DB::rollBack();
+                    Log::warning('Spin attempt with no tickets (after lock)', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'tickets_available' => $ticketsBeforeDeduction,
+                        'note' => 'Tickets were depleted by another request',
+                    ]);
+                    return response()->json([
+                        'error' => 'No tickets available',
+                        'message' => 'У вас нет доступных билетов'
+                    ], 400);
+                }
+                
                 // Уменьшаем количество билетов
-                $user->tickets_available = max(0, $user->tickets_available - 1);
+                $user->tickets_available = max(0, $ticketsBeforeDeduction - 1);
                 $user->last_spin_at = now();
                 // Сбрасываем флаг уведомления при новой прокрутке
                 $user->last_notification_sent_at = null;
@@ -180,12 +226,27 @@ class WheelController extends Controller
                     $user->tickets_depleted_at = now(); // Фиксируем момент окончания билетов
                 }
                 
+                // Логируем списание билета
+                Log::info('Ticket deducted for spin', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'tickets_before' => $ticketsBeforeDeduction,
+                    'tickets_after' => $user->tickets_available,
+                    'tickets_deducted' => 1,
+                    'timestamp' => now()->toIso8601String(),
+                ]);
+                
                 $user->save();
 
                 // Загружаем тип приза, если он связан с сектором
                 $prizeType = null;
+                $prizeMessage = null;
                 if ($winningSector->prize_type_id) {
                     $prizeType = \App\Models\PrizeType::find($winningSector->prize_type_id);
+                    // Получаем сообщение из типа приза, если оно указано
+                    if ($prizeType && $prizeType->message) {
+                        $prizeMessage = $prizeType->message;
+                    }
                 }
 
                 // Сохраняем результат прокрута
@@ -205,6 +266,17 @@ class WheelController extends Controller
                 if ($prizeType && $prizeType->action === 'add_ticket') {
                     $ticketsToAdd = $prizeType->value ?? 1;
                     $oldTickets = $user->tickets_available;
+                    
+                    // Логируем начисление билетов ДО изменения
+                    Log::info('Adding tickets from prize type action', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type_id' => $prizeType->id,
+                        'tickets_to_add' => $ticketsToAdd,
+                        'tickets_before' => $oldTickets,
+                    ]);
+                    
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
                     
                     if ($user->tickets_available > 0) {
@@ -214,13 +286,16 @@ class WheelController extends Controller
                     $user->save();
                     $prizeAwarded = true;
                     
+                    // Логируем начисление билетов ПОСЛЕ изменения
                     Log::info('Ticket added from prize type action', [
                         'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type_id' => $prizeType->id,
                         'tickets_added' => $ticketsToAdd,
-                        'old_tickets' => $oldTickets,
-                        'new_tickets' => $user->tickets_available,
+                        'tickets_before' => $oldTickets,
+                        'tickets_after' => $user->tickets_available,
+                        'timestamp' => now()->toIso8601String(),
                     ]);
                 }
                 
@@ -276,6 +351,17 @@ class WheelController extends Controller
                     }
                     
                     $oldTickets = $user->tickets_available;
+                    
+                    // Логируем начисление билетов ДО изменения
+                    Log::info('Adding tickets from prize', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
+                        'tickets_to_add' => $ticketsToAdd,
+                        'tickets_before' => $oldTickets,
+                    ]);
+                    
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
                     
                     // Ограничиваем максимальное количество билетов (если есть лимит)
@@ -292,12 +378,16 @@ class WheelController extends Controller
                     $user->save();
                     $prizeAwarded = true;
                     
+                    // Логируем начисление билетов ПОСЛЕ изменения
                     Log::info('Ticket prize awarded and credited to user', [
                         'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
                         'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
                         'tickets_added' => $ticketsToAdd,
-                        'old_tickets' => $oldTickets,
-                        'new_tickets' => $user->tickets_available,
+                        'tickets_before' => $oldTickets,
+                        'tickets_after' => $user->tickets_available,
+                        'timestamp' => now()->toIso8601String(),
                         'note' => 'Tickets were successfully added to user balance',
                     ]);
                 } elseif ($winningSector->prize_type === 'secret_box' || $winningSector->prize_type === 'sponsor_gift') {
@@ -335,6 +425,17 @@ class WheelController extends Controller
                     ]);
                 }
 
+                // Логируем финальное состояние билетов после всех операций
+                $user->refresh(); // Обновляем данные из БД для точности
+                Log::info('Spin transaction completed', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'spin_id' => $spin->id ?? null,
+                    'tickets_final' => $user->tickets_available,
+                    'prize_awarded' => $prizeAwarded,
+                    'timestamp' => now()->toIso8601String(),
+                ]);
+                
                 DB::commit();
 
                 // Рассчитываем время до следующего билета
@@ -440,6 +541,8 @@ class WheelController extends Controller
                     'rotation' => $targetRotation,
                     'tickets_available' => $user->tickets_available,
                     'prize_awarded' => $prizeAwarded,
+                    // Сообщение из типа приза (если указано в админке)
+                    'prize_message' => $prizeMessage,
                     // Информация о восстановлении билетов
                     'restore_interval_hours' => $settings->ticket_restore_hours ?? 3,
                     'restore_interval_seconds' => $restoreIntervalSeconds,
