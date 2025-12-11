@@ -317,107 +317,24 @@ class WheelController extends Controller
                     'sector_number' => $winningSector->sector_number, // Сохраняем номер сектора для админки
                 ]);
 
-                // Если выигрыш - начисляем приз
+                // ВАЖНО: Начисление приза происходит строго по типу приза сектора
+                // Объединяем логику в одно место, чтобы избежать двойного начисления
                 $prizeAwarded = false;
+                $ticketsToAdd = 0; // Количество билетов для начисления (0 если не билет)
                 
-                // Обрабатываем действие из типа приза, если оно указано
-                if ($prizeType && $prizeType->action === 'add_ticket') {
+                // Определяем, нужно ли начислять билеты
+                // Проверяем prize_type сектора ИЛИ action типа приза
+                if ($winningSector->prize_type === 'ticket' && $winningSector->prize_value > 0) {
+                    // Приз - билет из сектора
+                    $ticketsToAdd = $winningSector->prize_value ?? 1;
+                } elseif ($prizeType && $prizeType->action === 'add_ticket') {
+                    // Приз - билет из типа приза (action)
                     $ticketsToAdd = $prizeType->value ?? 1;
-                    // ВАЖНО: Обновляем данные пользователя из БД перед начислением
-                    $user->refresh();
-                    $ticketsBeforePrize = $user->tickets_available;
-                    
-                    // Логируем начисление билетов ДО изменения
-                    Log::info('Adding tickets from prize type action (BEFORE)', [
-                        'request_id' => $requestId,
-                        'user_id' => $user->id,
-                        'telegram_id' => $telegramId,
-                        'sector_number' => $winningSector->sector_number,
-                        'prize_type_id' => $prizeType->id,
-                        'tickets_to_add' => $ticketsToAdd,
-                        'tickets_before_prize' => $ticketsBeforePrize,
-                        'tickets_before_deduction' => $ticketsBeforeDeduction,
-                        'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
-                    ]);
-                    
-                    $user->tickets_available = $user->tickets_available + $ticketsToAdd;
-                    
-                    if ($user->tickets_available > 0) {
-                        $user->tickets_depleted_at = null;
-                    }
-                    
-                    $user->save();
-                    $prizeAwarded = true;
-                    
-                    // Логируем начисление билетов ПОСЛЕ изменения
-                    Log::info('Ticket added from prize type action (AFTER)', [
-                        'request_id' => $requestId,
-                        'user_id' => $user->id,
-                        'telegram_id' => $telegramId,
-                        'sector_number' => $winningSector->sector_number,
-                        'prize_type_id' => $prizeType->id,
-                        'tickets_added' => $ticketsToAdd,
-                        'tickets_before_prize' => $ticketsBeforePrize,
-                        'tickets_after_prize' => $user->tickets_available,
-                        'tickets_before_deduction' => $ticketsBeforeDeduction,
-                        'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
-                        'actual_final' => $user->fresh()->tickets_available,
-                        'timestamp' => now()->toIso8601String(),
-                    ]);
                 }
                 
-                // ВАЖНО: Проверяем что сектор действительно выпал и приз должен быть выдан
-                if ($winningSector->prize_type === 'empty') {
-                    // Пустой сектор - приз не начисляется
-                    $prizeAwarded = false;
-                    Log::info('Empty sector - no prize awarded', [
-                        'user_id' => $user->id,
-                        'sector_number' => $winningSector->sector_number,
-                    ]);
-                } elseif ($winningSector->prize_type === 'money' && $winningSector->prize_value > 0) {
-                    // ВАЖНО: Денежный приз (300, 500 рублей и т.д.) - НЕ начисляется автоматически!
-                    // Деньги НЕ добавляются в баланс пользователя.
-                    // Только отмечаем выигрыш в статистике (total_wins++).
-                    // Пользователь должен связаться с администратором для получения приза.
-                    // Приз сохраняется в таблице spins с правильным prize_value.
-                    $user->total_wins++;
-                    $user->save();
-                    $prizeAwarded = true;
-                    
-                    Log::info('Money prize awarded (NOT automatically credited - user must contact admin)', [
-                        'user_id' => $user->id,
-                        'sector_number' => $winningSector->sector_number,
-                        'prize_value' => $winningSector->prize_value, // Используем напрямую из сектора - гарантированно правильное значение
-                        'note' => 'Money is NOT added to user balance automatically',
-                    ]);
-                    
-                    // ПРИМЕЧАНИЕ: Уведомления о выигрыше отправляются отдельным endpoint
-                    // после завершения анимации на фронтенде (4 секунды)
-                } elseif ($winningSector->prize_type === 'ticket' && $winningSector->prize_value > 0) {
-                    // ВАЖНО: Начисляем билет(ы) за выигрыш
-                    // prize_value должно соответствовать конфигурации сектора из админки
-                    // Максимальное значение контролируется валидацией в админке (max:10)
-                    // Если приз 500 билетов не задан в админке, он не может выпасть
-                    $ticketsToAdd = $winningSector->prize_value ?? 1;
-                    
-                    // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Если значение больше 10, логируем предупреждение
-                    if ($ticketsToAdd > 10) {
-                        Log::channel('wheel-errors')->warning('Unusual ticket prize value detected', [
-                            'telegram_id' => $telegramId,
-                            'user_id' => $user->id,
-                            'sector_number' => $winningSector->sector_number,
-                            'prize_value' => $ticketsToAdd,
-                            'note' => 'Prize value exceeds recommended maximum of 10 tickets',
-                        ]);
-                        Log::warning('Unusual ticket prize value detected', [
-                            'user_id' => $user->id,
-                            'sector_number' => $winningSector->sector_number,
-                            'prize_value' => $ticketsToAdd,
-                            'note' => 'Prize value exceeds recommended maximum of 10 tickets',
-                        ]);
-                    }
-                    
-                    // ВАЖНО: Обновляем данные пользователя из БД перед начислением
+                // ВАЖНО: Начисляем билеты ТОЛЬКО ОДИН РАЗ, если нужно
+                if ($ticketsToAdd > 0) {
+                    // Обновляем данные пользователя из БД перед начислением
                     $user->refresh();
                     $ticketsBeforePrize = $user->tickets_available;
                     
@@ -434,16 +351,12 @@ class WheelController extends Controller
                         'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
                     ]);
                     
+                    // Формула: newTickets = oldTickets - 1 + ticketsToAdd
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
                     
-                    // Ограничиваем максимальное количество билетов (если есть лимит)
-                    // Пока без лимита, но можно добавить
-                    
                     // Если билеты стали больше 0, сбрасываем точку восстановления и флаг показа pop-up
-                    // (потому что билеты больше не закончились)
                     if ($user->tickets_available > 0) {
                         $user->tickets_depleted_at = null;
-                        // Сбрасываем флаг показа pop-up, чтобы он мог появиться снова при следующем обнулении
                         $user->referral_popup_shown_at = null;
                     }
                     
@@ -464,7 +377,27 @@ class WheelController extends Controller
                         'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
                         'actual_final' => $user->fresh()->tickets_available,
                         'timestamp' => now()->toIso8601String(),
-                        'note' => 'Tickets were successfully added to user balance',
+                    ]);
+                } elseif ($winningSector->prize_type === 'empty') {
+                    // Пустой сектор - приз не начисляется
+                    $prizeAwarded = false;
+                    Log::info('Empty sector - no prize awarded', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                    ]);
+                } elseif ($winningSector->prize_type === 'money' && $winningSector->prize_value > 0) {
+                    // ВАЖНО: Денежный приз (300, 500 рублей и т.д.) - НЕ начисляется автоматически!
+                    // Деньги НЕ добавляются в баланс пользователя.
+                    // Только отмечаем выигрыш в статистике (total_wins++).
+                    $user->total_wins++;
+                    $user->save();
+                    $prizeAwarded = true;
+                    
+                    Log::info('Money prize awarded (NOT automatically credited - user must contact admin)', [
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_value' => $winningSector->prize_value,
+                        'note' => 'Money is NOT added to user balance automatically',
                     ]);
                 } elseif ($winningSector->prize_type === 'secret_box' || $winningSector->prize_type === 'sponsor_gift') {
                     // ВАЖНО: Секретный бокс или подарок от спонсора - НЕ начисляется автоматически!
@@ -505,18 +438,43 @@ class WheelController extends Controller
                 $user->refresh(); // Обновляем данные из БД для точности
                 $duration = round((microtime(true) - $startTime) * 1000, 2); // в миллисекундах
                 
+                // ВАЖНО: Проверяем правильность итогового количества билетов
+                $expectedFinal = $ticketsBeforeDeduction - 1 + ($ticketsToAdd ?? 0);
+                $actualFinal = $user->tickets_available;
+                
                 Log::info('Spin transaction completed', [
                     'request_id' => $requestId,
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
                     'spin_id' => $spin->id ?? null,
-                    'tickets_final' => $user->tickets_available,
+                    'tickets_before_deduction' => $ticketsBeforeDeduction,
+                    'tickets_deducted' => 1,
+                    'tickets_added' => $ticketsToAdd ?? 0,
+                    'expected_final' => $expectedFinal,
+                    'tickets_final' => $actualFinal,
+                    'calculation_correct' => $expectedFinal === $actualFinal,
                     'prize_awarded' => $prizeAwarded,
                     'sector_number' => $winningSector->sector_number,
                     'prize_type' => $winningSector->prize_type,
+                    'prize_value' => $winningSector->prize_value,
                     'duration_ms' => $duration,
                     'timestamp' => now()->toIso8601String(),
                 ]);
+                
+                // Если расчет неверный, логируем ошибку
+                if ($expectedFinal !== $actualFinal) {
+                    Log::channel('wheel-errors')->error('Ticket calculation mismatch!', [
+                        'request_id' => $requestId,
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'tickets_before_deduction' => $ticketsBeforeDeduction,
+                        'tickets_deducted' => 1,
+                        'tickets_added' => $ticketsToAdd ?? 0,
+                        'expected_final' => $expectedFinal,
+                        'actual_final' => $actualFinal,
+                        'difference' => $actualFinal - $expectedFinal,
+                    ]);
+                }
                 
                 DB::commit();
 

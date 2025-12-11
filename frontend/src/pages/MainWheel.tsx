@@ -414,10 +414,8 @@ const MainWheel = () => {
     setSpinError(null);
     setWinningSectorNumber(null); // Сбрасываем подсветку при новом спине
 
-    // ВАЖНО: Списываем билет оптимистично ДО отправки запроса
-    // Это предотвращает визуальное обновление билетов во время анимации
-    const ticketsBeforeSpin = tickets;
-    setTickets(Math.max(0, tickets - 1));
+    // ВАЖНО: НЕ списываем билет на фронтенде!
+    // Backend управляет билетами, фронтенд только получает tickets_available из API
 
     const tg = window.Telegram?.WebApp;
 
@@ -547,7 +545,7 @@ const MainWheel = () => {
       
       // Сохраняем данные о билетах для обновления после анимации
       const newTickets = data.tickets_available || 0;
-      const prevTickets = ticketsBeforeSpin;
+      const prevTickets = tickets; // Текущее количество билетов до обновления
       
       // Проверяем, нужно ли показать pop-up о приглашении друга
       // Используем информацию с сервера, который проверяет все условия
@@ -706,8 +704,8 @@ const MainWheel = () => {
     }, 4100);
 
     } catch (error: any) {
-      // ВАЖНО: При ошибке откатываем оптимистичное списание билета
-      setTickets(ticketsBeforeSpin);
+      // ВАЖНО: При ошибке НЕ меняем билеты - они остаются как были
+      // Backend управляет билетами, фронтенд только получает данные из API
       
       // Игнорируем ошибки отмены запроса
       if (error.name === 'AbortError') {
@@ -769,8 +767,8 @@ const MainWheel = () => {
   const handleGiftExchange = (ticketsReceived: number) => {
     haptic.success();
     setShowGiftPopup(false);
-    setTickets(tickets + ticketsReceived);
-    // Обновляем билеты с сервера
+    // ВАЖНО: НЕ изменяем билеты локально!
+    // Обновляем билеты только из API ответа
     loadTickets();
   };
 
