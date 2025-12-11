@@ -52,7 +52,19 @@ return [
     |
     */
 
-    'url' => env('APP_URL', 'http://localhost'),
+    'url' => (function() {
+        $url = env('APP_URL', 'http://localhost');
+        // Нормализуем URL: убираем двойные слеши после протокола (https:/// -> https://)
+        $url = preg_replace('#(https?://)/+#', '$1', $url);
+        // Убираем двойные слеши в пути
+        $url = preg_replace('#([^:])//+#', '$1/', $url);
+        $url = rtrim($url, '/');
+        // Если URL невалидный, возвращаем localhost
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return 'http://localhost';
+        }
+        return $url;
+    })(),
 
     /*
     |--------------------------------------------------------------------------

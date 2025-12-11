@@ -477,13 +477,8 @@ class DeployController extends Controller
         }
 
         // 3. Попробовать найти composer через which (самый надежный способ)
-        // Добавляем пользовательский путь в PATH для поиска
-        $userComposerPath = '/home/d/dsc23ytp/.local/bin';
-        $pathEnv = getenv('PATH') ?: '';
-        $enhancedPath = $userComposerPath . ':' . $pathEnv;
-        
         try {
-            $whichProcess = Process::env(['PATH' => $enhancedPath])->run('which composer 2>&1');
+            $whichProcess = Process::run('which composer 2>&1');
             if ($whichProcess->successful()) {
                 $foundPath = trim($whichProcess->output());
                 if ($foundPath) {
@@ -497,9 +492,9 @@ class DeployController extends Controller
         
         // 4. Попробовать найти composer в стандартных местах
         $possiblePaths = [
-            '/home/d/dsc23ytp/.local/bin/composer', // Пользовательский путь (проверяем первым, так как он точно существует)
             '/usr/local/bin/composer',
             '/usr/bin/composer',
+            '/opt/composer/composer',
         ];
 
         foreach ($possiblePaths as $path) {

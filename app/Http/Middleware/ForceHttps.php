@@ -20,6 +20,19 @@ class ForceHttps
      */
     public function handle(Request $request, Closure $next): Response
     {
+        // Пропускаем middleware для CLI команд (artisan)
+        if (app()->runningInConsole()) {
+            return $next($request);
+        }
+        
+        // Дополнительная проверка: если Request не валиден, пропускаем
+        try {
+            $request->path();
+        } catch (\Exception $e) {
+            // Если не можем получить path, значит Request не валиден - пропускаем
+            return $next($request);
+        }
+        
         // Логируем входящий запрос
         $path = $request->path();
         $fullUrl = $request->fullUrl();
