@@ -121,5 +121,48 @@ class WowUserController extends Controller
             'data' => $user,
         ]);
     }
+
+    /**
+     * Списать билеты у пользователя вручную
+     */
+    public function removeTickets(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'tickets' => 'required|integer|min:1|max:100',
+        ]);
+
+        $user = User::whereNotNull('telegram_id')->findOrFail($id);
+
+        $ticketsToRemove = $request->input('tickets');
+        $oldTickets = $user->tickets_available;
+        
+        // Проверяем, что у пользователя достаточно билетов
+        if ($ticketsToRemove > $oldTickets) {
+            return response()->json([
+                'success' => false,
+                'message' => "Недостаточно билетов. У пользователя: {$oldTickets}, запрошено списание: {$ticketsToRemove}",
+            ], 400);
+        }
+        
+        // Списываем билеты
+        $user->tickets_available = max(0, $user->tickets_available - $ticketsToRemove);
+        $user->save();
+
+        // Создаем запись в истории билетов
+        \App\Models\UserTicket::create([
+            'user_id' => $user->id,
+            'tickets_count' => -$ticketsToRemove, // Отрицательное значение для списания
+            'source' => 'admin_remove', // Новый источник для админских списаний
+            'restored_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Списано {$ticketsToRemove} билет(ов)",
+            'old_tickets' => $oldTickets,
+            'new_tickets' => $user->tickets_available,
+            'data' => $user,
+        ]);
+    }
 }
 

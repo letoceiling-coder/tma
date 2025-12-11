@@ -138,6 +138,7 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('users', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'index']);
                 Route::get('users/{id}', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'show']);
                 Route::post('users/{id}/add-tickets', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'addTickets']);
+                Route::post('users/{id}/remove-tickets', [\App\Http\Controllers\Api\Admin\WowUserController::class, 'removeTickets']);
                 
                 // Призы лидерборда
                 Route::get('leaderboard-prizes', [\App\Http\Controllers\Api\Admin\LeaderboardPrizeController::class, 'index']);

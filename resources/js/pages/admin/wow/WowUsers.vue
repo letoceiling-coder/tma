@@ -104,6 +104,13 @@
                                     +
                                 </button>
                                 <button
+                                    @click="openRemoveTicketsModal(user)"
+                                    class="mr-2 px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                    title="Списать билеты"
+                                >
+                                    −
+                                </button>
+                                <button
                                     @click="viewUser(user)"
                                     class="px-3 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
                                 >
@@ -162,6 +169,7 @@
                     <div v-if="addTicketsUser">
                         <p class="text-sm text-muted-foreground mb-2">Пользователь:</p>
                         <p class="text-sm font-medium">{{ addTicketsUser.username || `Telegram ID: ${addTicketsUser.telegram_id}` }}</p>
+                        <p class="text-sm text-muted-foreground mt-1">Текущее количество билетов: {{ addTicketsUser.tickets_available || 0 }}</p>
                     </div>
                     
                     <div>
@@ -186,6 +194,61 @@
                         <button
                             @click="showAddTicketsModal = false"
                             :disabled="isAddingTickets"
+                            class="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-muted/10 transition-colors disabled:opacity-50"
+                        >
+                            Отмена
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Remove Tickets Modal -->
+        <div v-if="showRemoveTicketsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div class="bg-background border border-border rounded-lg shadow-2xl w-full max-w-md">
+                <div class="p-6 border-b border-border">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold">Списать билеты</h3>
+                        <button
+                            @click="showRemoveTicketsModal = false"
+                            class="text-muted-foreground hover:text-foreground"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div v-if="removeTicketsUser">
+                        <p class="text-sm text-muted-foreground mb-2">Пользователь:</p>
+                        <p class="text-sm font-medium">{{ removeTicketsUser.username || `Telegram ID: ${removeTicketsUser.telegram_id}` }}</p>
+                        <p class="text-sm text-muted-foreground mt-1">Текущее количество билетов: {{ removeTicketsUser.tickets_available || 0 }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="text-sm font-medium mb-1 block">Количество билетов для списания</label>
+                        <input
+                            v-model.number="ticketsToRemove"
+                            type="number"
+                            min="1"
+                            :max="removeTicketsUser?.tickets_available || 0"
+                            class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                        />
+                        <p class="text-xs text-muted-foreground mt-1">
+                            Можно списать не более {{ removeTicketsUser?.tickets_available || 0 }} билет(ов)
+                        </p>
+                    </div>
+                    
+                    <div class="flex items-center gap-3 pt-4">
+                        <button
+                            @click="removeTickets"
+                            :disabled="isRemovingTickets || ticketsToRemove < 1 || ticketsToRemove > (removeTicketsUser?.tickets_available || 0)"
+                            class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {{ isRemovingTickets ? 'Списание...' : 'Списать' }}
+                        </button>
+                        <button
+                            @click="showRemoveTicketsModal = false"
+                            :disabled="isRemovingTickets"
                             class="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-muted/10 transition-colors disabled:opacity-50"
                         >
                             Отмена
@@ -384,6 +447,63 @@ export default {
             }
         }
 
+        const showRemoveTicketsModal = ref(false)
+        const removeTicketsUser = ref(null)
+        const ticketsToRemove = ref(1)
+        const isRemovingTickets = ref(false)
+
+        const openRemoveTicketsModal = (user) => {
+            removeTicketsUser.value = user
+            ticketsToRemove.value = 1
+            showRemoveTicketsModal.value = true
+        }
+
+        const removeTickets = async () => {
+            if (!removeTicketsUser.value || ticketsToRemove.value < 1) return
+            if (ticketsToRemove.value > (removeTicketsUser.value.tickets_available || 0)) {
+                await Swal.fire({
+                    title: 'Ошибка',
+                    text: 'Нельзя списать больше билетов, чем есть у пользователя',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                })
+                return
+            }
+
+            isRemovingTickets.value = true
+            try {
+                const response = await apiPost(`/wow/users/${removeTicketsUser.value.id}/remove-tickets`, {
+                    tickets: ticketsToRemove.value
+                })
+
+                if (!response.ok) {
+                    const errorData = await response.json()
+                    throw new Error(errorData.message || 'Ошибка списания билетов')
+                }
+
+                const result = await response.json()
+                
+                await Swal.fire({
+                    title: 'Успешно!',
+                    text: result.message || 'Билеты списаны',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                })
+
+                showRemoveTicketsModal.value = false
+                fetchUsers(pagination.value.current) // Обновляем список
+            } catch (err) {
+                await Swal.fire({
+                    title: 'Ошибка',
+                    text: err.message || 'Не удалось списать билеты',
+                    icon: 'error',
+                    confirmButtonText: 'OK'
+                })
+            } finally {
+                isRemovingTickets.value = false
+            }
+        }
+
         onMounted(() => {
             fetchUsers()
         })
@@ -406,6 +526,12 @@ export default {
             isAddingTickets,
             openAddTicketsModal,
             addTickets,
+            showRemoveTicketsModal,
+            removeTicketsUser,
+            ticketsToRemove,
+            isRemovingTickets,
+            openRemoveTicketsModal,
+            removeTickets,
         }
     },
 }
