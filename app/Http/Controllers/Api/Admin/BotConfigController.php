@@ -266,12 +266,16 @@ class BotConfigController extends Controller
                 return response()->json(['error' => 'Токен бота не установлен'], 400);
             }
 
-            $webhookUrl = $request->input('url', config('telegram.webhook_url'));
-            // Если URL не задан, формируем из APP_URL
+            // Всегда используем текущий APP_URL для формирования webhook URL
+            // Это гарантирует, что при смене домена webhook установится с новым URL
+            $appUrl = rtrim(config('app.url', ''), '/');
+            
+            // Если передан кастомный URL, используем его, иначе формируем из APP_URL
+            $webhookUrl = $request->input('url');
             if (!$webhookUrl) {
-                $appUrl = rtrim(config('app.url', ''), '/');
                 $webhookUrl = $appUrl . '/api/telegram/webhook';
             }
+            
             // Исправляем двойные слеши в URL
             $webhookUrl = preg_replace('#([^:])//+#', '$1/', $webhookUrl);
             
@@ -285,9 +289,32 @@ class BotConfigController extends Controller
                 $params['secret_token'] = $secretToken;
             }
 
+            \Log::info('Установка Telegram webhook', [
+                'url' => $webhookUrl,
+                'has_secret_token' => !empty($secretToken),
+            ]);
+
             $response = \Http::post("https://api.telegram.org/bot{$token}/setWebhook", $params);
-            return response()->json($response->json());
+            $result = $response->json();
+            
+            if ($result['ok'] ?? false) {
+                \Log::info('Telegram webhook успешно установлен', [
+                    'url' => $webhookUrl,
+                    'result' => $result,
+                ]);
+            } else {
+                \Log::warning('Ошибка установки Telegram webhook', [
+                    'url' => $webhookUrl,
+                    'result' => $result,
+                ]);
+            }
+            
+            return response()->json($result);
         } catch (\Exception $e) {
+            \Log::error('Исключение при установке Telegram webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }

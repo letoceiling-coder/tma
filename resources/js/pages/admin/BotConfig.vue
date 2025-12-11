@@ -157,6 +157,14 @@
                 </button>
                 <button
                     type="button"
+                    @click="setWebhook"
+                    :disabled="loading"
+                    class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {{ loading ? 'Установка...' : 'Установить webhook' }}
+                </button>
+                <button
+                    type="button"
                     @click="getWebhookInfo"
                     class="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 transition-colors"
                 >
@@ -248,6 +256,28 @@ const testConnection = async () => {
         }
     } catch (err) {
         error.value = err.response?.data?.error || 'Ошибка проверки подключения'
+    } finally {
+        loading.value = false
+    }
+}
+
+const setWebhook = async () => {
+    loading.value = true
+    error.value = null
+    successMessage.value = null
+    try {
+        const response = await axios.post('/api/v1/settings/bot/set-webhook')
+        if (response.data.ok) {
+            successMessage.value = `Webhook успешно установлен: ${response.data.result?.url || 'URL обновлен'}`
+            // Автоматически обновляем информацию о webhook после установки
+            setTimeout(() => {
+                getWebhookInfo()
+            }, 1000)
+        } else {
+            error.value = response.data.description || 'Ошибка установки webhook'
+        }
+    } catch (err) {
+        error.value = err.response?.data?.error || err.response?.data?.message || 'Ошибка установки webhook'
     } finally {
         loading.value = false
     }
