@@ -274,17 +274,27 @@ class WheelController extends Controller
                     $user->tickets_depleted_at = now(); // Фиксируем момент окончания билетов
                 }
                 
-                // Логируем списание билета
-                Log::info('Ticket deducted for spin', [
+                // Логируем списание билета ДО сохранения
+                Log::info('Ticket deducted for spin (BEFORE save)', [
+                    'request_id' => $requestId,
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
-                    'tickets_before' => $ticketsBeforeDeduction,
-                    'tickets_after' => $user->tickets_available,
+                    'tickets_before_deduction' => $ticketsBeforeDeduction,
+                    'tickets_after_deduction' => $user->tickets_available,
                     'tickets_deducted' => 1,
                     'timestamp' => now()->toIso8601String(),
                 ]);
                 
                 $user->save();
+                
+                // Логируем списание билета ПОСЛЕ сохранения
+                Log::info('Ticket deducted for spin (AFTER save)', [
+                    'request_id' => $requestId,
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'tickets_available_in_db' => $user->fresh()->tickets_available,
+                    'timestamp' => now()->toIso8601String(),
+                ]);
 
                 // Загружаем тип приза, если он связан с сектором
                 $prizeType = null;
@@ -313,16 +323,21 @@ class WheelController extends Controller
                 // Обрабатываем действие из типа приза, если оно указано
                 if ($prizeType && $prizeType->action === 'add_ticket') {
                     $ticketsToAdd = $prizeType->value ?? 1;
-                    $oldTickets = $user->tickets_available;
+                    // ВАЖНО: Обновляем данные пользователя из БД перед начислением
+                    $user->refresh();
+                    $ticketsBeforePrize = $user->tickets_available;
                     
                     // Логируем начисление билетов ДО изменения
-                    Log::info('Adding tickets from prize type action', [
+                    Log::info('Adding tickets from prize type action (BEFORE)', [
+                        'request_id' => $requestId,
                         'user_id' => $user->id,
                         'telegram_id' => $telegramId,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type_id' => $prizeType->id,
                         'tickets_to_add' => $ticketsToAdd,
-                        'tickets_before' => $oldTickets,
+                        'tickets_before_prize' => $ticketsBeforePrize,
+                        'tickets_before_deduction' => $ticketsBeforeDeduction,
+                        'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
                     ]);
                     
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
@@ -335,14 +350,18 @@ class WheelController extends Controller
                     $prizeAwarded = true;
                     
                     // Логируем начисление билетов ПОСЛЕ изменения
-                    Log::info('Ticket added from prize type action', [
+                    Log::info('Ticket added from prize type action (AFTER)', [
+                        'request_id' => $requestId,
                         'user_id' => $user->id,
                         'telegram_id' => $telegramId,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type_id' => $prizeType->id,
                         'tickets_added' => $ticketsToAdd,
-                        'tickets_before' => $oldTickets,
-                        'tickets_after' => $user->tickets_available,
+                        'tickets_before_prize' => $ticketsBeforePrize,
+                        'tickets_after_prize' => $user->tickets_available,
+                        'tickets_before_deduction' => $ticketsBeforeDeduction,
+                        'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
+                        'actual_final' => $user->fresh()->tickets_available,
                         'timestamp' => now()->toIso8601String(),
                     ]);
                 }
@@ -398,16 +417,21 @@ class WheelController extends Controller
                         ]);
                     }
                     
-                    $oldTickets = $user->tickets_available;
+                    // ВАЖНО: Обновляем данные пользователя из БД перед начислением
+                    $user->refresh();
+                    $ticketsBeforePrize = $user->tickets_available;
                     
                     // Логируем начисление билетов ДО изменения
-                    Log::info('Adding tickets from prize', [
+                    Log::info('Adding tickets from prize (BEFORE)', [
+                        'request_id' => $requestId,
                         'user_id' => $user->id,
                         'telegram_id' => $telegramId,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type' => $winningSector->prize_type,
                         'tickets_to_add' => $ticketsToAdd,
-                        'tickets_before' => $oldTickets,
+                        'tickets_before_prize' => $ticketsBeforePrize,
+                        'tickets_before_deduction' => $ticketsBeforeDeduction,
+                        'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
                     ]);
                     
                     $user->tickets_available = $user->tickets_available + $ticketsToAdd;
@@ -427,14 +451,18 @@ class WheelController extends Controller
                     $prizeAwarded = true;
                     
                     // Логируем начисление билетов ПОСЛЕ изменения
-                    Log::info('Ticket prize awarded and credited to user', [
+                    Log::info('Ticket prize awarded and credited to user (AFTER)', [
+                        'request_id' => $requestId,
                         'user_id' => $user->id,
                         'telegram_id' => $telegramId,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type' => $winningSector->prize_type,
                         'tickets_added' => $ticketsToAdd,
-                        'tickets_before' => $oldTickets,
-                        'tickets_after' => $user->tickets_available,
+                        'tickets_before_prize' => $ticketsBeforePrize,
+                        'tickets_after_prize' => $user->tickets_available,
+                        'tickets_before_deduction' => $ticketsBeforeDeduction,
+                        'expected_final' => $ticketsBeforeDeduction - 1 + $ticketsToAdd,
+                        'actual_final' => $user->fresh()->tickets_available,
                         'timestamp' => now()->toIso8601String(),
                         'note' => 'Tickets were successfully added to user balance',
                     ]);

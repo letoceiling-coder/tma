@@ -414,6 +414,11 @@ const MainWheel = () => {
     setSpinError(null);
     setWinningSectorNumber(null); // Сбрасываем подсветку при новом спине
 
+    // ВАЖНО: Списываем билет оптимистично ДО отправки запроса
+    // Это предотвращает визуальное обновление билетов во время анимации
+    const ticketsBeforeSpin = tickets;
+    setTickets(Math.max(0, tickets - 1));
+
     const tg = window.Telegram?.WebApp;
 
     // Heavy haptic feedback for spin start
@@ -536,10 +541,13 @@ const MainWheel = () => {
         throw new Error('Некорректный ответ от сервера. Попробуйте снова.');
       }
 
-      // Обновляем билеты
+      // ВАЖНО: НЕ обновляем билеты здесь! 
+      // Билеты будут обновлены только ПОСЛЕ завершения анимации (в setTimeout ниже)
+      // Это предотвращает визуальное обновление до окончания вращения
+      
+      // Сохраняем данные о билетах для обновления после анимации
       const newTickets = data.tickets_available || 0;
-      const prevTickets = tickets;
-      setTickets(newTickets);
+      const prevTickets = ticketsBeforeSpin;
       
       // Проверяем, нужно ли показать pop-up о приглашении друга
       // Используем информацию с сервера, который проверяет все условия
@@ -547,34 +555,6 @@ const MainWheel = () => {
         setShowReferralPopup(true);
       }
       
-      // Если билеты стали больше 0, сбрасываем флаг показа pop-up
-      // (это означает, что пользователь получил новый билет и цикл обнуления завершен)
-      if (newTickets > 0 && prevTickets === 0) {
-        setReferralPopupShown(false);
-      }
-      
-      // Обновляем таймер только если билетов нет (0)
-      if (newTickets === 0) {
-        // Обновляем данные о времени до следующего билета (округляем до целого)
-        if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
-          setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
-        } else {
-          // Если сервер не вернул время, устанавливаем полный интервал
-          const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
-          setTimeLeft(intervalSeconds);
-        }
-      } else {
-        // Если билеты есть, сбрасываем таймер
-        setTimeLeft(0);
-      }
-      
-      if (data.restore_interval_seconds) {
-        setRestoreIntervalSeconds(data.restore_interval_seconds);
-      }
-      if (data.restore_interval_hours) {
-        setRestoreIntervalHours(data.restore_interval_hours);
-      }
-
       // Очищаем ошибку при успешном спине
       setSpinError(null);
 
@@ -611,6 +591,38 @@ const MainWheel = () => {
 
       // Ждем завершения анимации (4 секунды)
     setTimeout(async () => {
+      // ВАЖНО: Обновляем билеты ТОЛЬКО после завершения анимации
+      // Это гарантирует, что пользователь видит правильное количество билетов
+      setTickets(newTickets);
+      
+      // Если билеты стали больше 0, сбрасываем флаг показа pop-up
+      // (это означает, что пользователь получил новый билет и цикл обнуления завершен)
+      if (newTickets > 0 && prevTickets === 0) {
+        setReferralPopupShown(false);
+      }
+      
+      // Обновляем таймер только если билетов нет (0)
+      if (newTickets === 0) {
+        // Обновляем данные о времени до следующего билета (округляем до целого)
+        if (data.seconds_until_next_ticket !== null && data.seconds_until_next_ticket !== undefined) {
+          setTimeLeft(Math.max(0, Math.floor(data.seconds_until_next_ticket)));
+        } else {
+          // Если сервер не вернул время, устанавливаем полный интервал
+          const intervalSeconds = data.restore_interval_seconds || restoreIntervalSeconds;
+          setTimeLeft(intervalSeconds);
+        }
+      } else {
+        // Если билеты есть, сбрасываем таймер
+        setTimeLeft(0);
+      }
+      
+      if (data.restore_interval_seconds) {
+        setRestoreIntervalSeconds(data.restore_interval_seconds);
+      }
+      if (data.restore_interval_hours) {
+        setRestoreIntervalHours(data.restore_interval_hours);
+      }
+      
       setIsSpinning(false);
       isSpinningRef.current = false;
       spinAbortControllerRef.current = null;
@@ -694,6 +706,9 @@ const MainWheel = () => {
     }, 4100);
 
     } catch (error: any) {
+      // ВАЖНО: При ошибке откатываем оптимистичное списание билета
+      setTickets(ticketsBeforeSpin);
+      
       // Игнорируем ошибки отмены запроса
       if (error.name === 'AbortError') {
         console.log('Spin request was aborted (timeout or manual cancel)');
