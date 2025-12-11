@@ -127,16 +127,25 @@ class WowUserController extends Controller
      */
     public function removeTickets(Request $request, int $id): JsonResponse
     {
+        $user = User::whereNotNull('telegram_id')->findOrFail($id);
+        
+        $oldTickets = $user->tickets_available;
+        $maxTickets = max(1, $oldTickets); // Минимум 1 для валидации, максимум - текущее количество
+        
         $request->validate([
-            'tickets' => 'required|integer|min:1|max:100',
+            'tickets' => [
+                'required',
+                'integer',
+                'min:1',
+                "max:{$maxTickets}",
+            ],
+        ], [
+            'tickets.max' => "Недостаточно билетов. У пользователя: {$oldTickets}, можно списать не более {$maxTickets}",
         ]);
 
-        $user = User::whereNotNull('telegram_id')->findOrFail($id);
-
         $ticketsToRemove = $request->input('tickets');
-        $oldTickets = $user->tickets_available;
         
-        // Проверяем, что у пользователя достаточно билетов
+        // Дополнительная проверка на всякий случай
         if ($ticketsToRemove > $oldTickets) {
             return response()->json([
                 'success' => false,
