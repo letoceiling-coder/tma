@@ -25,6 +25,9 @@ Route::get('/channels', [SubscriptionController::class, 'getActiveChannels']);
 Route::get('/check-subscription/{channelUsername}', [SubscriptionController::class, 'checkSubscription']);
 Route::get('/check-all-subscriptions', [SubscriptionController::class, 'checkAllSubscriptions']);
 
+// Логирование кликов по каналам
+Route::post('/channels/{channelId}/click', [SubscriptionController::class, 'logChannelClick']);
+
 // Конфигурация рулетки (публичный доступ)
 Route::get('/wheel-config', [WheelController::class, 'getConfig']);
 

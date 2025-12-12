@@ -29,9 +29,18 @@ const ScrollToTop = () => {
   return null;
 };
 
+interface ChannelInfo {
+  username: string;
+  external_url?: string | null;
+  id?: number;
+  title?: string;
+  priority?: number;
+}
+
 const AppContent = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [channelUsernames, setChannelUsernames] = useState<string[]>([]);
+  const [channelsData, setChannelsData] = useState<ChannelInfo[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(true);
   const { initUser, isInitializing } = useUserInit();
 
@@ -68,7 +77,15 @@ const AppContent = () => {
             console.error("Ошибка при инициализации пользователя:", error);
           }
         } else {
-          // Загружаем usernames каналов
+          // Сохраняем полную информацию о каналах
+          const channelsInfo: ChannelInfo[] = channels.map((ch: any) => ({
+            username: ch.username,
+            external_url: ch.external_url,
+            title: ch.title,
+            priority: ch.priority,
+          }));
+          setChannelsData(channelsInfo);
+          // Загружаем usernames каналов для обратной совместимости
           setChannelUsernames(channels.map((ch: any) => ch.username));
         }
       } catch (error) {
@@ -130,6 +147,7 @@ const AppContent = () => {
     return (
       <ChannelSubscriptionCheck
         channelUsernames={channelUsernames}
+        channels={channelsData}
         onSubscribed={handleSubscribed}
       />
     );

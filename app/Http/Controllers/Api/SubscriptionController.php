@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Channel;
+use App\Models\ChannelClick;
+use App\Models\User;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
@@ -23,9 +27,11 @@ class SubscriptionController extends Controller
         return response()->json([
             'channels' => $channels->map(function ($channel) {
                 return [
+                    'id' => $channel->id,
                     'username' => $channel->username,
                     'title' => $channel->title,
                     'priority' => $channel->priority,
+                    'external_url' => $channel->external_url,
                 ];
             }),
         ]);
@@ -476,6 +482,74 @@ class SubscriptionController extends Controller
                 'channels' => [],
                 'message' => 'Error occurred during subscription check'
             ]);
+        }
+    }
+
+    /**
+     * Логирование клика по ссылке канала
+     * 
+     * @param Request $request
+     * @param int $channelId
+     * @return JsonResponse
+     */
+    public function logChannelClick(Request $request, int $channelId): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            $user = null;
+            if ($initData) {
+                $userData = TelegramService::parseInitData($initData);
+                if (isset($userData['user']['id'])) {
+                    $user = User::where('telegram_id', $userData['user']['id'])->first();
+                }
+            }
+
+            $channel = Channel::findOrFail($channelId);
+            
+            // Извлекаем UTM-параметры из external_url или из запроса
+            $utmParams = null;
+            $externalUrl = $channel->external_url;
+            
+            if ($externalUrl) {
+                $parsedUrl = parse_url($externalUrl);
+                if (isset($parsedUrl['query'])) {
+                    parse_str($parsedUrl['query'], $queryParams);
+                    // Фильтруем только UTM-параметры
+                    $utmParams = array_filter($queryParams, function($key) {
+                        return str_starts_with($key, 'utm_');
+                    }, ARRAY_FILTER_USE_KEY);
+                    $utmParams = !empty($utmParams) ? json_encode($utmParams) : null;
+                }
+            }
+
+            // Также проверяем UTM-параметры в запросе
+            $requestUtmParams = $request->input('utm_params');
+            if ($requestUtmParams) {
+                $utmParams = is_string($requestUtmParams) ? $requestUtmParams : json_encode($requestUtmParams);
+            }
+
+            ChannelClick::create([
+                'channel_id' => $channelId,
+                'user_id' => $user?->id,
+                'utm_params' => $utmParams,
+                'clicked_at' => now(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Click logged',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error logging channel click', [
+                'channel_id' => $channelId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error logging click',
+            ], 500);
         }
     }
 

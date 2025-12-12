@@ -12,6 +12,7 @@ class Channel extends Model
     protected $fillable = [
         'username',
         'title',
+        'external_url',
         'is_active',
         'priority',
     ];
@@ -30,6 +31,14 @@ class Channel extends Model
             ->orderBy('priority', 'desc')
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Получить ссылку на канал (external_url или стандартная)
+     */
+    public function getChannelUrl(): string
+    {
+        return $this->external_url ?: "https://t.me/{$this->username}";
     }
 }
 

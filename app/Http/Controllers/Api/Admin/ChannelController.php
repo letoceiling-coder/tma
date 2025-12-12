@@ -32,6 +32,17 @@ class ChannelController extends Controller
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|max:255|unique:channels,username',
             'title' => 'required|string|max:255',
+            'external_url' => [
+                'nullable',
+                'string',
+                'max:500',
+                'url',
+                function ($attribute, $value, $fail) {
+                    if ($value && !str_starts_with($value, 'https://t.me/')) {
+                        $fail('Внешняя ссылка должна начинаться с https://t.me/');
+                    }
+                },
+            ],
             'priority' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
         ]);
@@ -46,6 +57,7 @@ class ChannelController extends Controller
         $channel = Channel::create([
             'username' => $request->username,
             'title' => $request->title,
+            'external_url' => $request->external_url,
             'priority' => $request->priority ?? 0,
             'is_active' => $request->is_active ?? true,
         ]);
@@ -66,6 +78,17 @@ class ChannelController extends Controller
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|max:255|unique:channels,username,' . $id,
             'title' => 'required|string|max:255',
+            'external_url' => [
+                'nullable',
+                'string',
+                'max:500',
+                'url',
+                function ($attribute, $value, $fail) {
+                    if ($value && !str_starts_with($value, 'https://t.me/')) {
+                        $fail('Внешняя ссылка должна начинаться с https://t.me/');
+                    }
+                },
+            ],
             'priority' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
         ]);
@@ -80,6 +103,7 @@ class ChannelController extends Controller
         $channel->update([
             'username' => $request->username,
             'title' => $request->title,
+            'external_url' => $request->has('external_url') ? $request->external_url : $channel->external_url,
             'priority' => $request->priority ?? $channel->priority,
             'is_active' => $request->is_active ?? $channel->is_active,
         ]);

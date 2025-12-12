@@ -1,12 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
 
+interface ChannelInfo {
+  username: string;
+  external_url?: string | null;
+  id?: number;
+}
+
 interface UseChannelSubscriptionOptions {
   channelUsernames: string[]; // Массив каналов, например: ["bunny_world_2025", "another_channel"]
+  channels?: ChannelInfo[]; // Полная информация о каналах (приоритет над channelUsernames)
   onSubscriptionConfirmed?: () => void;
 }
 
 interface ChannelStatus {
   username: string;
+  external_url?: string | null;
+  id?: number;
   isSubscribed: boolean | null;
 }
 
@@ -15,21 +24,31 @@ interface ChannelSubscriptionResult {
   channels: ChannelStatus[];
   allSubscribed: boolean; // Все ли каналы подписаны
   checkSubscriptions: (force?: boolean) => void;
-  openChannel: (username: string) => void;
-  copyChannelLink: (username: string) => Promise<boolean>;
+  openChannel: (username: string, channelId?: number, externalUrl?: string | null) => void;
+  copyChannelLink: (username: string, externalUrl?: string | null) => Promise<boolean>;
 }
 
 export const useChannelSubscription = ({
   channelUsernames,
+  channels: channelsInfo,
   onSubscriptionConfirmed,
 }: UseChannelSubscriptionOptions): ChannelSubscriptionResult => {
   const [isChecking, setIsChecking] = useState(false);
-  const [channels, setChannels] = useState<ChannelStatus[]>(
-    channelUsernames.map((username) => ({
-      username,
-      isSubscribed: null,
-    }))
-  );
+  
+  // Используем channelsInfo если предоставлено, иначе создаем из channelUsernames
+  const initialChannels: ChannelStatus[] = channelsInfo
+    ? channelsInfo.map((ch) => ({
+        username: ch.username,
+        external_url: ch.external_url,
+        id: ch.id,
+        isSubscribed: null,
+      }))
+    : channelUsernames.map((username) => ({
+        username,
+        isSubscribed: null,
+      }));
+  
+  const [channels, setChannels] = useState<ChannelStatus[]>(initialChannels);
 
   const checkSubscriptions = useCallback(async (force: boolean = false) => {
     const tg = window.Telegram?.WebApp;
@@ -53,7 +72,11 @@ export const useChannelSubscription = ({
       // Backend API более надежен, так как мы можем контролировать его логику
       // и убедиться, что бот является администратором каналов
       
-      const checkPromises = channelUsernames.map(async (username) => {
+      const usernamesToCheck = channelsInfo 
+        ? channelsInfo.map(ch => ch.username)
+        : channelUsernames;
+      
+      const checkPromises = usernamesToCheck.map(async (username) => {
           // УБРАНО: автоматическое разрешение через localStorage для production
           // Проверяем только через API
 
@@ -129,7 +152,18 @@ export const useChannelSubscription = ({
         });
 
       const results = await Promise.all(checkPromises);
-      setChannels(results);
+      
+      // Объединяем результаты проверки с информацией о каналах
+      const mergedResults: ChannelStatus[] = results.map((result) => {
+        const channelInfo = channelsInfo?.find(ch => ch.username === result.username);
+        return {
+          ...result,
+          external_url: channelInfo?.external_url,
+          id: channelInfo?.id,
+        };
+      });
+      
+      setChannels(mergedResults);
 
       // Если все каналы подписаны, вызываем callback
       const allSubscribed = results.every((r) => r.isSubscribed);
@@ -147,10 +181,11 @@ export const useChannelSubscription = ({
     } finally {
       setIsChecking(false);
     }
-  }, [channelUsernames, onSubscriptionConfirmed]);
+  }, [channelUsernames, channelsInfo, onSubscriptionConfirmed]);
 
-  const copyChannelLink = useCallback(async (username: string): Promise<boolean> => {
-    const channelUrl = `https://t.me/${username}`;
+  const copyChannelLink = useCallback(async (username: string, externalUrl?: string | null): Promise<boolean> => {
+    // Используем external_url если указано, иначе стандартную ссылку
+    const channelUrl = externalUrl || `https://t.me/${username}`;
     
     try {
       // Пробуем использовать Clipboard API
@@ -180,10 +215,55 @@ export const useChannelSubscription = ({
     }
   }, []);
 
-  const openChannel = useCallback((username: string) => {
+  const openChannel = useCallback(async (username: string, channelId?: number, externalUrl?: string | null) => {
     const tg = window.Telegram?.WebApp;
-    const channelUrl = `https://t.me/${username}`;
+    
+    // Используем external_url если указано, иначе стандартную ссылку
+    const channelUrl = externalUrl || `https://t.me/${username}`;
     const platform = tg?.platform || 'web';
+    
+    // Логируем клик перед открытием
+    if (channelId) {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const apiPath = apiUrl ? `${apiUrl}/api/channels/${channelId}/click` : `/api/channels/${channelId}/click`;
+        
+        // Извлекаем UTM-параметры из externalUrl если есть
+        let utmParams = null;
+        if (externalUrl) {
+          try {
+            const url = new URL(externalUrl);
+            const params: Record<string, string> = {};
+            url.searchParams.forEach((value, key) => {
+              if (key.startsWith('utm_')) {
+                params[key] = value;
+              }
+            });
+            if (Object.keys(params).length > 0) {
+              utmParams = params;
+            }
+          } catch (e) {
+            // Игнорируем ошибки парсинга URL
+          }
+        }
+        
+        await fetch(apiPath, {
+          method: 'POST',
+          headers: {
+            'X-Telegram-Init-Data': tg?.initData || '',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            utm_params: utmParams,
+          }),
+        }).catch((err) => {
+          console.warn('Failed to log channel click:', err);
+        });
+      } catch (error) {
+        console.warn('Error logging channel click:', error);
+      }
+    }
     
     // Определяем, является ли это десктопной версией
     const isDesktop = platform === 'tdesktop' || platform === 'web' || platform === 'macos' || platform === 'windows' || platform === 'linux';

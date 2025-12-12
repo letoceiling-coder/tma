@@ -32,6 +32,7 @@
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Username</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Название</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Внешняя ссылка</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Приоритет</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Статус</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Действия</th>
@@ -41,6 +42,12 @@
                         <tr v-for="channel in channels" :key="channel.id" class="hover:bg-muted/10">
                             <td class="px-6 py-4 text-sm font-medium text-foreground">@{{ channel.username }}</td>
                             <td class="px-6 py-4 text-sm text-foreground">{{ channel.title }}</td>
+                            <td class="px-6 py-4 text-sm text-foreground">
+                                <span v-if="channel.external_url" class="text-blue-500 truncate max-w-xs block" :title="channel.external_url">
+                                    {{ channel.external_url }}
+                                </span>
+                                <span v-else class="text-muted-foreground">—</span>
+                            </td>
                             <td class="px-6 py-4 text-sm text-foreground">{{ channel.priority }}</td>
                             <td class="px-6 py-4 text-sm">
                                 <span
@@ -109,6 +116,16 @@
                         />
                     </div>
                     <div>
+                        <label class="text-sm font-medium mb-1 block">Внешняя ссылка (опционально)</label>
+                        <input
+                            v-model="form.external_url"
+                            type="url"
+                            placeholder="https://t.me/channel?utm_source=..."
+                            class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                        />
+                        <p class="text-xs text-muted-foreground mt-1">Должна начинаться с https://t.me/</p>
+                    </div>
+                    <div>
                         <label class="text-sm font-medium mb-1 block">Приоритет</label>
                         <input
                             v-model.number="form.priority"
@@ -169,6 +186,7 @@ export default {
             id: null,
             username: '',
             title: '',
+            external_url: '',
             priority: 0,
             is_active: true,
         })
@@ -195,6 +213,7 @@ export default {
                 id: channel.id,
                 username: channel.username,
                 title: channel.title,
+                external_url: channel.external_url || '',
                 priority: channel.priority,
                 is_active: channel.is_active,
             }
@@ -247,6 +266,7 @@ export default {
                 const channelData = {
                     username: form.value.username.replace('@', ''), // Убираем @ если есть
                     title: form.value.title,
+                    external_url: form.value.external_url || null,
                     priority: form.value.priority || 0,
                     is_active: form.value.is_active,
                 }
@@ -294,6 +314,7 @@ export default {
                 id: null,
                 username: '',
                 title: '',
+                external_url: '',
                 priority: 0,
                 is_active: true,
             }

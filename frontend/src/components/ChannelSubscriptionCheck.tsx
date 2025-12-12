@@ -3,18 +3,29 @@ import { useChannelSubscription } from "@/hooks/useChannelSubscription";
 import { haptic } from "@/lib/haptic";
 import { ExternalLink, Copy, Check } from "lucide-react";
 
+interface ChannelInfo {
+  username: string;
+  external_url?: string | null;
+  id?: number;
+  title?: string;
+  priority?: number;
+}
+
 interface ChannelSubscriptionCheckProps {
-  channelUsernames: string[]; // Массив каналов
+  channelUsernames: string[]; // Массив каналов (для обратной совместимости)
+  channels?: ChannelInfo[]; // Полная информация о каналах
   onSubscribed: () => void;
 }
 
 const ChannelSubscriptionCheck = ({
   channelUsernames,
+  channels: channelsInfo,
   onSubscribed,
 }: ChannelSubscriptionCheckProps) => {
   const { isChecking, channels, allSubscribed, checkSubscriptions, openChannel, copyChannelLink } =
     useChannelSubscription({
       channelUsernames,
+      channels: channelsInfo,
       onSubscriptionConfirmed: onSubscribed,
     });
   
@@ -163,7 +174,7 @@ const ChannelSubscriptionCheck = ({
               <button
                 onClick={() => {
                   haptic.mediumTap();
-                  openChannel(channel.username);
+                  openChannel(channel.username, channel.id, channel.external_url);
                 }}
                 style={{
                   display: "flex",
@@ -201,7 +212,7 @@ const ChannelSubscriptionCheck = ({
               <button
                 onClick={async () => {
                   haptic.lightTap();
-                  const success = await copyChannelLink(channel.username);
+                  const success = await copyChannelLink(channel.username, channel.external_url);
                   if (success) {
                     setCopiedChannel(channel.username);
                     setTimeout(() => {
