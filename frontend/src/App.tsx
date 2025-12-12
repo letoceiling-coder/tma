@@ -44,14 +44,16 @@ const AppContent = () => {
   const [loadingChannels, setLoadingChannels] = useState(true);
   const { initUser, isInitializing } = useUserInit();
 
-  // Загружаем список каналов при монтировании
+  // Загружаем список каналов и проверяем подписку при каждом запуске
   useEffect(() => {
-    const loadChannels = async () => {
+    const loadChannelsAndCheck = async () => {
       try {
         const apiUrl = import.meta.env.VITE_API_URL || '';
-        const apiPath = apiUrl ? `${apiUrl}/api/channels` : `/api/channels`;
+        const tg = window.Telegram?.WebApp;
         
-        const response = await fetch(apiPath, {
+        // Загружаем список каналов
+        const channelsPath = apiUrl ? `${apiUrl}/api/channels` : `/api/channels`;
+        const channelsResponse = await fetch(channelsPath, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -59,12 +61,12 @@ const AppContent = () => {
           },
         });
 
-        if (!response.ok) {
+        if (!channelsResponse.ok) {
           throw new Error('Ошибка загрузки каналов');
         }
 
-        const data = await response.json();
-        const channels = data.channels || [];
+        const channelsData = await channelsResponse.json();
+        const channels = channelsData.channels || [];
         
         if (channels.length === 0) {
           // Если каналов нет, пропускаем проверку подписки
@@ -76,37 +78,63 @@ const AppContent = () => {
           } catch (error) {
             console.error("Ошибка при инициализации пользователя:", error);
           }
+          setLoadingChannels(false);
+          return;
+        }
+
+        // Сохраняем полную информацию о каналах
+        const channelsInfo: ChannelInfo[] = channels.map((ch: any) => ({
+          id: ch.id,
+          username: ch.username,
+          external_url: ch.external_url,
+          title: ch.title,
+          priority: ch.priority,
+        }));
+        setChannelsData(channelsInfo);
+        setChannelUsernames(channels.map((ch: any) => ch.username));
+
+        // ВСЕГДА проверяем подписку через check-all-subscriptions при запуске
+        if (tg && tg.initData) {
+          const checkPath = apiUrl 
+            ? `${apiUrl}/api/check-all-subscriptions?forceCheck=true` 
+            : `/api/check-all-subscriptions?forceCheck=true`;
+          
+          const checkResponse = await fetch(checkPath, {
+            method: 'GET',
+            headers: {
+              'X-Telegram-Init-Data': tg.initData,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          });
+
+          if (checkResponse.ok) {
+            const checkData = await checkResponse.json();
+            // Устанавливаем статус подписки на основе результата проверки
+            setIsSubscribed(checkData.all_subscribed === true);
+          } else {
+            // При ошибке проверки блокируем доступ
+            setIsSubscribed(false);
+          }
         } else {
-          // Сохраняем полную информацию о каналах
-          const channelsInfo: ChannelInfo[] = channels.map((ch: any) => ({
-            username: ch.username,
-            external_url: ch.external_url,
-            title: ch.title,
-            priority: ch.priority,
-          }));
-          setChannelsData(channelsInfo);
-          // Загружаем usernames каналов для обратной совместимости
-          setChannelUsernames(channels.map((ch: any) => ch.username));
+          // Если нет initData, блокируем доступ
+          setIsSubscribed(false);
         }
       } catch (error) {
-        console.error('Ошибка загрузки каналов:', error);
-        // При ошибке пропускаем проверку подписки
-        setIsSubscribed(true);
+        console.error('Ошибка загрузки каналов или проверки подписки:', error);
+        // При ошибке блокируем доступ
+        setIsSubscribed(false);
       } finally {
         setLoadingChannels(false);
       }
     };
 
-    loadChannels();
+    loadChannelsAndCheck();
   }, []);
 
   const handleSubscribed = async () => {
     setIsSubscribed(true);
-    sessionStorage.setItem("channel_subscribed", "true");
-    // Сохраняем в localStorage для тестирования
-    channelUsernames.forEach((username) => {
-      localStorage.setItem(`channel_subscribed_${username}`, "true");
-    });
+    // НЕ сохраняем в sessionStorage/localStorage - проверка всегда выполняется при запуске
 
     // Инициализируем пользователя после успешной проверки подписки
     try {

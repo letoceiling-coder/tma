@@ -272,10 +272,9 @@ class SubscriptionController extends Controller
 
             $status = $result['result']['status'] ?? null;
             
-            // Пользователь считается подписанным если статус: member, administrator, creator
-            // Статусы: left, kicked - не подписан
-            // Статусы: member, administrator, creator, restricted - подписан
-            $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
+            // ВАЖНО: Пользователь считается подписанным ТОЛЬКО если status = 'member'
+            // Это требование задачи - проверять только статус member
+            $isSubscribed = $status === 'member';
 
             // Кешируем результат: положительные на 5 минут, отрицательные на 15 секунд (быстрее обновление)
             // Если была принудительная проверка и результат отрицательный - кешируем на меньшее время
@@ -356,24 +355,34 @@ class SubscriptionController extends Controller
             // Исправляем путь к токену
             $botToken = config('telegram.bot_token') ?? config('services.telegram.bot_token');
 
+            // Проверяем параметр forceCheck - если true, игнорируем кеш
+            $forceCheck = $request->query('forceCheck', false) || $request->input('forceCheck', false);
+
             foreach ($channels as $channel) {
                 $chatId = '@' . ltrim($channel->username, '@');
                 
-                // Проверяем кеш
-                $cacheKey = "subscription_check_{$userId}_{$channel->username}";
-                $cachedResult = Cache::get($cacheKey);
-                
-                if ($cachedResult !== null) {
-                    $results[] = [
-                        'username' => $channel->username,
-                        'title' => $channel->title,
-                        'is_subscribed' => $cachedResult,
-                        'status' => 'cached',
-                    ];
-                    if (!$cachedResult) {
-                        $allSubscribed = false;
+                // Если forceCheck=true, игнорируем кеш и всегда проверяем через API
+                if (!$forceCheck) {
+                    $cacheKey = "subscription_check_{$userId}_{$channel->username}";
+                    $cachedResult = Cache::get($cacheKey);
+                    
+                    if ($cachedResult !== null) {
+                        $results[] = [
+                            'username' => $channel->username,
+                            'title' => $channel->title,
+                            'is_subscribed' => $cachedResult,
+                            'status' => 'cached',
+                        ];
+                        if (!$cachedResult) {
+                            $allSubscribed = false;
+                        }
+                        continue;
                     }
-                    continue;
+                } else {
+                    // При forceCheck инвалидируем кеш
+                    $cacheKey = "subscription_check_{$userId}_{$channel->username}";
+                    Cache::forget($cacheKey);
+                    Cache::forget("subscription_check_positive_{$userId}_{$channel->username}");
                 }
                 
                 try {
@@ -410,14 +419,19 @@ class SubscriptionController extends Controller
                     if ($response->successful()) {
                         $result = $response->json();
                         $status = $result['result']['status'] ?? null;
-                        $isSubscribed = in_array($status, ['member', 'administrator', 'creator', 'restricted']);
                         
-                        // Кешируем результат: положительные на 5 минут, отрицательные на 30 секунд
-                        $cacheTime = $isSubscribed ? 300 : 30;
-                        Cache::put($cacheKey, $isSubscribed, $cacheTime);
+                        // ВАЖНО: Проверяем только статус 'member' (требование задачи)
+                        $isSubscribed = $status === 'member';
                         
-                        if ($isSubscribed) {
-                            Cache::put("subscription_check_positive_{$userId}_{$channel->username}", true, 600);
+                        // НЕ кешируем результат при forceCheck - всегда свежая проверка
+                        // Кешируем только если не forceCheck (для оптимизации повторных запросов)
+                        if (!$forceCheck) {
+                            $cacheTime = $isSubscribed ? 300 : 30;
+                            Cache::put($cacheKey, $isSubscribed, $cacheTime);
+                            
+                            if ($isSubscribed) {
+                                Cache::put("subscription_check_positive_{$userId}_{$channel->username}", true, 600);
+                            }
                         }
                         
                         $results[] = [
@@ -431,25 +445,39 @@ class SubscriptionController extends Controller
                             $allSubscribed = false;
                         }
                     } else {
-                        // При ошибке проверяем кеш положительных результатов
-                        $cacheKeyPositive = "subscription_check_positive_{$userId}_{$channel->username}";
-                        $cachedPositive = Cache::get($cacheKeyPositive);
-                        
-                        if ($cachedPositive === true) {
-                            $results[] = [
-                                'username' => $channel->username,
-                                'title' => $channel->title,
-                                'is_subscribed' => true,
-                                'status' => 'cached_after_error',
-                            ];
-                        } else {
+                        // При ошибке API и forceCheck - блокируем доступ
+                        // При обычной проверке используем кеш только если не forceCheck
+                        if ($forceCheck) {
+                            // При forceCheck и ошибке API - блокируем
                             $results[] = [
                                 'username' => $channel->username,
                                 'title' => $channel->title,
                                 'is_subscribed' => false,
                                 'status' => null,
+                                'error' => 'API error during force check',
                             ];
                             $allSubscribed = false;
+                        } else {
+                            // При обычной проверке используем кеш положительных результатов
+                            $cacheKeyPositive = "subscription_check_positive_{$userId}_{$channel->username}";
+                            $cachedPositive = Cache::get($cacheKeyPositive);
+                            
+                            if ($cachedPositive === true) {
+                                $results[] = [
+                                    'username' => $channel->username,
+                                    'title' => $channel->title,
+                                    'is_subscribed' => true,
+                                    'status' => 'cached_after_error',
+                                ];
+                            } else {
+                                $results[] = [
+                                    'username' => $channel->username,
+                                    'title' => $channel->title,
+                                    'is_subscribed' => false,
+                                    'status' => null,
+                                ];
+                                $allSubscribed = false;
+                            }
                         }
                     }
                 } catch (\Exception $e) {

@@ -68,96 +68,51 @@ export const useChannelSubscription = ({
     setIsChecking(true);
 
     try {
-      // Всегда используем backend API для проверки подписки
-      // Backend API более надежен, так как мы можем контролировать его логику
-      // и убедиться, что бот является администратором каналов
+      // Используем check-all-subscriptions вместо индивидуальных проверок
+      // Это гарантирует актуальную проверку через Telegram Bot API
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const forceParam = force ? '?forceCheck=true' : '';
+      const apiPath = apiUrl 
+        ? `${apiUrl}/api/check-all-subscriptions${forceParam}` 
+        : `/api/check-all-subscriptions${forceParam}`;
       
+      console.log(`Проверка подписки на все каналы через API: ${apiPath}${force ? ' (force)' : ''}`);
+      
+      const response = await fetch(apiPath, {
+        method: "GET",
+        headers: {
+          "X-Telegram-Init-Data": tg.initData || "",
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Ошибка проверки подписки');
+      }
+      
+      const data = await response.json();
+      console.log('Результат проверки всех подписок:', data);
+      
+      // Преобразуем результат в формат ChannelStatus[]
       const usernamesToCheck = channelsInfo 
         ? channelsInfo.map(ch => ch.username)
         : channelUsernames;
       
-      const checkPromises = usernamesToCheck.map(async (username) => {
-          // УБРАНО: автоматическое разрешение через localStorage для production
-          // Проверяем только через API
+      const results = usernamesToCheck.map((username) => {
+        const channelResult = data.channels?.find((ch: any) => ch.username === username);
+        return {
+          username,
+          isSubscribed: channelResult?.is_subscribed === true,
+        };
+      });
 
-          // Вызываем backend API для проверки подписки
-          try {
-            const apiUrl = import.meta.env.VITE_API_URL || '';
-            // Добавляем параметр force для принудительной проверки (инвалидация кеша)
-            const forceParam = force ? '?force=1' : '';
-            const apiPath = apiUrl ? `${apiUrl}/api/check-subscription/${username}${forceParam}` 
-                                   : `/api/check-subscription/${username}${forceParam}`;
-            
-            console.log(`Проверка подписки на @${username} через API: ${apiPath}${force ? ' (force)' : ''}`);
-            console.log(`InitData присутствует: ${!!tg.initData}`);
-            
-            const response = await fetch(apiPath, {
-              method: "GET",
-              headers: {
-                "X-Telegram-Init-Data": tg.initData || "",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-              },
-            });
-            
-            console.log(`Ответ API для @${username}:`, response.status, response.statusText);
-            
-            const responseText = await response.text();
-            console.log(`Текст ответа API для @${username}:`, responseText);
-            
-            let data;
-            try {
-              data = JSON.parse(responseText);
-            } catch (e) {
-              console.error(`Ошибка парсинга JSON для @${username}:`, e, responseText);
-              return {
-                username,
-                isSubscribed: false,
-              };
-            }
-            
-            console.log(`Данные ответа API для @${username}:`, data);
-            
-            if (response.ok) {
-              // Строгая проверка - только если явно true
-              const isSubscribed = data.is_subscribed === true;
-              console.log(`Результат проверки @${username}: isSubscribed=${isSubscribed}, status=${data.status}`);
-              
-              // Если в ответе есть debug информация, логируем её
-              if (data.debug) {
-                console.log(`Debug информация для @${username}:`, data.debug);
-              }
-              
-              return {
-                username,
-                isSubscribed,
-              };
-            } else {
-              // Если API недоступен или вернул ошибку, логируем и блокируем доступ
-              console.warn(`API ошибка для @${username}:`, data.message || 'Unknown error', data);
-              
-              return {
-                username,
-                isSubscribed: false,
-              };
-            }
-          } catch (error) {
-            // При ошибке считаем что не подписан (блокируем доступ)
-            console.error(`Исключение при проверке @${username}:`, error);
-            return {
-              username,
-              isSubscribed: false,
-            };
-          }
-        });
-
-      const results = await Promise.all(checkPromises);
-      
       // Объединяем результаты проверки с информацией о каналах
       const mergedResults: ChannelStatus[] = results.map((result) => {
         const channelInfo = channelsInfo?.find(ch => ch.username === result.username);
         return {
-          ...result,
+          username: result.username,
+          isSubscribed: result.isSubscribed,
           external_url: channelInfo?.external_url,
           id: channelInfo?.id,
         };
@@ -166,14 +121,18 @@ export const useChannelSubscription = ({
       setChannels(mergedResults);
 
       // Если все каналы подписаны, вызываем callback
-      const allSubscribed = results.every((r) => r.isSubscribed);
+      const allSubscribed = data.all_subscribed === true;
       if (allSubscribed) {
         onSubscriptionConfirmed?.();
       }
     } catch (error) {
       console.error("Error in checkSubscriptions:", error);
+      // При ошибке блокируем доступ
+      const usernamesToCheck = channelsInfo 
+        ? channelsInfo.map(ch => ch.username)
+        : channelUsernames;
       setChannels(
-        channelUsernames.map((username) => ({
+        usernamesToCheck.map((username) => ({
           username,
           isSubscribed: false,
         }))
