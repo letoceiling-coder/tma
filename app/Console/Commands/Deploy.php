@@ -19,7 +19,8 @@ class Deploy extends Command
                             {--skip-build : Пропустить npm run build}
                             {--dry-run : Показать что будет сделано без выполнения}
                             {--insecure : Отключить проверку SSL сертификата (для разработки)}
-                            {--with-seed : Выполнить seeders на сервере (по умолчанию пропускаются)}';
+                            {--with-seed : Выполнить seeders на сервере (по умолчанию пропускаются)}
+                            {--force : Принудительная отправка (force push) - перезаписывает удаленную ветку}';
 
     /**
      * The console command description.
@@ -351,14 +352,23 @@ class Deploy extends Command
         $branchProcess = Process::run('git rev-parse --abbrev-ref HEAD');
         $branch = trim($branchProcess->output()) ?: 'main';
         
+        $forcePush = $this->option('force');
+        
+        if ($forcePush) {
+            $this->warn('  ⚠️  ВНИМАНИЕ: Используется принудительная отправка (--force)');
+            $this->warn('  ⚠️  Это перезапишет удаленную ветку и может удалить коммиты!');
+        }
+        
         if ($dryRun) {
-            $this->line("  [DRY-RUN] Выполнение: git push origin {$branch}");
+            $pushCommand = $forcePush ? "git push --force origin {$branch}" : "git push origin {$branch}";
+            $this->line("  [DRY-RUN] Выполнение: {$pushCommand}");
             return;
         }
 
         // Увеличиваем таймаут для git push (большие файлы могут требовать больше времени)
+        $pushCommand = $forcePush ? "git push --force origin {$branch}" : "git push origin {$branch}";
         $process = Process::timeout(300) // 5 минут
-            ->run("git push origin {$branch}");
+            ->run($pushCommand);
 
         if (!$process->successful()) {
             $errorOutput = $process->errorOutput();
@@ -366,8 +376,9 @@ class Deploy extends Command
             // Проверяем, нужно ли установить upstream
             if (str_contains($errorOutput, 'no upstream branch')) {
                 $this->line("  🔄 Установка upstream для ветки {$branch}...");
+                $upstreamCommand = $forcePush ? "git push --force -u origin {$branch}" : "git push -u origin {$branch}";
                 $process = Process::timeout(300)
-                    ->run("git push -u origin {$branch}");
+                    ->run($upstreamCommand);
                 
                 if (!$process->successful()) {
                     throw new \Exception("Ошибка отправки в репозиторий:\n" . $process->errorOutput());
@@ -382,11 +393,21 @@ class Deploy extends Command
                     );
                 }
                 
+                // Если обычный push не прошел из-за non-fast-forward, предлагаем force
+                if (str_contains($errorOutput, 'non-fast-forward') && !$forcePush) {
+                    throw new \Exception(
+                        "Ошибка отправки в репозиторий: локальная ветка отстает от удаленной.\n" .
+                        "Если вы делаете откат, используйте флаг --force:\n" .
+                        "php artisan deploy --force --insecure\n" .
+                        "⚠️  ВНИМАНИЕ: --force перезапишет удаленную ветку!"
+                    );
+                }
+                
                 throw new \Exception("Ошибка отправки в репозиторий:\n" . $errorOutput);
             }
         }
 
-        $this->info("  ✅ Изменения отправлены в ветку: {$branch}");
+        $this->info("  ✅ Изменения отправлены в ветку: {$branch}" . ($forcePush ? " (force push)" : ""));
         $this->newLine();
     }
 
