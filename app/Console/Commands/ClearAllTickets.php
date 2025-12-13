@@ -113,12 +113,15 @@ class ClearAllTickets extends Command
                 $this->info("✓ Файлы вложений не найдены или уже удалены");
             }
             
-            // Удаляем все тикеты поддержки (сообщения удалятся автоматически через cascade)
-            $supportTicketsCount = SupportTicket::count();
-            SupportTicket::truncate(); // Truncate автоматически коммитит
+            // Сначала удаляем все сообщения
+            $supportMessagesCount = SupportMessage::count();
+            SupportMessage::query()->delete();
+            $this->info("✓ Удалено сообщений поддержки: {$supportMessagesCount}");
             
+            // Затем удаляем все тикеты поддержки
+            $supportTicketsCount = SupportTicket::count();
+            SupportTicket::query()->delete();
             $this->info("✓ Удалено тикетов поддержки: {$supportTicketsCount}");
-            $this->info("✓ Удалено сообщений поддержки (через cascade)");
 
             $this->newLine();
             $this->info('=== Статистика после очистки ===');
