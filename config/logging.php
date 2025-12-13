@@ -135,6 +135,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'tickets' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/tickets.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_TICKETS_DAYS', 90), // Хранить логи 90 дней
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

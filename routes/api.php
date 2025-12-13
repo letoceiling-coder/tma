@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ReferralController;
 use App\Http\Controllers\Api\WowAuthController;
 use App\Http\Controllers\Api\LeaderboardController;
 use App\Http\Controllers\Api\StarExchangeController;
+use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\v1\FolderController;
 use App\Http\Controllers\Api\v1\MediaController;
 use Illuminate\Support\Facades\Route;
@@ -158,8 +159,20 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('welcome', [\App\Http\Controllers\Api\Admin\WelcomeController::class, 'index']);
                 Route::post('welcome', [\App\Http\Controllers\Api\Admin\WelcomeController::class, 'update']);
             });
+            
+            // Support tickets
+            Route::get('support/tickets', [SupportController::class, 'index']);
+            Route::get('support/tickets/{id}', [SupportController::class, 'show']);
+            Route::post('support/ticket', [SupportController::class, 'store']);
+            Route::post('support/message', [SupportController::class, 'sendMessage']);
         });
     });
+});
+
+// Support webhooks (protected by deploy.token middleware)
+Route::middleware('deploy.token')->prefix('support/webhook')->group(function () {
+    Route::post('/message', [SupportController::class, 'webhookMessage']);
+    Route::post('/status', [SupportController::class, 'webhookStatus']);
 });
 
 // Маршрут для деплоя (защищен токеном)

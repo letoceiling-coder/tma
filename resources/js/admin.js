@@ -316,6 +316,12 @@ const routes = [
                 component: () => import('./pages/admin/Documentation.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
+            {
+                path: 'support',
+                name: 'admin.support',
+                component: () => import('./pages/admin/Support.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'manager'] },
+            },
         ],
     },
 ];

@@ -18,6 +18,14 @@ class EnsureUserIsAdmin
         $user = $request->user();
         
         if (!$user || !$user->hasAnyRole(['admin'])) {
+            // Логирование неавторизованного доступа к поддержке
+            if (str_contains($request->path(), 'support')) {
+                \App\Services\SupportLogger::logUnauthorizedAccess('Admin access to support', [
+                    'path' => $request->path(),
+                    'user_id' => $user?->id,
+                ]);
+            }
+            
             return response()->json([
                 'message' => 'Доступ запрещен. Требуется роль администратора.',
             ], 403);

@@ -115,6 +115,12 @@ class AdminMenu
                 ],
             ],
             [
+                'title' => 'Поддержка',
+                'route' => 'admin.support',
+                'icon' => 'chat',
+                'roles' => ['admin', 'manager'],
+            ],
+            [
                 'title' => 'Документация',
                 'route' => 'admin.documentation',
                 'icon' => 'book',
