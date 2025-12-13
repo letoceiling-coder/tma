@@ -574,14 +574,76 @@ class WheelController extends Controller
                 }
 
                 // Сохраняем результат прокрута
-                $spin = Spin::create([
-                    'user_id' => $user->id,
-                    'spin_time' => now(),
-                    'prize_type' => $winningSector->prize_type,
-                    'prize_value' => $winningSector->prize_value,
-                    'sector_id' => $winningSector->id,
-                    'sector_number' => $winningSector->sector_number, // Сохраняем номер сектора для админки
-                ]);
+                // ВАЖНО: Оборачиваем в try-catch чтобы не прерывать вращение при ошибке сохранения
+                try {
+                    $spin = Spin::create([
+                        'user_id' => $user->id,
+                        'spin_time' => now(),
+                        'prize_type' => $winningSector->prize_type,
+                        'prize_value' => $winningSector->prize_value ?? 0,
+                        'sector_id' => $winningSector->id,
+                        'sector_number' => $winningSector->sector_number, // Сохраняем номер сектора для админки
+                    ]);
+                } catch (\Exception $spinError) {
+                    // Ошибка сохранения spin - логируем, но НЕ прерываем вращение
+                    $errorMsg = 'Failed to save spin record: ' . $spinError->getMessage();
+                    Log::channel('wheel-errors')->error($errorMsg, [
+                        'request_id' => $requestId,
+                        'telegram_id' => $telegramId,
+                        'user_id' => $user->id,
+                        'sector_id' => $winningSector->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
+                        'prize_value' => $winningSector->prize_value,
+                        'error' => $spinError->getMessage(),
+                        'trace' => $spinError->getTraceAsString(),
+                        'file' => $spinError->getFile(),
+                        'line' => $spinError->getLine(),
+                    ]);
+                    
+                    try {
+                        WheelError::logError(
+                            'spin_save_error',
+                            $errorMsg,
+                            [
+                                'sector_id' => $winningSector->id,
+                                'sector_number' => $winningSector->sector_number,
+                                'prize_type' => $winningSector->prize_type,
+                                'prize_value' => $winningSector->prize_value,
+                                'error_class' => get_class($spinError),
+                                'file' => $spinError->getFile(),
+                                'line' => $spinError->getLine(),
+                                'telegram_id' => $telegramId,
+                            ],
+                            $user->id,
+                            $winningSector->id,
+                            $winningSector->prize_type,
+                            $randomValue ?? null,
+                            $expectedResult ?? null
+                        );
+                    } catch (\Exception $logError) {
+                        Log::error('Failed to log wheel error to database', ['error' => $logError->getMessage()]);
+                    }
+                    
+                    // Создаем временный объект spin для продолжения обработки
+                    // Это позволяет не прерывать вращение даже если сохранение не удалось
+                    $spin = (object) [
+                        'id' => null,
+                        'user_id' => $user->id,
+                        'spin_time' => now(),
+                        'prize_type' => $winningSector->prize_type,
+                        'prize_value' => $winningSector->prize_value ?? 0,
+                        'sector_id' => $winningSector->id,
+                        'sector_number' => $winningSector->sector_number,
+                    ];
+                    
+                    Log::warning('Continuing spin processing despite spin save error', [
+                        'request_id' => $requestId,
+                        'user_id' => $user->id,
+                        'sector_number' => $winningSector->sector_number,
+                        'prize_type' => $winningSector->prize_type,
+                    ]);
+                }
 
                 // ВАЖНО: Начисление приза происходит строго по типу приза сектора
                 // Объединяем логику в одно место, чтобы избежать двойного начисления
@@ -665,50 +727,106 @@ class WheelController extends Controller
                         'prize_value' => $winningSector->prize_value,
                         'note' => 'Money is NOT added to user balance automatically',
                     ]);
-                } elseif ($winningSector->prize_type === 'secret_box' || $winningSector->prize_type === 'sponsor_gift') {
-                    // ВАЖНО: Секретный бокс или подарок от спонсора - НЕ начисляется автоматически!
+                } elseif ($winningSector->prize_type === 'secret_box' || $winningSector->prize_type === 'sponsor_gift' || $winningSector->prize_type === 'gift') {
+                    // ВАЖНО: Секретный бокс, подарок от спонсора или обычный подарок - НЕ начисляется автоматически!
                     // Никакие призы не добавляются автоматически.
                     // Только отмечаем выигрыш в статистике.
                     // Пользователь должен связаться с администратором для получения приза.
-                    if (!$prizeAwarded) {
-                        $user->total_wins++;
-                        $user->save();
-                        $prizeAwarded = true;
-                    }
-                    
-                    // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для диагностики sponsor_gift
-                    Log::info('Secret box or sponsor gift prize awarded (NOT automatically credited - user must contact admin)', [
-                        'request_id' => $requestId,
-                        'user_id' => $user->id,
-                        'telegram_id' => $telegramId,
-                        'spin_id' => $spin->id ?? null,
-                        'sector_id' => $winningSector->id,
-                        'sector_number' => $winningSector->sector_number,
-                        'prize_type' => $winningSector->prize_type,
-                        'prize_value' => $winningSector->prize_value,
-                        'prize_type_id' => $winningSector->prize_type_id,
-                        'is_sponsor_gift' => $winningSector->prize_type === 'sponsor_gift',
-                        'probability_percent' => (float) $winningSector->probability_percent,
-                        'is_active' => $winningSector->is_active,
-                        'icon_url' => $winningSector->icon_url,
-                        'prize_awarded' => $prizeAwarded,
-                        'total_wins' => $user->total_wins,
-                        'note' => 'Prize is NOT awarded automatically',
-                        'test_mode' => $testMode ?? false,
-                    ]);
-                    
-                    // Дополнительное логирование в wheel-errors для sponsor_gift
-                    if ($winningSector->prize_type === 'sponsor_gift') {
-                        Log::channel('wheel-errors')->info('SPONSOR_GIFT sector selected and processed', [
+                    // ОБРАБОТКА: Визуальный/информационный приз - пассивное поведение, без побочных эффектов
+                    try {
+                        if (!$prizeAwarded) {
+                            $user->total_wins++;
+                            $user->save();
+                            $prizeAwarded = true;
+                        }
+                        
+                        // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для диагностики sponsor_gift
+                        Log::info('Secret box, sponsor gift or gift prize awarded (NOT automatically credited - user must contact admin)', [
                             'request_id' => $requestId,
                             'user_id' => $user->id,
                             'telegram_id' => $telegramId,
                             'spin_id' => $spin->id ?? null,
                             'sector_id' => $winningSector->id,
                             'sector_number' => $winningSector->sector_number,
+                            'prize_type' => $winningSector->prize_type,
+                            'prize_value' => $winningSector->prize_value ?? 0,
+                            'prize_type_id' => $winningSector->prize_type_id,
+                            'is_sponsor_gift' => $winningSector->prize_type === 'sponsor_gift',
+                            'is_gift' => $winningSector->prize_type === 'gift',
                             'probability_percent' => (float) $winningSector->probability_percent,
                             'is_active' => $winningSector->is_active,
+                            'icon_url' => $winningSector->icon_url ?? null,
+                            'prize_awarded' => $prizeAwarded,
+                            'total_wins' => $user->total_wins,
+                            'note' => 'Prize is NOT awarded automatically - visual/informational prize',
                             'test_mode' => $testMode ?? false,
+                        ]);
+                        
+                        // Дополнительное логирование в wheel-errors для sponsor_gift
+                        if ($winningSector->prize_type === 'sponsor_gift') {
+                            Log::channel('wheel-errors')->info('SPONSOR_GIFT sector selected and processed successfully', [
+                                'request_id' => $requestId,
+                                'user_id' => $user->id,
+                                'telegram_id' => $telegramId,
+                                'spin_id' => $spin->id ?? null,
+                                'sector_id' => $winningSector->id,
+                                'sector_number' => $winningSector->sector_number,
+                                'probability_percent' => (float) $winningSector->probability_percent,
+                                'is_active' => $winningSector->is_active,
+                                'icon_url' => $winningSector->icon_url ?? null,
+                                'prize_value' => $winningSector->prize_value ?? 0,
+                                'test_mode' => $testMode ?? false,
+                                'status' => 'success',
+                            ]);
+                        }
+                    } catch (\Exception $prizeError) {
+                        // Ошибка при обработке приза - логируем, но НЕ прерываем вращение
+                        $errorMsg = 'Error processing sponsor_gift/gift prize: ' . $prizeError->getMessage();
+                        Log::channel('wheel-errors')->error($errorMsg, [
+                            'request_id' => $requestId,
+                            'telegram_id' => $telegramId,
+                            'user_id' => $user->id,
+                            'spin_id' => $spin->id ?? null,
+                            'sector_id' => $winningSector->id,
+                            'sector_number' => $winningSector->sector_number,
+                            'prize_type' => $winningSector->prize_type,
+                            'error' => $prizeError->getMessage(),
+                            'trace' => $prizeError->getTraceAsString(),
+                            'file' => $prizeError->getFile(),
+                            'line' => $prizeError->getLine(),
+                        ]);
+                        
+                        try {
+                            WheelError::logError(
+                                'prize_processing_error',
+                                $errorMsg,
+                                [
+                                    'spin_id' => $spin->id ?? null,
+                                    'sector_id' => $winningSector->id,
+                                    'sector_number' => $winningSector->sector_number,
+                                    'prize_type' => $winningSector->prize_type,
+                                    'error_class' => get_class($prizeError),
+                                    'file' => $prizeError->getFile(),
+                                    'line' => $prizeError->getLine(),
+                                    'telegram_id' => $telegramId,
+                                ],
+                                $user->id,
+                                $winningSector->id,
+                                $winningSector->prize_type,
+                                $randomValue ?? null,
+                                $expectedResult ?? null
+                            );
+                        } catch (\Exception $logError) {
+                            Log::error('Failed to log wheel error to database', ['error' => $logError->getMessage()]);
+                        }
+                        
+                        // Продолжаем выполнение - приз не обработан, но вращение не прервано
+                        // Пользователь увидит результат прокрутки
+                        Log::warning('Continuing spin processing despite prize processing error', [
+                            'request_id' => $requestId,
+                            'user_id' => $user->id,
+                            'sector_number' => $winningSector->sector_number,
+                            'prize_type' => $winningSector->prize_type,
                         ]);
                     }
                 } else {
@@ -897,14 +1015,17 @@ class WheelController extends Controller
                     throw new \Exception('Failed to calculate rotation');
                 }
 
-                return response()->json([
+                // ВАЖНО: Всегда возвращаем корректный ответ, даже если были ошибки при обработке приза
+                // Пользователь должен увидеть результат прокрутки
+                $response = [
                     'success' => true,
-                    'spin_id' => $spin->id,
+                    'spin_id' => $spin->id ?? null,
                     'sector' => [
                         'id' => $winningSector->id,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type' => $winningSector->prize_type,
-                        'prize_value' => $winningSector->prize_value,
+                        'prize_value' => $winningSector->prize_value ?? 0,
+                        'icon_url' => $winningSector->icon_url ?? null,
                     ],
                     'rotation' => $targetRotation,
                     'tickets_available' => $user->tickets_available,
@@ -916,14 +1037,21 @@ class WheelController extends Controller
                     'restore_interval_seconds' => $restoreIntervalSeconds,
                     'next_ticket_at' => $nextTicketAt,
                     'seconds_until_next_ticket' => $secondsUntilNextTicket,
-                    // Добавляем отладочную информацию для проверки
-                    '_debug' => [
+                ];
+                
+                // Добавляем отладочную информацию только в debug режиме
+                if (config('app.debug') || $request->input('debug', false)) {
+                    $response['_debug'] = [
                         'sector_index' => $sectorIndex,
                         'random_spins' => $randomSpins,
                         'normalized_rotation' => round($normalizedRotation, 2),
                         'expected_frontend_index' => floor((360 - $normalizedRotation + 15) / 30) % 12,
-                    ],
-                ]);
+                        'random_value' => $randomValue ?? null,
+                        'test_mode' => $testMode ?? false,
+                    ];
+                }
+                
+                return response()->json($response);
 
             } catch (\Exception $e) {
                 DB::rollBack();

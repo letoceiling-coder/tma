@@ -7,7 +7,7 @@ interface SpinResultPopupProps {
   isOpen: boolean;
   onClose: () => void;
   result: number;
-  prizeType: 'money' | 'ticket' | 'secret_box' | 'empty' | null;
+  prizeType: 'money' | 'ticket' | 'secret_box' | 'sponsor_gift' | 'gift' | 'empty' | null;
   prizeValue: number;
   adminUsername: string | null;
   hasMoreTickets: boolean;
@@ -15,7 +15,8 @@ interface SpinResultPopupProps {
 }
 
 const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, adminUsername, hasMoreTickets, prizeMessage }: SpinResultPopupProps) => {
-  const isWin = result > 0 || result === -1;
+  // Выигрыш: положительное значение, secret_box (-1), sponsor_gift (-2), gift (-3)
+  const isWin = result > 0 || result === -1 || result === -2 || result === -3;
   
   // Используем сообщение из типа приза (админка), если оно указано
   // Если сообщение пустое или не указано - не показываем текст
@@ -38,13 +39,14 @@ const SpinResultPopup = ({ isOpen, onClose, result, prizeType, prizeValue, admin
   
   const adminLink = getAdminLink();
   
-  // Кнопка показывается СТРОГО только для: 300 рублей, 500 рублей, Secret Box, Подарок от спонсора
+  // Кнопка показывается СТРОГО только для: 300 рублей, 500 рублей, Secret Box, Подарок от спонсора, Подарок
   // НЕ показывается для: пустого сектора, +1 билет
   const prizeValueNum = Number(prizeValue);
   const isEligiblePrize = prizeType !== 'empty' && 
     ((prizeType === 'money' && (prizeValueNum === 300 || prizeValueNum === 500)) || 
      prizeType === 'secret_box' ||
-     prizeType === 'sponsor_gift');
+     prizeType === 'sponsor_gift' ||
+     prizeType === 'gift');
   
   // Кнопка показывается только если есть adminUsername (иначе некуда вести)
   const showContactButton = isEligiblePrize && !!adminLink;

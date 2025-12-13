@@ -14,7 +14,7 @@ import useTelegramWebApp from "@/hooks/useTelegramWebApp";
 interface WheelSector {
   id: number;
   sector_number: number;
-  prize_type: 'money' | 'ticket' | 'secret_box' | 'empty';
+  prize_type: 'money' | 'ticket' | 'secret_box' | 'sponsor_gift' | 'gift' | 'empty';
   prize_value: number;
   icon_url: string | null;
   probability_percent: number;
@@ -108,6 +108,12 @@ const MainWheel = () => {
         } else if (sector.prize_type === 'secret_box') {
           value = -1; // Специальное значение для секретного бокса
           text = "??";
+        } else if (sector.prize_type === 'sponsor_gift') {
+          value = -2; // Специальное значение для подарка от спонсора
+          text = "🎁"; // Иконка подарка
+        } else if (sector.prize_type === 'gift') {
+          value = -3; // Специальное значение для обычного подарка
+          text = "🎁"; // Иконка подарка
         }
 
         return {
@@ -585,6 +591,10 @@ const MainWheel = () => {
         resultValue = prizeValue;
       } else if (prizeType === 'secret_box') {
         resultValue = -1; // Специальное значение для секретного бокса
+      } else if (prizeType === 'sponsor_gift') {
+        resultValue = -2; // Специальное значение для подарка от спонсора
+      } else if (prizeType === 'gift') {
+        resultValue = -3; // Специальное значение для обычного подарка
       }
 
       // Ждем завершения анимации (4 секунды)
