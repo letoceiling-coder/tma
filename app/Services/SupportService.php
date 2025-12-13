@@ -44,8 +44,8 @@ class SupportService
         try {
             $payload = [
                 'ticket_id' => $ticket->id,
-                'theme' => $ticket->theme,
-                'message' => $ticket->messages()->first()?->message ?? '',
+                'theme' => $ticket->subject ?? $ticket->theme ?? '',
+                'message' => $ticket->messages()->first()?->body ?? '',
                 'attachments' => $attachments,
                 'project' => $this->projectIdentifier,
                 'external_url' => config('app.url'), // URL основного проекта для отправки webhook обратно

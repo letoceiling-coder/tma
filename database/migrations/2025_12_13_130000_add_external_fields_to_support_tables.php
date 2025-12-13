@@ -52,6 +52,11 @@ return new class extends Migration
             }
         }
 
+        // Переименовываем message в body (если колонка message существует)
+        if (Schema::hasColumn('support_messages', 'message') && !Schema::hasColumn('support_messages', 'body')) {
+            DB::statement('ALTER TABLE support_messages CHANGE message body TEXT NOT NULL');
+        }
+
         // Изменяем enum sender: local|crm → tma|crm
         // Проверяем текущий тип колонки, чтобы не выполнять лишние операции
         $columnInfo = DB::select("SHOW COLUMNS FROM support_messages WHERE Field = 'sender'");
@@ -79,6 +84,11 @@ return new class extends Migration
 
     public function down(): void
     {
+        // Переименовываем обратно body в message
+        if (Schema::hasColumn('support_messages', 'body') && !Schema::hasColumn('support_messages', 'message')) {
+            DB::statement('ALTER TABLE support_messages CHANGE body message TEXT NOT NULL');
+        }
+
         Schema::table('support_messages', function (Blueprint $table) {
             $table->dropIndex(['external_message_id']);
             $table->dropColumn('external_message_id');
