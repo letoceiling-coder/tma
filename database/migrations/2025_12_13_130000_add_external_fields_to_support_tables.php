@@ -27,7 +27,16 @@ return new class extends Migration
         });
 
         // Изменяем enum sender: local|crm → tma|crm
-        // MySQL не поддерживает изменение ENUM напрямую, делаем через ALTER
+        // Сначала расширяем ENUM, чтобы включить 'tma' (если его еще нет)
+        // Это безопасно, так как не удаляет существующие значения
+        DB::statement("ALTER TABLE support_messages MODIFY COLUMN sender ENUM('local', 'tma', 'crm') NOT NULL");
+        
+        // Теперь обновляем все существующие записи с 'local' на 'tma'
+        DB::table('support_messages')
+            ->where('sender', 'local')
+            ->update(['sender' => 'tma']);
+        
+        // Затем удаляем 'local' из ENUM, оставляя только 'tma' и 'crm'
         DB::statement("ALTER TABLE support_messages MODIFY COLUMN sender ENUM('tma', 'crm') NOT NULL");
     }
 
