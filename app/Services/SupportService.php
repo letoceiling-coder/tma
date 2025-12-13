@@ -6,6 +6,7 @@ use App\Models\SupportTicket;
 use App\Services\SupportLogger;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class SupportService
@@ -125,7 +126,7 @@ class SupportService
                 'path' => $path,
                 'size' => $file->getSize(),
                 'mime_type' => $file->getMimeType(),
-                'url' => asset('storage/' . $path),
+                'url' => Storage::disk('public')->url($path),
             ];
         }
 
