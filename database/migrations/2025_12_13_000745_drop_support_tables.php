@@ -13,45 +13,28 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Шаг 1: Удаляем foreign keys из всех таблиц
-        // Удаляем foreign key из ticket_chats (ссылается на support_tickets)
-        if (Schema::hasTable('ticket_chats')) {
-            Schema::table('ticket_chats', function (Blueprint $table) {
-                try {
-                    // Пробуем удалить foreign key по имени колонки
-                    if (Schema::hasColumn('ticket_chats', 'ticket_id')) {
-                        $table->dropForeign(['ticket_id']);
-                    }
-                } catch (\Exception $e) {
-                    // Игнорируем ошибку, если foreign key уже удален или не существует
-                }
-            });
-        }
+        $connection = DB::connection();
+        $database = $connection->getDatabaseName();
 
-        // Удаляем foreign key из support_tickets (ссылается на ticket_chats)
-        if (Schema::hasTable('support_tickets')) {
-            Schema::table('support_tickets', function (Blueprint $table) {
-                try {
-                    if (Schema::hasColumn('support_tickets', 'chat_id')) {
-                        $table->dropForeign(['chat_id']);
-                    }
-                } catch (\Exception $e) {
-                    // Игнорируем ошибку
-                }
-            });
-        }
+        // Шаг 1: Удаляем foreign keys через прямой SQL (безопаснее)
+        // Получаем все foreign keys для таблиц поддержки
+        $foreignKeys = DB::select("
+            SELECT 
+                CONSTRAINT_NAME,
+                TABLE_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = ?
+            AND TABLE_NAME IN ('support_tickets', 'support_ticket_messages', 'ticket_chats', 'message_sync_logs')
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+        ", [$database]);
 
-        // Удаляем foreign key из support_ticket_messages (ссылается на support_tickets)
-        if (Schema::hasTable('support_ticket_messages')) {
-            Schema::table('support_ticket_messages', function (Blueprint $table) {
-                try {
-                    if (Schema::hasColumn('support_ticket_messages', 'ticket_id')) {
-                        $table->dropForeign(['ticket_id']);
-                    }
-                } catch (\Exception $e) {
-                    // Игнорируем ошибку
-                }
-            });
+        // Удаляем каждый foreign key
+        foreach ($foreignKeys as $fk) {
+            try {
+                DB::statement("ALTER TABLE `{$fk->TABLE_NAME}` DROP FOREIGN KEY `{$fk->CONSTRAINT_NAME}`");
+            } catch (\Exception $e) {
+                // Игнорируем ошибку, если foreign key уже удален
+            }
         }
 
         // Шаг 2: Удаляем таблицы в правильном порядке (сначала зависимые)
