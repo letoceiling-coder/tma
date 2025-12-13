@@ -50,11 +50,24 @@ class SupportService
                 'project' => $this->projectIdentifier,
             ];
 
-            $response = Http::withHeaders([
-                'Authorization' => "Bearer {$this->deployToken}",
+            $headers = [
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-            ])->timeout(30)->post($this->crmUrl, $payload);
+            ];
+            
+            // Добавляем токен в заголовок Authorization
+            if ($this->deployToken) {
+                $headers['Authorization'] = "Bearer {$this->deployToken}";
+            }
+            
+            Log::channel('tickets')->debug('Sending ticket to CRM', [
+                'url' => $this->crmUrl,
+                'has_token' => !empty($this->deployToken),
+                'token_length' => $this->deployToken ? strlen($this->deployToken) : 0,
+                'payload' => $payload,
+            ]);
+            
+            $response = Http::withHeaders($headers)->timeout(30)->post($this->crmUrl, $payload);
 
             if ($response->successful()) {
                 Log::channel('tickets')->info('Ticket sent to CRM successfully', [

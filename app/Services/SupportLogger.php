@@ -39,7 +39,7 @@ class SupportLogger
     {
         try {
             $level = $success ? 'info' : 'error';
-            $crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket'));
+            $crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/support/ticket'));
             
             Log::channel('tickets')->{$level}('Ticket sent to CRM', array_merge([
                 'ticket_id' => $ticket->id,
