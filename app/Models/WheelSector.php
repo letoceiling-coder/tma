@@ -45,55 +45,136 @@ class WheelSector extends Model
      * - Если сумма вероятностей < 100%, остаток трактуется как "пустой сектор"
      * - Если сумма > 100%, это ошибка конфигурации (будет залогировано)
      * 
-     * @return WheelSector|null
+     * @param bool $testMode Режим тестирования (для детального логирования)
+     * @return array ['sector' => WheelSector|null, 'random_value' => float, 'expected_result' => array]
      */
-    public static function getRandomSector()
+    public static function getRandomSector($testMode = false)
     {
         $sectors = static::getActiveSectors();
         
         if ($sectors->isEmpty()) {
-            return null;
+            \Log::channel('wheel-errors')->warning('No active sectors found in getRandomSector');
+            return [
+                'sector' => null,
+                'random_value' => null,
+                'expected_result' => ['message' => 'No active sectors found'],
+            ];
         }
 
         // Вычисляем сумму вероятностей всех активных секторов
         $totalProbability = $sectors->sum('probability_percent');
         
+        // Детальное логирование для диагностики
+        $sectorDetails = $sectors->map(function ($s) {
+            return [
+                'id' => $s->id,
+                'sector_number' => $s->sector_number,
+                'prize_type' => $s->prize_type,
+                'probability' => (float) $s->probability_percent,
+                'is_active' => $s->is_active,
+            ];
+        })->toArray();
+        
         // Проверяем, что сумма не превышает 100%
         if ($totalProbability > 100.0) {
             \Log::channel('wheel-errors')->error('Total probability exceeds 100%', [
                 'total_probability' => $totalProbability,
-                'sectors' => $sectors->map(function ($s) {
-                    return [
-                        'id' => $s->id,
-                        'sector_number' => $s->sector_number,
-                        'probability' => $s->probability_percent,
-                    ];
-                })->toArray(),
+                'sectors' => $sectorDetails,
             ]);
             // В случае ошибки конфигурации возвращаем null
-            return null;
+            return [
+                'sector' => null,
+                'random_value' => null,
+                'expected_result' => [
+                    'error' => 'Total probability exceeds 100%',
+                    'total_probability' => $totalProbability,
+                ],
+            ];
         }
         
         // Генерируем случайное число от 0 до 100 (включительно)
         // Используем более точный генератор случайных чисел
         $random = mt_rand(0, 10000) / 100.0; // 0.00 до 100.00 с точностью до 0.01
         
+        // Детальное логирование для диагностики sponsor_gift
+        if ($testMode || config('app.debug')) {
+            \Log::info('Wheel sector selection - detailed', [
+                'random_value' => $random,
+                'total_probability' => $totalProbability,
+                'sectors' => $sectorDetails,
+                'empty_sector_probability' => 100.0 - $totalProbability,
+            ]);
+        }
+        
         // Если сумма вероятностей < 100%, остаток трактуется как пустой сектор
         // Если random > totalProbability, возвращаем null (пустой сектор)
         if ($random > $totalProbability) {
-            return null; // Пустой сектор
+            if ($testMode || config('app.debug')) {
+                \Log::info('Empty sector selected (random > total_probability)', [
+                    'random' => $random,
+                    'total_probability' => $totalProbability,
+                ]);
+            }
+            return [
+                'sector' => null,
+                'random_value' => $random,
+                'expected_result' => [
+                    'message' => 'Empty sector (random > total_probability)',
+                    'random' => $random,
+                    'total_probability' => $totalProbability,
+                    'empty_probability' => 100.0 - $totalProbability,
+                ],
+            ];
         }
         
         // Распределяем секторы по последовательным диапазонам
         // Сектор i занимает диапазон: (cumulative_before, cumulative_before + probability_i]
         $cumulative = 0;
+        $previousCumulative = 0;
         foreach ($sectors as $sector) {
+            $previousCumulative = $cumulative;
             $cumulative += $sector->probability_percent;
+            
+            // Детальное логирование для каждого сектора
+            if ($testMode || config('app.debug')) {
+                \Log::debug('Checking sector range', [
+                    'sector_id' => $sector->id,
+                    'sector_number' => $sector->sector_number,
+                    'prize_type' => $sector->prize_type,
+                    'range_start' => $previousCumulative,
+                    'range_end' => $cumulative,
+                    'random' => $random,
+                    'in_range' => $random <= $cumulative && $random > $previousCumulative,
+                ]);
+            }
+            
             // Проверяем попадание в диапазон сектора
             // Используем строгое сравнение: random должен быть <= cumulative
             // и > предыдущего cumulative (что гарантируется последовательностью)
             if ($random <= $cumulative) {
-                return $sector;
+                // Детальное логирование выбранного сектора
+                $expectedResult = [
+                    'sector_id' => $sector->id,
+                    'sector_number' => $sector->sector_number,
+                    'prize_type' => $sector->prize_type,
+                    'prize_value' => $sector->prize_value,
+                    'probability' => (float) $sector->probability_percent,
+                    'range_start' => $previousCumulative,
+                    'range_end' => $cumulative,
+                    'random_in_range' => true,
+                ];
+                
+                if ($testMode || config('app.debug')) {
+                    \Log::info('Sector selected', array_merge($expectedResult, [
+                        'random_value' => $random,
+                    ]));
+                }
+                
+                return [
+                    'sector' => $sector,
+                    'random_value' => $random,
+                    'expected_result' => $expectedResult,
+                ];
             }
         }
 
@@ -102,8 +183,20 @@ class WheelSector extends Model
             'random' => $random,
             'total_probability' => $totalProbability,
             'sectors_count' => $sectors->count(),
+            'sectors' => $sectorDetails,
         ]);
-        return $sectors->last();
+        
+        $lastSector = $sectors->last();
+        return [
+            'sector' => $lastSector,
+            'random_value' => $random,
+            'expected_result' => [
+                'message' => 'Fallback to last sector',
+                'sector_id' => $lastSector->id ?? null,
+                'sector_number' => $lastSector->sector_number ?? null,
+                'prize_type' => $lastSector->prize_type ?? null,
+            ],
+        ];
     }
     
     /**

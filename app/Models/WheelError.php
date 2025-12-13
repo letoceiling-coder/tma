@@ -12,6 +12,10 @@ class WheelError extends Model
 
     protected $fillable = [
         'user_id',
+        'sector_id',
+        'prize_type',
+        'random_value',
+        'expected_sector_result',
         'error_type',
         'error_message',
         'sector_config_snapshot',
@@ -22,6 +26,8 @@ class WheelError extends Model
     protected $casts = [
         'sector_config_snapshot' => 'array',
         'request_payload' => 'array',
+        'expected_sector_result' => 'array',
+        'random_value' => 'decimal:2',
         'timestamp' => 'datetime',
     ];
 
@@ -34,19 +40,35 @@ class WheelError extends Model
     }
 
     /**
+     * Связь с сектором
+     */
+    public function sector()
+    {
+        return $this->belongsTo(WheelSector::class);
+    }
+
+    /**
      * Логировать ошибку рулетки
      * 
      * @param string $errorType Тип ошибки
      * @param string $errorMessage Сообщение об ошибке
      * @param array $context Дополнительный контекст
      * @param int|null $userId ID пользователя
+     * @param int|null $sectorId ID сектора
+     * @param string|null $prizeType Тип приза
+     * @param float|null $randomValue Случайное значение, использованное при выборе сектора
+     * @param array|null $expectedSectorResult Ожидаемый результат выбора сектора
      * @return WheelError
      */
     public static function logError(
         string $errorType,
         string $errorMessage,
         array $context = [],
-        ?int $userId = null
+        ?int $userId = null,
+        ?int $sectorId = null,
+        ?string $prizeType = null,
+        ?float $randomValue = null,
+        ?array $expectedSectorResult = null
     ): self {
         // Получаем снимок конфигурации секторов
         $sectorConfig = WheelSector::getActiveSectors()->map(function ($sector) {
@@ -62,6 +84,10 @@ class WheelError extends Model
 
         return self::create([
             'user_id' => $userId,
+            'sector_id' => $sectorId,
+            'prize_type' => $prizeType,
+            'random_value' => $randomValue,
+            'expected_sector_result' => $expectedSectorResult,
             'error_type' => $errorType,
             'error_message' => $errorMessage,
             'sector_config_snapshot' => $sectorConfig,

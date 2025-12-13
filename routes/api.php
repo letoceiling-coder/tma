@@ -131,6 +131,11 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::post('wheel/settings', [\App\Http\Controllers\Api\Admin\WheelController::class, 'updateSettings']);
                 Route::get('wheel/validate', [\App\Http\Controllers\Api\Admin\WheelController::class, 'validateProbabilities']);
                 
+                // Ошибки рулетки
+                Route::get('errors', [\App\Http\Controllers\Api\Admin\WheelErrorController::class, 'index']);
+                Route::get('errors/{id}', [\App\Http\Controllers\Api\Admin\WheelErrorController::class, 'show']);
+                Route::get('errors/sponsor-gift/stats', [\App\Http\Controllers\Api\Admin\WheelErrorController::class, 'sponsorGiftStats']);
+                
                 // Выигрыши
                 Route::get('wins', [\App\Http\Controllers\Api\Admin\WinsController::class, 'index']);
                 Route::get('wins/stats', [\App\Http\Controllers\Api\Admin\WinsController::class, 'stats']);
