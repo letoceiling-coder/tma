@@ -114,13 +114,26 @@ class IntegrationService
             // Используем новый API интеграции (внутри v1 префикса)
             $url = rtrim($this->crmUrl, '/') . '/api/v1/integration/messages';
             
+            $messageText = $message->body ?? $message->message ?? '';
+            
             $payload = [
                 'external_ticket_id' => $ticket->external_id,
-                'message' => $message->body ?? $message->message ?? '',
+                'message' => $messageText, // Отправляем как message для CRM
+                'body' => $messageText, // Также отправляем как body для совместимости
                 'attachments' => $message->attachments ?? [],
                 'sender' => 'tma',
                 'external_message_id' => $message->id,
             ];
+
+            Log::channel('tickets')->debug('IntegrationService: Sending message to CRM', [
+                'url' => $url,
+                'ticket_external_id' => $ticket->external_id,
+                'message_id' => $message->id,
+                'has_message_text' => !empty($messageText),
+                'message_length' => strlen($messageText),
+                'has_attachments' => !empty($message->attachments),
+                'attachments_count' => is_array($message->attachments) ? count($message->attachments) : 0,
+            ]);
 
             $response = Http::withToken($this->deployToken)
                 ->timeout(30)
