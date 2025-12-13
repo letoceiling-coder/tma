@@ -13,16 +13,43 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Шаг 1: Удаляем foreign key из support_tickets перед удалением таблиц
+        // Шаг 1: Удаляем foreign keys из всех таблиц
+        // Удаляем foreign key из ticket_chats (ссылается на support_tickets)
+        if (Schema::hasTable('ticket_chats')) {
+            Schema::table('ticket_chats', function (Blueprint $table) {
+                try {
+                    // Пробуем удалить foreign key по имени колонки
+                    if (Schema::hasColumn('ticket_chats', 'ticket_id')) {
+                        $table->dropForeign(['ticket_id']);
+                    }
+                } catch (\Exception $e) {
+                    // Игнорируем ошибку, если foreign key уже удален или не существует
+                }
+            });
+        }
+
+        // Удаляем foreign key из support_tickets (ссылается на ticket_chats)
         if (Schema::hasTable('support_tickets')) {
             Schema::table('support_tickets', function (Blueprint $table) {
-                // Проверяем и удаляем все возможные foreign keys
-                if (Schema::hasColumn('support_tickets', 'chat_id')) {
-                    try {
+                try {
+                    if (Schema::hasColumn('support_tickets', 'chat_id')) {
                         $table->dropForeign(['chat_id']);
-                    } catch (\Exception $e) {
-                        // Игнорируем ошибку, если foreign key уже удален
                     }
+                } catch (\Exception $e) {
+                    // Игнорируем ошибку
+                }
+            });
+        }
+
+        // Удаляем foreign key из support_ticket_messages (ссылается на support_tickets)
+        if (Schema::hasTable('support_ticket_messages')) {
+            Schema::table('support_ticket_messages', function (Blueprint $table) {
+                try {
+                    if (Schema::hasColumn('support_ticket_messages', 'ticket_id')) {
+                        $table->dropForeign(['ticket_id']);
+                    }
+                } catch (\Exception $e) {
+                    // Игнорируем ошибку
                 }
             });
         }
@@ -36,7 +63,7 @@ return new class extends Migration
             Schema::dropIfExists('support_ticket_messages');
         }
 
-        // Шаг 3: Удаляем таблицу support_tickets (теперь foreign key уже удален)
+        // Шаг 3: Удаляем таблицу support_tickets
         if (Schema::hasTable('support_tickets')) {
             Schema::dropIfExists('support_tickets');
         }
