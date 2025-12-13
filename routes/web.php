@@ -3,10 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
-// API маршруты должны быть обработаны до SPA маршрутов
-// Они определены в routes/api.php
-
-// Роут для отдачи файлов из storage (если символическая ссылка не работает)
+// ВАЖНО: Роут для storage должен быть ПЕРВЫМ, до всех остальных
+// Это нужно, чтобы Laravel обрабатывал запросы к /storage, даже если символическая ссылка не работает
 Route::get('/storage/{path}', function ($path) {
     // Защита от path traversal
     $path = str_replace('..', '', $path);
@@ -20,22 +18,39 @@ Route::get('/storage/{path}', function ($path) {
     $realBasePath = realpath($basePath);
     
     if (!$realFilePath || !$realBasePath || !str_starts_with($realFilePath, $realBasePath)) {
+        \Illuminate\Support\Facades\Log::warning('Storage file access denied - path traversal attempt', [
+            'path' => $path,
+            'file_path' => $filePath,
+        ]);
         abort(404);
     }
     
     if (!file_exists($realFilePath) || !is_file($realFilePath)) {
+        \Illuminate\Support\Facades\Log::warning('Storage file not found', [
+            'path' => $path,
+            'real_file_path' => $realFilePath,
+        ]);
         abort(404);
     }
     
     $mimeType = mime_content_type($realFilePath);
     $fileName = basename($realFilePath);
     
+    \Illuminate\Support\Facades\Log::debug('Storage file served', [
+        'path' => $path,
+        'file' => $fileName,
+        'mime_type' => $mimeType,
+    ]);
+    
     return response()->file($realFilePath, [
         'Content-Type' => $mimeType,
         'Content-Disposition' => 'inline; filename="' . $fileName . '"',
         'Cache-Control' => 'public, max-age=31536000',
     ]);
-})->where('path', '.*');
+})->where('path', '.*')->name('storage.serve');
+
+// API маршруты должны быть обработаны до SPA маршрутов
+// Они определены в routes/api.php
 
 // Проксирование assets для React приложения - должно быть ПЕРВЫМ
 // Если запрашивается /assets/*, отдаем из /frontend/assets/*
