@@ -62,19 +62,51 @@
                             <div
                                 v-for="(attachment, index) in message.attachments"
                                 :key="index"
-                                class="flex items-center gap-2"
+                                class="flex items-start gap-2"
                             >
+                                <!-- Превью изображения -->
                                 <a
-                                    v-if="attachment.url"
+                                    v-if="attachment.url && isImageAttachment(attachment)"
                                     :href="attachment.url"
                                     target="_blank"
-                                    class="text-xs underline flex items-center gap-1 hover:opacity-80"
+                                    class="flex-shrink-0 hover:opacity-80 transition-opacity"
                                 >
-                                    📎 {{ attachment.name }}
-                                    <span v-if="attachment.size" class="opacity-70">
-                                        ({{ formatBytes(attachment.size) }})
-                                    </span>
+                                    <img
+                                        :src="attachment.url"
+                                        :alt="attachment.name"
+                                        class="w-20 h-20 object-cover rounded border border-border/50"
+                                    />
                                 </a>
+                                <!-- Иконка документа -->
+                                <div
+                                    v-else-if="attachment.url"
+                                    class="flex-shrink-0"
+                                >
+                                    <a
+                                        :href="attachment.url"
+                                        target="_blank"
+                                        class="block w-16 h-16 flex items-center justify-center bg-muted/50 rounded border border-border/50 hover:bg-muted transition-colors"
+                                    >
+                                        <span class="text-2xl">{{ getAttachmentIcon(attachment) }}</span>
+                                    </a>
+                                </div>
+                                <!-- Информация о файле -->
+                                <div class="flex-1 min-w-0">
+                                    <a
+                                        v-if="attachment.url"
+                                        :href="attachment.url"
+                                        target="_blank"
+                                        class="text-xs underline flex items-center gap-1 hover:opacity-80 block truncate"
+                                    >
+                                        {{ attachment.name }}
+                                    </a>
+                                    <span v-else class="text-xs text-muted-foreground truncate block">
+                                        {{ attachment.name }}
+                                    </span>
+                                    <span v-if="attachment.size" class="text-xs text-muted-foreground block">
+                                        {{ formatBytes(attachment.size) }}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <p class="text-xs mt-2 opacity-70">
@@ -114,17 +146,36 @@
                             accept="image/*,.pdf,.doc,.docx,.txt"
                             class="w-full h-10 px-3 border border-border rounded bg-background text-sm"
                         />
-                        <div v-if="attachments.length > 0" class="mt-2 space-y-1">
+                        <div v-if="attachments.length > 0" class="mt-2 space-y-2">
                             <div
                                 v-for="(file, index) in attachments"
                                 :key="index"
-                                class="text-sm text-muted-foreground flex items-center justify-between"
+                                class="flex items-start gap-3 p-2 border border-border rounded bg-background"
                             >
-                                <span>{{ file.name }}</span>
+                                <!-- Превью изображения -->
+                                <div v-if="isImageFile(file)" class="flex-shrink-0">
+                                    <img
+                                        :src="getFilePreview(file)"
+                                        :alt="file.name"
+                                        class="w-16 h-16 object-cover rounded border border-border"
+                                    />
+                                </div>
+                                <!-- Иконка документа -->
+                                <div v-else class="flex-shrink-0">
+                                    <div class="w-16 h-16 flex items-center justify-center bg-muted rounded border border-border">
+                                        <span class="text-2xl">{{ getFileIcon(file) }}</span>
+                                    </div>
+                                </div>
+                                <!-- Информация о файле -->
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-medium truncate">{{ file.name }}</p>
+                                    <p class="text-xs text-muted-foreground">{{ formatBytes(file.size) }}</p>
+                                </div>
+                                <!-- Кнопка удаления -->
                                 <button
                                     type="button"
                                     @click="removeAttachment(index)"
-                                    class="text-destructive hover:text-destructive/80"
+                                    class="flex-shrink-0 p-1 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded transition-colors"
                                 >
                                     ✕
                                 </button>
@@ -147,7 +198,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -230,10 +281,21 @@ export default {
 
         const handleFileSelect = (event) => {
             const files = Array.from(event.target.files)
-            attachments.value = files
+            // Создаем превью для изображений
+            attachments.value = files.map(file => {
+                if (isImageFile(file)) {
+                    file.previewUrl = URL.createObjectURL(file)
+                }
+                return file
+            })
         }
 
         const removeAttachment = (index) => {
+            const file = attachments.value[index]
+            // Очищаем URL превью для изображений, чтобы избежать утечек памяти
+            if (file && isImageFile(file) && file.previewUrl) {
+                URL.revokeObjectURL(file.previewUrl)
+            }
             attachments.value.splice(index, 1)
         }
 
@@ -261,6 +323,12 @@ export default {
                 })
 
                 if (response.data.success) {
+                    // Очищаем превью перед очисткой массива
+                    attachments.value.forEach(file => {
+                        if (file && file.previewUrl) {
+                            URL.revokeObjectURL(file.previewUrl)
+                        }
+                    })
                     newMessage.value = ''
                     attachments.value = []
                     await fetchTicket()
@@ -289,12 +357,70 @@ export default {
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
         }
 
+        const isImageFile = (file) => {
+            return file.type && file.type.startsWith('image/')
+        }
+
+        const isImageAttachment = (attachment) => {
+            const name = attachment.name?.toLowerCase() || ''
+            const mimeType = attachment.mime_type?.toLowerCase() || ''
+            const url = attachment.url?.toLowerCase() || ''
+            
+            const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg']
+            const isImageExt = imageExtensions.some(ext => name.endsWith(ext) || url.endsWith(ext))
+            const isImageMime = mimeType.startsWith('image/')
+            
+            return isImageExt || isImageMime
+        }
+
+        const getFilePreview = (file) => {
+            if (file && isImageFile(file)) {
+                return file.previewUrl || URL.createObjectURL(file)
+            }
+            return ''
+        }
+
+        const getFileIcon = (file) => {
+            const name = file.name?.toLowerCase() || ''
+            const type = file.type?.toLowerCase() || ''
+            
+            if (type.includes('pdf') || name.endsWith('.pdf')) return '📄'
+            if (type.includes('word') || name.endsWith('.doc') || name.endsWith('.docx')) return '📝'
+            if (type.includes('excel') || name.endsWith('.xls') || name.endsWith('.xlsx')) return '📊'
+            if (type.includes('powerpoint') || name.endsWith('.ppt') || name.endsWith('.pptx')) return '📽️'
+            if (name.endsWith('.txt')) return '📃'
+            if (name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) return '📦'
+            return '📎'
+        }
+
+        const getAttachmentIcon = (attachment) => {
+            const name = attachment.name?.toLowerCase() || ''
+            const mimeType = attachment.mime_type?.toLowerCase() || ''
+            
+            if (mimeType.includes('pdf') || name.endsWith('.pdf')) return '📄'
+            if (mimeType.includes('word') || name.endsWith('.doc') || name.endsWith('.docx')) return '📝'
+            if (mimeType.includes('excel') || name.endsWith('.xls') || name.endsWith('.xlsx')) return '📊'
+            if (mimeType.includes('powerpoint') || name.endsWith('.ppt') || name.endsWith('.pptx')) return '📽️'
+            if (name.endsWith('.txt')) return '📃'
+            if (name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) return '📦'
+            return '📎'
+        }
+
         watch(() => route.params.id, () => {
             fetchTicket()
         })
 
         onMounted(() => {
             fetchTicket()
+        })
+
+        onBeforeUnmount(() => {
+            // Очищаем все превью при размонтировании компонента
+            attachments.value.forEach(file => {
+                if (file && file.previewUrl) {
+                    URL.revokeObjectURL(file.previewUrl)
+                }
+            })
         })
 
         return {
@@ -313,6 +439,11 @@ export default {
             sendMessage,
             formatDate,
             formatBytes,
+            isImageFile,
+            isImageAttachment,
+            getFilePreview,
+            getFileIcon,
+            getAttachmentIcon,
         }
     }
 }
