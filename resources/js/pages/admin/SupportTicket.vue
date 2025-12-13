@@ -1,35 +1,45 @@
 <template>
-    <div
-        class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-        @click.self="$emit('close')"
-    >
-        <div class="bg-card rounded-lg border border-border w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+    <div class="support-ticket-page">
+        <div class="mb-4">
+            <button
+                @click="$router.push({ name: 'admin.support' })"
+                class="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+                ← Назад к списку тикетов
+            </button>
+        </div>
+
+        <div v-if="loading" class="flex items-center justify-center py-12">
+            <p class="text-muted-foreground">Загрузка тикета...</p>
+        </div>
+
+        <div v-if="error" class="p-4 bg-destructive/10 border border-destructive/20 rounded-lg mb-4">
+            <p class="text-destructive">{{ error }}</p>
+        </div>
+
+        <div v-if="ticket && !loading" class="bg-card rounded-lg border border-border">
             <!-- Header -->
-            <div class="p-4 border-b border-border flex items-center justify-between">
-                <div>
-                    <h2 class="text-xl font-semibold">{{ ticket.subject || ticket.theme }}</h2>
-                    <div class="flex items-center gap-2 mt-1">
-                        <StatusBadge :status="ticket.status" />
-                        <span class="text-xs text-muted-foreground">
-                            Создан: {{ formatDate(ticket.created_at) }}
-                        </span>
+            <div class="p-4 border-b border-border">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <h1 class="text-2xl font-semibold mb-2">{{ ticket.subject || ticket.theme }}</h1>
+                        <div class="flex items-center gap-3">
+                            <StatusBadge :status="ticket.status" />
+                            <span class="text-sm text-muted-foreground">
+                                Создан: {{ formatDate(ticket.created_at) }}
+                            </span>
+                            <span v-if="ticket.messages?.length" class="text-sm text-muted-foreground">
+                                Сообщений: {{ ticket.messages.length }}
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <button
-                    @click="$emit('close')"
-                    class="p-2 hover:bg-accent/10 rounded transition-colors"
-                >
-                    ✕
-                </button>
             </div>
 
             <!-- Messages -->
             <div
                 ref="messagesContainer"
-                class="flex-1 overflow-y-auto p-4 space-y-4"
-                :class="{
-                    'opacity-50 pointer-events-none': !isChatEnabled
-                }"
+                class="p-4 space-y-4 min-h-[400px] max-h-[600px] overflow-y-auto"
             >
                 <div
                     v-for="message in sortedMessages"
@@ -47,25 +57,28 @@
                                 : 'bg-muted text-muted-foreground'
                         ]"
                     >
-                        <p class="text-sm whitespace-pre-wrap">{{ message.body || message.message || '' }}</p>
+                        <p class="text-sm whitespace-pre-wrap mb-2">{{ message.body || message.message || '' }}</p>
                         <div v-if="message.attachments && message.attachments.length > 0" class="mt-2 space-y-2">
                             <div
                                 v-for="(attachment, index) in message.attachments"
                                 :key="index"
-                                class="mt-2"
+                                class="flex items-center gap-2"
                             >
                                 <a
                                     v-if="attachment.url"
                                     :href="attachment.url"
                                     target="_blank"
-                                    class="text-xs underline flex items-center gap-1"
+                                    class="text-xs underline flex items-center gap-1 hover:opacity-80"
                                 >
                                     📎 {{ attachment.name }}
+                                    <span v-if="attachment.size" class="opacity-70">
+                                        ({{ formatBytes(attachment.size) }})
+                                    </span>
                                 </a>
                             </div>
                         </div>
                         <p class="text-xs mt-2 opacity-70">
-                            {{ formatDate(message.created_at) }}
+                            {{ message.sender === 'tma' ? 'Вы' : 'CRM' }} • {{ formatDate(message.created_at) }}
                         </p>
                     </div>
                 </div>
@@ -91,7 +104,6 @@
                             rows="3"
                             placeholder="Введите сообщение..."
                             class="w-full px-3 py-2 border border-border rounded bg-background resize-none"
-                            required
                         ></textarea>
                     </div>
                     <div>
@@ -122,7 +134,7 @@
                     <div class="flex gap-3">
                         <button
                             type="submit"
-                            :disabled="sending || !newMessage.trim()"
+                            :disabled="sending || (!newMessage.trim() && attachments.length === 0)"
                             class="px-4 py-2 bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:opacity-50 transition-colors"
                         >
                             {{ sending ? 'Отправка...' : 'Отправить' }}
@@ -135,38 +147,37 @@
 </template>
 
 <script>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
-import StatusBadge from './StatusBadge.vue'
+import StatusBadge from '../../components/admin/StatusBadge.vue'
 
 export default {
-    name: 'TicketChat',
+    name: 'SupportTicket',
     components: {
         StatusBadge,
     },
-    props: {
-        ticket: {
-            type: Object,
-            required: true
-        }
-    },
-    emits: ['close', 'refresh'],
-    setup(props, { emit }) {
+    setup() {
+        const route = useRoute()
+        const router = useRouter()
+        const loading = ref(false)
+        const error = ref(null)
+        const ticket = ref(null)
         const newMessage = ref('')
         const attachments = ref([])
         const sending = ref(false)
         const messagesContainer = ref(null)
 
         const isChatEnabled = computed(() => {
-            return ['open', 'in_progress'].includes(props.ticket.status)
+            return ticket.value && ['open', 'in_progress'].includes(ticket.value.status)
         })
 
         const sortedMessages = computed(() => {
-            if (!props.ticket.messages || !Array.isArray(props.ticket.messages)) {
+            if (!ticket.value?.messages || !Array.isArray(ticket.value.messages)) {
                 return []
             }
-            return [...props.ticket.messages].sort((a, b) => {
+            return [...ticket.value.messages].sort((a, b) => {
                 const dateA = new Date(a.created_at || 0)
                 const dateB = new Date(b.created_at || 0)
                 return dateA - dateB
@@ -178,6 +189,34 @@ export default {
             return {
                 'Authorization': `Bearer ${token}`,
                 'Accept': 'application/json',
+            }
+        }
+
+        const fetchTicket = async () => {
+            const ticketId = route.params.id
+            if (!ticketId) {
+                error.value = 'ID тикета не указан'
+                return
+            }
+
+            loading.value = true
+            error.value = null
+            try {
+                const response = await axios.get(`/api/v1/support/tickets/${ticketId}`, {
+                    headers: getAuthHeaders()
+                })
+
+                if (response.data.success) {
+                    ticket.value = response.data.data
+                    scrollToBottom()
+                } else {
+                    error.value = response.data.message || 'Не удалось загрузить тикет'
+                }
+            } catch (err) {
+                error.value = err.response?.data?.message || 'Ошибка при загрузке тикета'
+                console.error('Error fetching ticket:', err)
+            } finally {
+                loading.value = false
             }
         }
 
@@ -199,15 +238,17 @@ export default {
         }
 
         const sendMessage = async () => {
-            if (!newMessage.value.trim() && attachments.value.length === 0) {
+            if ((!newMessage.value.trim() && attachments.value.length === 0) || !isChatEnabled.value) {
                 return
             }
 
             sending.value = true
             try {
                 const formData = new FormData()
-                formData.append('ticket_id', props.ticket.id)
-                formData.append('message', newMessage.value)
+                formData.append('ticket_id', ticket.value.id)
+                if (newMessage.value.trim()) {
+                    formData.append('message', newMessage.value)
+                }
                 attachments.value.forEach((file) => {
                     formData.append('attachments[]', file)
                 })
@@ -222,15 +263,8 @@ export default {
                 if (response.data.success) {
                     newMessage.value = ''
                     attachments.value = []
-                    emit('refresh')
-                    // Reload ticket to get new message
-                    const ticketResponse = await axios.get(`/api/v1/support/tickets/${props.ticket.id}`, {
-                        headers: getAuthHeaders()
-                    })
-                    if (ticketResponse.data.success) {
-                        Object.assign(props.ticket, ticketResponse.data.data)
-                        scrollToBottom()
-                    }
+                    await fetchTicket()
+                    Swal.fire('Успех', 'Сообщение отправлено', 'success')
                 } else {
                     Swal.fire('Ошибка', response.data.message || 'Не удалось отправить сообщение', 'error')
                 }
@@ -246,11 +280,28 @@ export default {
             return new Date(date).toLocaleString('ru-RU')
         }
 
-        watch(() => props.ticket.messages, () => {
-            scrollToBottom()
-        }, { deep: true })
+        const formatBytes = (bytes, decimals = 2) => {
+            if (bytes === 0) return '0 Bytes'
+            const k = 1024
+            const dm = decimals < 0 ? 0 : decimals
+            const sizes = ['Bytes', 'KB', 'MB', 'GB']
+            const i = Math.floor(Math.log(bytes) / Math.log(k))
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
+        }
+
+        watch(() => route.params.id, () => {
+            fetchTicket()
+        })
+
+        onMounted(() => {
+            fetchTicket()
+        })
 
         return {
+            router,
+            loading,
+            error,
+            ticket,
             newMessage,
             attachments,
             sending,
@@ -261,6 +312,7 @@ export default {
             removeAttachment,
             sendMessage,
             formatDate,
+            formatBytes,
         }
     }
 }

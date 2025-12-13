@@ -58,20 +58,23 @@
             <div
                 v-for="ticket in tickets"
                 :key="ticket.id"
-                @click="selectTicket(ticket.id)"
+                @click="$router.push({ name: 'admin.support.ticket', params: { id: ticket.id } })"
                 :class="[
                     'bg-card rounded-lg border p-4 cursor-pointer transition-colors hover:border-accent',
-                    selectedTicketId === ticket.id ? 'border-accent bg-accent/5' : 'border-border'
+                    'border-border'
                 ]"
             >
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 mb-2">
-                            <h3 class="font-semibold text-foreground">{{ ticket.theme }}</h3>
+                            <h3 class="font-semibold text-foreground">{{ ticket.subject || ticket.theme }}</h3>
                             <StatusBadge :status="ticket.status" />
                         </div>
                         <p class="text-sm text-muted-foreground mb-2">
-                            {{ ticket.messages?.[0]?.message?.substring(0, 100) || 'Нет сообщений' }}...
+                            {{ ticket.messages?.[0]?.body || ticket.messages?.[0]?.message || 'Нет сообщений' }}
+                            <span v-if="ticket.messages?.[0]?.body || ticket.messages?.[0]?.message">
+                                {{ (ticket.messages[0].body || ticket.messages[0].message).length > 100 ? '...' : '' }}
+                            </span>
                         </p>
                         <div class="flex items-center gap-4 text-xs text-muted-foreground">
                             <span>Создан: {{ formatDate(ticket.created_at) }}</span>
@@ -129,13 +132,6 @@
             </div>
         </div>
 
-        <!-- Chat Modal -->
-        <TicketChat
-            v-if="selectedTicket"
-            :ticket="selectedTicket"
-            @close="closeChat"
-            @refresh="fetchTickets"
-        />
 
         <!-- Create Ticket Modal -->
         <div
@@ -217,25 +213,23 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import StatusBadge from '../../components/admin/StatusBadge.vue'
-import TicketChat from '../../components/admin/TicketChat.vue'
 
 export default {
     name: 'Support',
     components: {
         StatusBadge,
-        TicketChat,
     },
     setup() {
+        const router = useRouter()
         const loading = ref(false)
         const error = ref(null)
         const tickets = ref([])
         const pagination = ref(null)
-        const selectedTicketId = ref(null)
-        const selectedTicket = ref(null)
         const showCreateModal = ref(false)
         const creating = ref(false)
         const filters = ref({
@@ -292,24 +286,6 @@ export default {
             }
         }
 
-        const selectTicket = async (ticketId) => {
-            selectedTicketId.value = ticketId
-            try {
-                const response = await axios.get(`/api/v1/support/tickets/${ticketId}`, {
-                    headers: getAuthHeaders()
-                })
-                if (response.data.success) {
-                    selectedTicket.value = response.data.data
-                }
-            } catch (err) {
-                Swal.fire('Ошибка', 'Не удалось загрузить тикет', 'error')
-            }
-        }
-
-        const closeChat = () => {
-            selectedTicket.value = null
-            selectedTicketId.value = null
-        }
 
         const handleFilterChange = () => {
             currentPage.value = 1
@@ -396,19 +372,16 @@ export default {
         })
 
         return {
+            router,
             loading,
             error,
             tickets,
             pagination,
-            selectedTicketId,
-            selectedTicket,
             showCreateModal,
             creating,
             filters,
             newTicket,
             fetchTickets,
-            selectTicket,
-            closeChat,
             handleFilterChange,
             handleSearch,
             handlePageChange,
