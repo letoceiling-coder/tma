@@ -332,7 +332,7 @@ export default {
                     newMessage.value = ''
                     attachments.value = []
                     await fetchTicket()
-                    Swal.fire('Успех', 'Сообщение отправлено', 'success')
+                    // Попап успеха убран - сообщение просто добавляется в чат
                 } else {
                     Swal.fire('Ошибка', response.data.message || 'Не удалось отправить сообщение', 'error')
                 }
