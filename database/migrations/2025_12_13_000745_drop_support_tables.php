@@ -13,7 +13,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Удаляем таблицы в правильном порядке (сначала зависимые)
+        // Шаг 1: Удаляем foreign key из support_tickets перед удалением таблиц
+        if (Schema::hasTable('support_tickets')) {
+            Schema::table('support_tickets', function (Blueprint $table) {
+                // Проверяем и удаляем все возможные foreign keys
+                if (Schema::hasColumn('support_tickets', 'chat_id')) {
+                    try {
+                        $table->dropForeign(['chat_id']);
+                    } catch (\Exception $e) {
+                        // Игнорируем ошибку, если foreign key уже удален
+                    }
+                }
+            });
+        }
+
+        // Шаг 2: Удаляем таблицы в правильном порядке (сначала зависимые)
         if (Schema::hasTable('message_sync_logs')) {
             Schema::dropIfExists('message_sync_logs');
         }
@@ -22,23 +36,14 @@ return new class extends Migration
             Schema::dropIfExists('support_ticket_messages');
         }
 
-        if (Schema::hasTable('ticket_chats')) {
-            Schema::dropIfExists('ticket_chats');
-        }
-
-        // Удаляем колонку chat_id из support_tickets, если она существует
-        if (Schema::hasTable('support_tickets')) {
-            Schema::table('support_tickets', function (Blueprint $table) {
-                if (Schema::hasColumn('support_tickets', 'chat_id')) {
-                    $table->dropForeign(['chat_id']);
-                    $table->dropColumn('chat_id');
-                }
-            });
-        }
-
-        // Удаляем таблицу support_tickets
+        // Шаг 3: Удаляем таблицу support_tickets (теперь foreign key уже удален)
         if (Schema::hasTable('support_tickets')) {
             Schema::dropIfExists('support_tickets');
+        }
+
+        // Шаг 4: Удаляем ticket_chats (после удаления support_tickets)
+        if (Schema::hasTable('ticket_chats')) {
+            Schema::dropIfExists('ticket_chats');
         }
     }
 
