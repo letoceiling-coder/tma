@@ -150,7 +150,7 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/support/ticket'),
+    'crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru'),
     'project_identifier' => env('APP_PROJECT_IDENTIFIER', 'wows-in'),
 
 ];

@@ -161,7 +161,7 @@ class SupportController extends Controller
                 ];
             }, $attachments);
 
-            // Отправка в CRM
+            // Отправка в CRM через новый IntegrationService
             $crmTicketId = $this->integrationService->sendTicketToCrm($ticket, $crmAttachments);
             $crmSent = !empty($crmTicketId);
             

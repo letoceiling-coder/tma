@@ -15,7 +15,10 @@ class IntegrationService
 
     public function __construct()
     {
+        // Базовый URL CRM без пути к API
         $this->crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru'));
+        // Убираем путь из URL, если он есть
+        $this->crmUrl = rtrim(preg_replace('#/api/.*$#', '', $this->crmUrl), '/');
         $this->deployToken = config('app.deploy_token') ?: env('DEPLOY_TOKEN') ?: null;
         $this->projectIdentifier = config('app.project_identifier', env('APP_PROJECT_IDENTIFIER', 'tma'));
     }
@@ -31,13 +34,16 @@ class IntegrationService
         }
 
         try {
-            $url = rtrim($this->crmUrl, '/') . '/api/integration/tickets';
+            // Используем новый API интеграции (внутри v1 префикса)
+            $url = rtrim($this->crmUrl, '/') . '/api/v1/integration/tickets';
             
             $payload = [
                 'external_ticket_id' => $ticket->id,
-                'subject' => $ticket->subject,
+                'subject' => $ticket->subject ?? $ticket->theme ?? '',
                 'message' => $ticket->messages()->first()?->body ?? '',
                 'attachments' => $attachments,
+                'external_url' => config('app.url'),
+                'project' => $this->projectIdentifier,
             ];
 
             $response = Http::withToken($this->deployToken)
@@ -105,7 +111,8 @@ class IntegrationService
         }
 
         try {
-            $url = rtrim($this->crmUrl, '/') . '/api/integration/messages';
+            // Используем новый API интеграции (внутри v1 префикса)
+            $url = rtrim($this->crmUrl, '/') . '/api/v1/integration/messages';
             
             $payload = [
                 'external_ticket_id' => $ticket->external_id,
