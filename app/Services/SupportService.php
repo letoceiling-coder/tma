@@ -11,13 +11,13 @@ use Illuminate\Support\Str;
 class SupportService
 {
     protected string $crmUrl;
-    protected string $deployToken;
+    protected ?string $deployToken;
     protected ?string $projectIdentifier;
 
     public function __construct()
     {
         $this->crmUrl = env('APP_CRM_URL', config('app.crm_url', 'https://crm.siteaccess.ru/api/v1/tecket'));
-        $this->deployToken = env('DEPLOY_TOKEN');
+        $this->deployToken = env('DEPLOY_TOKEN') ?: null;
         $this->projectIdentifier = env('APP_PROJECT_IDENTIFIER', config('app.project_identifier', 'default'));
     }
 
