@@ -16,7 +16,7 @@ class SupportService
 
     public function __construct()
     {
-        $this->crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket'));
+        $this->crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/support/ticket'));
         $this->deployToken = config('app.deploy_token') ?: env('DEPLOY_TOKEN') ?: null;
         $this->projectIdentifier = config('app.project_identifier', env('APP_PROJECT_IDENTIFIER', 'default'));
     }

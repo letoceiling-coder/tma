@@ -41,7 +41,7 @@ class SupportTicketTest extends TestCase
         putenv("DEPLOY_TOKEN={$this->deployToken}");
         
         // Настраиваем URL CRM для тестов
-        config(['app.crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket')]);
+        config(['app.crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/ticket')]);
         config(['app.project_identifier' => env('APP_PROJECT_IDENTIFIER', 'tma')]);
 
         Storage::fake('public');

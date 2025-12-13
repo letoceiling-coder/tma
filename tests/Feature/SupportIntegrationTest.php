@@ -43,7 +43,7 @@ class SupportIntegrationTest extends TestCase
 
         // Получаем токены из .env или используем тестовые
         $this->deployToken = env('DEPLOY_TOKEN', 'test-deploy-token-12345678901234567890');
-        $this->crmUrl = env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket');
+        $this->crmUrl = env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/ticket');
         
         config(['app.deploy_token' => $this->deployToken]);
         config(['app.crm_url' => $this->crmUrl]);

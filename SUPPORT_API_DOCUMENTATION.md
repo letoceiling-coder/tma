@@ -453,7 +453,7 @@ APP_CRM_URL=https://crm.siteaccess.ru/api/v1/tecket
 
 Или в `config/app.php`:
 ```php
-'crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket'),
+'crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/ticket'),
 ```
 
 #### Запрос от системы поддержки в CRM:
