@@ -1,9 +1,41 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 // API маршруты должны быть обработаны до SPA маршрутов
 // Они определены в routes/api.php
+
+// Роут для отдачи файлов из storage (если символическая ссылка не работает)
+Route::get('/storage/{path}', function ($path) {
+    // Защита от path traversal
+    $path = str_replace('..', '', $path);
+    $path = ltrim($path, '/');
+    
+    $filePath = storage_path('app/public/' . $path);
+    $basePath = storage_path('app/public');
+    
+    // Проверяем, что файл находится внутри базовой директории
+    $realFilePath = realpath($filePath);
+    $realBasePath = realpath($basePath);
+    
+    if (!$realFilePath || !$realBasePath || !str_starts_with($realFilePath, $realBasePath)) {
+        abort(404);
+    }
+    
+    if (!file_exists($realFilePath) || !is_file($realFilePath)) {
+        abort(404);
+    }
+    
+    $mimeType = mime_content_type($realFilePath);
+    $fileName = basename($realFilePath);
+    
+    return response()->file($realFilePath, [
+        'Content-Type' => $mimeType,
+        'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+        'Cache-Control' => 'public, max-age=31536000',
+    ]);
+})->where('path', '.*');
 
 // Проксирование assets для React приложения - должно быть ПЕРВЫМ
 // Если запрашивается /assets/*, отдаем из /frontend/assets/*
