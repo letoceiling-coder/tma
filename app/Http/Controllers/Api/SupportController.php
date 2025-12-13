@@ -158,10 +158,22 @@ class SupportController extends Controller
                 ];
             }, $attachments);
 
+            // Отправка в CRM
             $crmSent = $this->supportService->sendTicketToCrm($ticket, $crmAttachments);
-            SupportLogger::logTicketSentToCrm($ticket, $crmSent, [
-                'attachments_count' => count($crmAttachments),
-            ]);
+            
+            // Логирование результата отправки
+            try {
+                SupportLogger::logTicketSentToCrm($ticket, $crmSent, [
+                    'attachments_count' => count($crmAttachments),
+                    'crm_url' => config('app.crm_url'),
+                    'has_deploy_token' => !empty(config('app.deploy_token')),
+                ]);
+            } catch (\Exception $logError) {
+                // Логирование не должно прерывать выполнение
+                Log::error('Failed to log ticket sent to CRM', [
+                    'error' => $logError->getMessage(),
+                ]);
+            }
 
             DB::commit();
 

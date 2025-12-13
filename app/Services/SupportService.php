@@ -16,9 +16,9 @@ class SupportService
 
     public function __construct()
     {
-        $this->crmUrl = env('APP_CRM_URL', config('app.crm_url', 'https://crm.siteaccess.ru/api/v1/tecket'));
-        $this->deployToken = env('DEPLOY_TOKEN') ?: null;
-        $this->projectIdentifier = env('APP_PROJECT_IDENTIFIER', config('app.project_identifier', 'default'));
+        $this->crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket'));
+        $this->deployToken = config('app.deploy_token') ?: env('DEPLOY_TOKEN') ?: null;
+        $this->projectIdentifier = config('app.project_identifier', env('APP_PROJECT_IDENTIFIER', 'default'));
     }
 
     /**
@@ -27,7 +27,17 @@ class SupportService
     public function sendTicketToCrm(SupportTicket $ticket, array $attachments = []): bool
     {
         if (!$this->deployToken) {
-            Log::error('DEPLOY_TOKEN not configured');
+            Log::channel('tickets')->error('DEPLOY_TOKEN not configured', [
+                'ticket_id' => $ticket->id,
+                'crm_url' => $this->crmUrl,
+            ]);
+            return false;
+        }
+
+        if (empty($this->crmUrl)) {
+            Log::channel('tickets')->error('CRM URL not configured', [
+                'ticket_id' => $ticket->id,
+            ]);
             return false;
         }
 
@@ -76,6 +86,8 @@ class SupportService
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'has_deploy_token' => !empty($this->deployToken),
             ]);
             return false;
         }

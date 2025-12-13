@@ -37,14 +37,24 @@ class SupportLogger
      */
     public static function logTicketSentToCrm(SupportTicket $ticket, bool $success, array $context = []): void
     {
-        $level = $success ? 'info' : 'error';
-        Log::channel('tickets')->{$level}('Ticket sent to CRM', array_merge([
-            'ticket_id' => $ticket->id,
-            'theme' => $ticket->theme,
-            'status' => $ticket->status,
-            'success' => $success,
-            'crm_url' => config('app.crm_url'),
-        ], $context));
+        try {
+            $level = $success ? 'info' : 'error';
+            $crmUrl = config('app.crm_url', env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket'));
+            
+            Log::channel('tickets')->{$level}('Ticket sent to CRM', array_merge([
+                'ticket_id' => $ticket->id,
+                'theme' => $ticket->theme,
+                'status' => $ticket->status,
+                'success' => $success,
+                'crm_url' => $crmUrl ?: 'not configured',
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log ticket sent to CRM', [
+                'ticket_id' => $ticket->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

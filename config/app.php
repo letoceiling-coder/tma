@@ -144,4 +144,13 @@ return [
     'deploy_token' => env('DEPLOY_TOKEN'),
     'server_url' => env('DEPLOY_SERVER_URL'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Support/CRM Configuration
+    |--------------------------------------------------------------------------
+    */
+
+    'crm_url' => env('APP_CRM_URL', 'https://crm.siteaccess.ru/api/v1/tecket'),
+    'project_identifier' => env('APP_PROJECT_IDENTIFIER', 'wows-in'),
+
 ];
