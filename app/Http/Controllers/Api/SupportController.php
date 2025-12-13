@@ -10,6 +10,7 @@ use App\Http\Requests\WebhookStatusRequest;
 use App\Models\SupportMessage;
 use App\Models\SupportTicket;
 use App\Services\SupportService;
+use App\Services\Integration\IntegrationService;
 use App\Services\SupportLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,10 +20,12 @@ use Illuminate\Support\Facades\Log;
 class SupportController extends Controller
 {
     protected SupportService $supportService;
+    protected IntegrationService $integrationService;
 
-    public function __construct(SupportService $supportService)
+    public function __construct(SupportService $supportService, IntegrationService $integrationService)
     {
         $this->supportService = $supportService;
+        $this->integrationService = $integrationService;
     }
 
     /**
@@ -122,7 +125,7 @@ class SupportController extends Controller
 
             // Create ticket
             $ticket = SupportTicket::create([
-                'theme' => $request->input('theme'),
+                'subject' => $request->input('theme'), // Пока используем theme из запроса, но сохраняем как subject
                 'status' => 'open',
             ]);
 
@@ -135,8 +138,8 @@ class SupportController extends Controller
             // Create initial message
             $message = SupportMessage::create([
                 'ticket_id' => $ticket->id,
-                'sender' => 'local',
-                'message' => $request->input('message'),
+                'sender' => 'tma',
+                'body' => $request->input('message'),
                 'attachments' => !empty($attachments) ? $attachments : null,
                 'created_at' => now(),
             ]);
@@ -148,7 +151,7 @@ class SupportController extends Controller
             ]);
             SupportLogger::logMessageCreated($message);
 
-            // Send to CRM
+            // Send to CRM через IntegrationService
             $crmAttachments = array_map(function ($att) {
                 return [
                     'name' => $att['name'],
@@ -159,7 +162,8 @@ class SupportController extends Controller
             }, $attachments);
 
             // Отправка в CRM
-            $crmSent = $this->supportService->sendTicketToCrm($ticket, $crmAttachments);
+            $crmTicketId = $this->integrationService->sendTicketToCrm($ticket, $crmAttachments);
+            $crmSent = !empty($crmTicketId);
             
             // Логирование результата отправки
             try {
@@ -224,8 +228,8 @@ class SupportController extends Controller
             // Create message
             $message = SupportMessage::create([
                 'ticket_id' => $ticket->id,
-                'sender' => 'local',
-                'message' => $request->input('message'),
+                'sender' => 'tma',
+                'body' => $request->input('message'),
                 'attachments' => !empty($attachments) ? $attachments : null,
                 'created_at' => now(),
             ]);
@@ -235,17 +239,8 @@ class SupportController extends Controller
                 'message_length' => strlen($request->input('message')),
             ]);
 
-            // Send to CRM
-            $crmAttachments = array_map(function ($att) {
-                return [
-                    'name' => $att['name'],
-                    'url' => $att['url'],
-                    'size' => $att['size'],
-                    'mime_type' => $att['mime_type'],
-                ];
-            }, $attachments);
-
-            // TODO: Send message to CRM if needed
+            // Send message to CRM через IntegrationService
+            $this->integrationService->sendMessageToCrm($message);
 
             DB::commit();
 
@@ -281,8 +276,9 @@ class SupportController extends Controller
             $message = SupportMessage::create([
                 'ticket_id' => $ticket->id,
                 'sender' => 'crm',
-                'message' => $request->input('message'),
+                'body' => $request->input('message'),
                 'attachments' => $request->input('attachments'),
+                'external_message_id' => $request->input('external_message_id'),
                 'created_at' => now(),
             ]);
 

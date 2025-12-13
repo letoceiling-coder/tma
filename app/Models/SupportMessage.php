@@ -19,8 +19,9 @@ class SupportMessage extends Model
     protected $fillable = [
         'ticket_id',
         'sender',
-        'message',
+        'body',
         'attachments',
+        'external_message_id',
         'created_at',
     ];
 

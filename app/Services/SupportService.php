@@ -48,6 +48,7 @@ class SupportService
                 'message' => $ticket->messages()->first()?->message ?? '',
                 'attachments' => $attachments,
                 'project' => $this->projectIdentifier,
+                'external_url' => config('app.url'), // URL основного проекта для отправки webhook обратно
             ];
 
             $headers = [

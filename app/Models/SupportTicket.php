@@ -15,8 +15,9 @@ class SupportTicket extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'theme',
+        'subject',
         'status',
+        'external_id',
     ];
 
     protected $casts = [

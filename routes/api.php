@@ -169,7 +169,13 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
-// Support webhooks (protected by deploy.token middleware)
+// Integration API (protected by deploy.token middleware)
+Route::middleware('deploy.token')->prefix('integration')->group(function () {
+    Route::post('/messages', [\App\Http\Controllers\Api\IntegrationController::class, 'receiveMessage']);
+    Route::post('/status', [\App\Http\Controllers\Api\IntegrationController::class, 'receiveStatusChange']);
+});
+
+// Legacy webhooks (deprecated, use /api/integration/*)
 Route::middleware('deploy.token')->prefix('support/webhook')->group(function () {
     Route::post('/message', [SupportController::class, 'webhookMessage']);
     Route::post('/status', [SupportController::class, 'webhookStatus']);

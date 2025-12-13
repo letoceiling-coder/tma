@@ -8,6 +8,7 @@ use App\Models\WheelSetting;
 use App\Models\Spin;
 use App\Models\User;
 use App\Models\UserTicket;
+use App\Models\WheelError;
 use App\Services\TelegramService;
 use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
@@ -151,6 +152,40 @@ class WheelController extends Controller
                     'message' => 'У вас нет доступных билетов'
                 ], 400);
             }
+            
+            // Защита от повторного запуска: проверяем, что прошло достаточно времени с последнего спина
+            // Минимальный интервал между спинами - 3 секунды (защита от двойных кликов)
+            if ($user->last_spin_at && $user->last_spin_at->diffInSeconds(now()) < 3) {
+                $secondsSinceLastSpin = $user->last_spin_at->diffInSeconds(now());
+                Log::warning('Spin attempt too soon after last spin', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'seconds_since_last_spin' => $secondsSinceLastSpin,
+                    'last_spin_at' => $user->last_spin_at->toIso8601String(),
+                ]);
+                
+                // Логируем в таблицу wheel_errors
+                try {
+                    WheelError::logError(
+                        'duplicate_spin_attempt',
+                        "Spin attempt too soon after last spin: {$secondsSinceLastSpin} seconds",
+                        [
+                            'seconds_since_last_spin' => $secondsSinceLastSpin,
+                            'last_spin_at' => $user->last_spin_at->toIso8601String(),
+                            'telegram_id' => $telegramId,
+                        ],
+                        $user->id
+                    );
+                } catch (\Exception $e) {
+                    Log::error('Failed to log wheel error to database', ['error' => $e->getMessage()]);
+                }
+                
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Spin in progress',
+                    'message' => 'Пожалуйста, подождите завершения предыдущей прокрутки'
+                ], 429); // 429 Too Many Requests
+            }
 
             // Проверяем режим "всегда пусто"
             $settings = WheelSetting::getSettings();
@@ -163,13 +198,30 @@ class WheelController extends Controller
                     ->get();
                 
                 if ($emptySectors->isEmpty()) {
-                    Log::channel('wheel-errors')->error('No empty sectors configured in always_empty_mode', [
+                    $errorMsg = 'No empty sectors configured in always_empty_mode';
+                    Log::channel('wheel-errors')->error($errorMsg, [
                         'telegram_id' => $telegramId,
                         'user_id' => $user->id,
                         'settings' => [
                             'always_empty_mode' => $settings->always_empty_mode,
                         ],
                     ]);
+                    
+                    // Логируем в таблицу wheel_errors
+                    try {
+                        WheelError::logError(
+                            'configuration_error',
+                            $errorMsg,
+                            [
+                                'always_empty_mode' => $settings->always_empty_mode,
+                                'telegram_id' => $telegramId,
+                            ],
+                            $user->id
+                        );
+                    } catch (\Exception $e) {
+                        Log::error('Failed to log wheel error to database', ['error' => $e->getMessage()]);
+                    }
+                    
                     return response()->json([
                         'error' => 'No empty sectors configured'
                     ], 500);
@@ -179,20 +231,97 @@ class WheelController extends Controller
             } else {
                 // Обычный режим - выбираем сектор на основе вероятностей
                 $winningSector = WheelSector::getRandomSector();
+                
+                // Если getRandomSector вернул null, это означает выпадение пустого сектора
+                // (остаток вероятности от 0 до 100%)
+                if (!$winningSector) {
+                    // Находим любой активный пустой сектор для отображения
+                    $emptySectors = WheelSector::where('is_active', true)
+                        ->where('prize_type', 'empty')
+                        ->orderBy('sector_number')
+                        ->get();
+                    
+                    if ($emptySectors->isEmpty()) {
+                        // Если нет пустых секторов, это ошибка конфигурации
+                        $errorMsg = 'Empty sector selected but no empty sectors configured';
+                        Log::channel('wheel-errors')->error($errorMsg, [
+                            'telegram_id' => $telegramId,
+                            'user_id' => $user->id,
+                            'total_probability' => WheelSector::getActiveSectors()->sum('probability_percent'),
+                        ]);
+                        
+                        // Логируем в таблицу wheel_errors
+                        try {
+                            WheelError::logError(
+                                'configuration_error',
+                                $errorMsg,
+                                [
+                                    'total_probability' => WheelSector::getActiveSectors()->sum('probability_percent'),
+                                    'telegram_id' => $telegramId,
+                                ],
+                                $user->id
+                            );
+                        } catch (\Exception $e) {
+                            Log::error('Failed to log wheel error to database', ['error' => $e->getMessage()]);
+                        }
+                        
+                        // Используем первый активный сектор как fallback (не должно происходить)
+                        $fallbackSector = WheelSector::where('is_active', true)->first();
+                        if ($fallbackSector) {
+                            $winningSector = $fallbackSector;
+                            Log::warning('Using fallback sector for empty result', [
+                                'sector_id' => $fallbackSector->id,
+                                'sector_number' => $fallbackSector->sector_number,
+                            ]);
+                        } else {
+                            // Критическая ошибка - нет активных секторов
+                            return response()->json([
+                                'success' => false,
+                                'error' => 'No active sectors configured',
+                                'message' => 'Ошибка конфигурации рулетки. Обратитесь к администратору.'
+                            ], 500);
+                        }
+                    } else {
+                        // Выбираем случайный пустой сектор для отображения
+                        $winningSector = $emptySectors->random();
+                        Log::info('Empty sector selected (probability remainder)', [
+                            'user_id' => $user->id,
+                            'sector_number' => $winningSector->sector_number,
+                            'total_probability' => WheelSector::getActiveSectors()->sum('probability_percent'),
+                        ]);
+                    }
+                }
             }
             
             if (!$winningSector) {
-                Log::channel('wheel-errors')->error('No active sectors configured', [
+                $errorMsg = 'No active sectors configured';
+                Log::channel('wheel-errors')->error($errorMsg, [
                     'telegram_id' => $telegramId,
                     'user_id' => $user->id,
                     'settings' => [
                         'always_empty_mode' => $settings->always_empty_mode,
                     ],
                 ]);
-                Log::error('No active sectors configured', [
+                Log::error($errorMsg, [
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
                 ]);
+                
+                // Логируем в таблицу wheel_errors
+                try {
+                    WheelError::logError(
+                        'configuration_error',
+                        $errorMsg,
+                        [
+                            'always_empty_mode' => $settings->always_empty_mode,
+                            'telegram_id' => $telegramId,
+                        ],
+                        $user->id
+                    );
+                } catch (\Exception $e) {
+                    Log::error('Failed to log wheel error to database', ['error' => $e->getMessage()]);
+                }
+                
                 return response()->json([
                     'success' => false,
                     'error' => 'No active sectors configured',
@@ -202,22 +331,70 @@ class WheelController extends Controller
 
             // Валидация сектора перед использованием
             if (!$winningSector->sector_number || !$winningSector->prize_type) {
-                Log::channel('wheel-errors')->error('Invalid sector data', [
+                $errorMsg = 'Invalid sector data: missing sector_number or prize_type';
+                Log::channel('wheel-errors')->error($errorMsg, [
                     'telegram_id' => $telegramId,
                     'user_id' => $user->id,
-                    'sector_id' => $winningSector->id,
-                    'sector_number' => $winningSector->sector_number,
-                    'prize_type' => $winningSector->prize_type,
+                    'sector_id' => $winningSector->id ?? null,
+                    'sector_number' => $winningSector->sector_number ?? null,
+                    'prize_type' => $winningSector->prize_type ?? null,
                 ]);
-                Log::error('Invalid sector data', [
+                Log::error($errorMsg, [
                     'user_id' => $user->id,
-                    'sector_id' => $winningSector->id,
+                    'sector_id' => $winningSector->id ?? null,
                 ]);
+                
+                // Логируем в таблицу wheel_errors
+                try {
+                    WheelError::logError(
+                        'sector_validation_error',
+                        $errorMsg,
+                        [
+                            'sector_id' => $winningSector->id ?? null,
+                            'sector_number' => $winningSector->sector_number ?? null,
+                            'prize_type' => $winningSector->prize_type ?? null,
+                            'telegram_id' => $telegramId,
+                        ],
+                        $user->id
+                    );
+                } catch (\Exception $e) {
+                    Log::error('Failed to log wheel error to database', ['error' => $e->getMessage()]);
+                }
+                
                 return response()->json([
                     'success' => false,
                     'error' => 'Invalid sector data',
                     'message' => 'Ошибка конфигурации сектора. Обратитесь к администратору.'
                 ], 500);
+            }
+            
+            // Проверяем корректность суммы вероятностей перед началом транзакции
+            $probabilityValidation = WheelSector::validateProbabilities();
+            if (!$probabilityValidation['valid']) {
+                $errorMsg = $probabilityValidation['message'];
+                Log::channel('wheel-errors')->error('Probability validation failed', [
+                    'telegram_id' => $telegramId,
+                    'user_id' => $user->id,
+                    'validation' => $probabilityValidation,
+                ]);
+                
+                // Логируем в таблицу wheel_errors
+                try {
+                    WheelError::logError(
+                        'probability_error',
+                        $errorMsg,
+                        [
+                            'validation' => $probabilityValidation,
+                            'telegram_id' => $telegramId,
+                        ],
+                        $user->id
+                    );
+                } catch (\Exception $e) {
+                    Log::error('Failed to log wheel error to database', ['error' => $e->getMessage()]);
+                }
+                
+                // Не блокируем прокрутку, но логируем ошибку
+                // Продолжаем выполнение, так как getRandomSector уже обработал эту ситуацию
             }
 
             // Создаем запись о прокруте
@@ -414,11 +591,13 @@ class WheelController extends Controller
                         'user_id' => $user->id,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type' => $winningSector->prize_type,
+                        'prize_type_id' => $winningSector->prize_type_id,
                         'note' => 'Prize is NOT awarded automatically',
                     ]);
                 } else {
                     // Неизвестный тип приза или некорректное значение
-                    Log::channel('wheel-errors')->warning('Unknown prize type or invalid value', [
+                    $errorMsg = 'Unknown prize type or invalid value: ' . $winningSector->prize_type;
+                    Log::channel('wheel-errors')->warning($errorMsg, [
                         'telegram_id' => $telegramId,
                         'user_id' => $user->id,
                         'spin_id' => $spin->id ?? null,
@@ -426,12 +605,30 @@ class WheelController extends Controller
                         'prize_type' => $winningSector->prize_type,
                         'prize_value' => $winningSector->prize_value,
                     ]);
-                    Log::warning('Unknown prize type or invalid value', [
+                    Log::warning($errorMsg, [
                         'user_id' => $user->id,
                         'sector_number' => $winningSector->sector_number,
                         'prize_type' => $winningSector->prize_type,
                         'prize_value' => $winningSector->prize_value,
                     ]);
+                    
+                    // Логируем в таблицу wheel_errors
+                    try {
+                        WheelError::logError(
+                            'prize_award_error',
+                            $errorMsg,
+                            [
+                                'spin_id' => $spin->id ?? null,
+                                'sector_number' => $winningSector->sector_number,
+                                'prize_type' => $winningSector->prize_type,
+                                'prize_value' => $winningSector->prize_value,
+                                'telegram_id' => $telegramId,
+                            ],
+                            $user->id
+                        );
+                    } catch (\Exception $logError) {
+                        Log::error('Failed to log wheel error to database', ['error' => $logError->getMessage()]);
+                    }
                 }
 
                 // Логируем финальное состояние билетов после всех операций
@@ -600,7 +797,8 @@ class WheelController extends Controller
             } catch (\Exception $e) {
                 DB::rollBack();
                 // Логируем ошибку транзакции
-                Log::channel('wheel-errors')->error('Transaction error in wheel spin', [
+                $errorMsg = 'Transaction error in wheel spin: ' . $e->getMessage();
+                Log::channel('wheel-errors')->error($errorMsg, [
                     'telegram_id' => $telegramId ?? null,
                     'user_id' => $user->id ?? null,
                     'error' => $e->getMessage(),
@@ -608,14 +806,46 @@ class WheelController extends Controller
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
                 ]);
+                
+                // Логируем в таблицу wheel_errors
+                try {
+                    WheelError::logError(
+                        'transaction_error',
+                        $errorMsg,
+                        [
+                            'error_class' => get_class($e),
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine(),
+                            'telegram_id' => $telegramId ?? null,
+                            'request_id' => $requestId ?? null,
+                        ],
+                        $user->id ?? null
+                    );
+                } catch (\Exception $logError) {
+                    Log::error('Failed to log wheel error to database', ['error' => $logError->getMessage()]);
+                }
+                
                 throw $e;
             }
 
         } catch (\Exception $e) {
             $duration = round((microtime(true) - $startTime) * 1000, 2);
             
+            // Определяем тип ошибки
+            $errorType = 'unknown_error';
+            if (str_contains($e->getMessage(), 'ticket')) {
+                $errorType = 'ticket_error';
+            } elseif (str_contains($e->getMessage(), 'sector') || str_contains($e->getMessage(), 'configuration')) {
+                $errorType = 'configuration_error';
+            } elseif (str_contains($e->getMessage(), 'probability')) {
+                $errorType = 'probability_error';
+            } elseif (str_contains($e->getMessage(), 'transaction')) {
+                $errorType = 'transaction_error';
+            }
+            
             // Логируем в отдельный файл для ошибок пользовательской части
-            Log::channel('wheel-errors')->error('Error in wheel spin', [
+            $errorMsg = 'Error in wheel spin: ' . $e->getMessage();
+            Log::channel('wheel-errors')->error($errorMsg, [
                 'request_id' => $requestId,
                 'telegram_id' => $telegramId ?? null,
                 'user_id' => $user->id ?? null,
@@ -634,10 +864,31 @@ class WheelController extends Controller
             ]);
 
             // Также логируем в общий лог для совместимости
-            Log::error('Error in wheel spin', [
+            Log::error($errorMsg, [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
+            
+            // Логируем в таблицу wheel_errors
+            try {
+                WheelError::logError(
+                    $errorType,
+                    $errorMsg,
+                    [
+                        'error_class' => get_class($e),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine(),
+                        'duration_ms' => $duration,
+                        'request_id' => $requestId,
+                        'ip' => $request->ip() ?? null,
+                        'init_data_provided' => !empty($initData),
+                        'tickets_available' => $user->tickets_available ?? null,
+                    ],
+                    $user->id ?? null
+                );
+            } catch (\Exception $logError) {
+                Log::error('Failed to log wheel error to database', ['error' => $logError->getMessage()]);
+            }
 
             // Определяем тип ошибки для более точного сообщения
             $errorMessage = 'Произошла ошибка при прокруте рулетки';

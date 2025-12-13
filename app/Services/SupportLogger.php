@@ -16,7 +16,7 @@ class SupportLogger
         try {
             Log::channel('tickets')->info('Ticket created', array_merge([
                 'ticket_id' => $ticket->id,
-                'theme' => $ticket->theme,
+                'subject' => $ticket->subject ?? $ticket->theme ?? null,
                 'status' => $ticket->status,
                 'user_id' => auth()->check() ? auth()->id() : null,
                 'user_email' => auth()->check() ? auth()->user()?->email : null,
@@ -43,7 +43,7 @@ class SupportLogger
             
             Log::channel('tickets')->{$level}('Ticket sent to CRM', array_merge([
                 'ticket_id' => $ticket->id,
-                'theme' => $ticket->theme,
+                'subject' => $ticket->subject ?? $ticket->theme ?? null,
                 'status' => $ticket->status,
                 'success' => $success,
                 'crm_url' => $crmUrl ?: 'not configured',
@@ -89,7 +89,7 @@ class SupportLogger
         try {
             Log::channel('tickets')->info('Ticket status changed', array_merge([
                 'ticket_id' => $ticket->id,
-                'theme' => $ticket->theme,
+                'subject' => $ticket->subject ?? $ticket->theme ?? null,
                 'old_status' => $oldStatus,
                 'new_status' => $newStatus,
                 'changed_by' => $context['changed_by'] ?? (auth()->check() ? 'admin' : 'crm'),
@@ -161,7 +161,7 @@ class SupportLogger
         try {
             Log::channel('tickets')->debug('Ticket viewed', array_merge([
                 'ticket_id' => $ticket->id,
-                'theme' => $ticket->theme,
+                'subject' => $ticket->subject ?? $ticket->theme ?? null,
                 'status' => $ticket->status,
                 'messages_count' => $ticket->messages()->count(),
                 'user_id' => auth()->check() ? auth()->id() : null,
