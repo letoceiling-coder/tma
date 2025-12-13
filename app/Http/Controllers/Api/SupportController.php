@@ -30,28 +30,69 @@ class SupportController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $status = $request->get('status');
-        $perPage = $request->get('per_page', 20);
+        try {
+            $status = $request->get('status');
+            $perPage = min((int) $request->get('per_page', 20), 100); // Максимум 100 на страницу
 
-        $query = SupportTicket::with(['messages' => function ($q) {
-            $q->orderBy('created_at', 'desc');
-        }])->orderBy('created_at', 'desc');
+            $query = SupportTicket::query();
 
-        if ($status) {
-            $query->where('status', $status);
+            // Загружаем сообщения только если они нужны
+            $query->with(['messages' => function ($q) {
+                $q->orderBy('created_at', 'desc');
+            }]);
+
+            $query->orderBy('created_at', 'desc');
+
+            if ($status && in_array($status, ['open', 'in_progress', 'closed'])) {
+                $query->where('status', $status);
+            }
+
+            $tickets = $query->paginate($perPage);
+
+            // Логирование после успешного получения данных
+            try {
+                SupportLogger::logTicketsListed(
+                    ['status' => $status, 'per_page' => $perPage],
+                    $tickets->total()
+                );
+            } catch (\Exception $logError) {
+                // Логирование не должно прерывать выполнение
+                Log::error('Failed to log tickets list', [
+                    'error' => $logError->getMessage(),
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => $tickets,
+            ]);
+        } catch (\Exception $e) {
+            // Логируем ошибку
+            try {
+                SupportLogger::logError('Fetching tickets list', $e, [
+                    'status' => $request->get('status'),
+                    'per_page' => $request->get('per_page'),
+                ]);
+            } catch (\Exception $logError) {
+                // Если даже логирование не работает, пишем в основной лог
+                Log::error('Error fetching tickets list', [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка при получении списка тикетов',
+                'error' => config('app.debug') ? [
+                    'message' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ] : null,
+            ], 500);
         }
-
-        $tickets = $query->paginate($perPage);
-
-        SupportLogger::logTicketsListed(
-            ['status' => $status, 'per_page' => $perPage],
-            $tickets->total()
-        );
-
-        return response()->json([
-            'success' => true,
-            'data' => $tickets,
-        ]);
     }
 
     /**

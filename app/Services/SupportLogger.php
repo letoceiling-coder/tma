@@ -13,15 +13,23 @@ class SupportLogger
      */
     public static function logTicketCreated(SupportTicket $ticket, array $context = []): void
     {
-        Log::channel('tickets')->info('Ticket created', array_merge([
-            'ticket_id' => $ticket->id,
-            'theme' => $ticket->theme,
-            'status' => $ticket->status,
-            'user_id' => auth()->id(),
-            'user_email' => auth()->user()?->email,
-            'ip' => request()->ip(),
-            'user_agent' => request()->userAgent(),
-        ], $context));
+        try {
+            Log::channel('tickets')->info('Ticket created', array_merge([
+                'ticket_id' => $ticket->id,
+                'theme' => $ticket->theme,
+                'status' => $ticket->status,
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'user_email' => auth()->check() ? auth()->user()?->email : null,
+                'ip' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log ticket creation', [
+                'ticket_id' => $ticket->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -44,15 +52,23 @@ class SupportLogger
      */
     public static function logMessageCreated(SupportMessage $message, array $context = []): void
     {
-        Log::channel('tickets')->info('Message created', array_merge([
-            'message_id' => $message->id,
-            'ticket_id' => $message->ticket_id,
-            'sender' => $message->sender,
-            'has_attachments' => !empty($message->attachments),
-            'attachments_count' => is_array($message->attachments) ? count($message->attachments) : 0,
-            'user_id' => auth()->id(),
-            'ip' => request()->ip(),
-        ], $context));
+        try {
+            Log::channel('tickets')->info('Message created', array_merge([
+                'message_id' => $message->id,
+                'ticket_id' => $message->ticket_id,
+                'sender' => $message->sender,
+                'has_attachments' => !empty($message->attachments),
+                'attachments_count' => is_array($message->attachments) ? count($message->attachments) : 0,
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'ip' => request()->ip(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log message creation', [
+                'message_id' => $message->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -60,15 +76,23 @@ class SupportLogger
      */
     public static function logTicketStatusChanged(SupportTicket $ticket, string $oldStatus, string $newStatus, array $context = []): void
     {
-        Log::channel('tickets')->info('Ticket status changed', array_merge([
-            'ticket_id' => $ticket->id,
-            'theme' => $ticket->theme,
-            'old_status' => $oldStatus,
-            'new_status' => $newStatus,
-            'changed_by' => $context['changed_by'] ?? (auth()->check() ? 'admin' : 'crm'),
-            'user_id' => auth()->id(),
-            'ip' => request()->ip(),
-        ], $context));
+        try {
+            Log::channel('tickets')->info('Ticket status changed', array_merge([
+                'ticket_id' => $ticket->id,
+                'theme' => $ticket->theme,
+                'old_status' => $oldStatus,
+                'new_status' => $newStatus,
+                'changed_by' => $context['changed_by'] ?? (auth()->check() ? 'admin' : 'crm'),
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'ip' => request()->ip(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log status change', [
+                'ticket_id' => $ticket->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -104,12 +128,19 @@ class SupportLogger
      */
     public static function logTicketsListed(array $filters, int $count, array $context = []): void
     {
-        Log::channel('tickets')->debug('Tickets list requested', array_merge([
-            'filters' => $filters,
-            'count' => $count,
-            'user_id' => auth()->id(),
-            'ip' => request()->ip(),
-        ], $context));
+        try {
+            Log::channel('tickets')->debug('Tickets list requested', array_merge([
+                'filters' => $filters,
+                'count' => $count,
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'ip' => request()->ip(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log tickets list', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -117,14 +148,22 @@ class SupportLogger
      */
     public static function logTicketViewed(SupportTicket $ticket, array $context = []): void
     {
-        Log::channel('tickets')->debug('Ticket viewed', array_merge([
-            'ticket_id' => $ticket->id,
-            'theme' => $ticket->theme,
-            'status' => $ticket->status,
-            'messages_count' => $ticket->messages()->count(),
-            'user_id' => auth()->id(),
-            'ip' => request()->ip(),
-        ], $context));
+        try {
+            Log::channel('tickets')->debug('Ticket viewed', array_merge([
+                'ticket_id' => $ticket->id,
+                'theme' => $ticket->theme,
+                'status' => $ticket->status,
+                'messages_count' => $ticket->messages()->count(),
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'ip' => request()->ip(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log ticket view', [
+                'ticket_id' => $ticket->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -132,12 +171,20 @@ class SupportLogger
      */
     public static function logClosedTicketMessageAttempt(SupportTicket $ticket, array $context = []): void
     {
-        Log::channel('tickets')->warning('Attempt to send message to closed ticket', array_merge([
-            'ticket_id' => $ticket->id,
-            'status' => $ticket->status,
-            'user_id' => auth()->id(),
-            'ip' => request()->ip(),
-        ], $context));
+        try {
+            Log::channel('tickets')->warning('Attempt to send message to closed ticket', array_merge([
+                'ticket_id' => $ticket->id,
+                'status' => $ticket->status,
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'ip' => request()->ip(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log closed ticket attempt', [
+                'ticket_id' => $ticket->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -145,11 +192,19 @@ class SupportLogger
      */
     public static function logValidationError(string $action, array $errors, array $context = []): void
     {
-        Log::channel('tickets')->warning("Validation error: {$action}", array_merge([
-            'errors' => $errors,
-            'user_id' => auth()->id(),
-            'ip' => request()->ip(),
-        ], $context));
+        try {
+            Log::channel('tickets')->warning("Validation error: {$action}", array_merge([
+                'errors' => $errors,
+                'user_id' => auth()->check() ? auth()->id() : null,
+                'ip' => request()->ip(),
+            ], $context));
+        } catch (\Exception $e) {
+            // Если логирование не удалось, не прерываем выполнение
+            Log::channel('tickets')->error('Failed to log validation error', [
+                'action' => $action,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
