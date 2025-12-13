@@ -58,10 +58,17 @@ Route::middleware(['telegram.initdata'])->group(function () {
     Route::post('/stars/exchange/initiate', [StarExchangeController::class, 'initiateExchange']);
     Route::post('/stars/exchange/confirm', [StarExchangeController::class, 'confirmExchange']);
     Route::get('/stars/exchange/history', [StarExchangeController::class, 'getHistory']);
+    
+    // Telegram Stars Payments (Invoice API)
+    Route::post('/payments/stars/create-invoice', [\App\Http\Controllers\Api\StarsPaymentController::class, 'createInvoice']);
+    Route::get('/payments/stars/balance', [\App\Http\Controllers\Api\StarsPaymentController::class, 'getStarsBalance']);
 });
 
 // Webhook для Telegram Stars Exchange (не требует initData, но защищен токеном)
 Route::post('/stars/exchange/webhook', [StarExchangeController::class, 'webhook']);
+
+// Webhook для Telegram Stars Payments (Invoice API)
+Route::post('/payments/stars/webhook', [\App\Http\Controllers\Api\StarsPaymentController::class, 'webhook']);
 
 // Webhook для Telegram Bot (защищен middleware)
 Route::post('/telegram/webhook', [\App\Http\Controllers\Api\TelegramWebhookController::class, 'handle'])

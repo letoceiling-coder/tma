@@ -62,12 +62,6 @@ class ClearAllTickets extends Command
 
             $this->info("✓ Очищено тикетов у {$clearedCount} пользователей");
 
-            // Очищаем историю, если указан флаг --history
-            if ($this->option('history')) {
-                $historyCleared = UserTicket::truncate();
-                $this->info("✓ Очищена история тикетов (таблица user_tickets)");
-            }
-
             // Также сбрасываем связанные поля
             User::whereNotNull('tickets_depleted_at')
                 ->update(['tickets_depleted_at' => null]);
@@ -78,6 +72,13 @@ class ClearAllTickets extends Command
             $this->info("✓ Сброшены связанные поля (tickets_depleted_at, referral_popup_shown_at)");
 
             DB::commit();
+
+            // Очищаем историю ПОСЛЕ коммита транзакции (truncate не работает внутри транзакции)
+            if ($this->option('history')) {
+                // Truncate автоматически коммитит, поэтому делаем вне транзакции
+                UserTicket::truncate();
+                $this->info("✓ Очищена история тикетов (таблица user_tickets)");
+            }
 
             $this->newLine();
             $this->info('=== Статистика после очистки ===');

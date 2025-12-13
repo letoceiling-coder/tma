@@ -1,0 +1,466 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\StarPayment;
+use App\Models\PaymentError;
+use App\Models\UserTicket;
+use App\Services\TelegramService;
+use App\Telegram\Bot;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+
+class StarsPaymentController extends Controller
+{
+    /**
+     * Создать инвойс для покупки 20 прокрутов за 50 звезд
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function createInvoice(Request $request): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            if (!$initData) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Init data not provided',
+                    'message' => 'Ошибка авторизации'
+                ], 401);
+            }
+
+            $telegramId = TelegramService::getTelegramId($initData);
+            
+            if (!$telegramId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User ID not found',
+                    'message' => 'Ошибка авторизации'
+                ], 401);
+            }
+
+            $user = User::where('telegram_id', $telegramId)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User not found',
+                    'message' => 'Пользователь не найден'
+                ], 404);
+            }
+
+            $amount = 50; // Фиксированная сумма: 50 звезд
+            $ticketsAmount = 20; // Фиксированное количество билетов
+            $purpose = 'buy_20_spins';
+
+            // Создаем запись о платеже со статусом pending
+            $payment = StarPayment::create([
+                'user_id' => $user->id,
+                'amount' => $amount,
+                'purpose' => $purpose,
+                'status' => 'pending',
+                'payload' => [
+                    'purpose' => $purpose,
+                    'stars_amount' => $amount,
+                    'tickets_amount' => $ticketsAmount,
+                ],
+            ]);
+
+            // Создаем инвойс через Telegram Bot API
+            try {
+                $bot = new Bot();
+                
+                $invoiceResult = $bot->createInvoiceLink(
+                    title: '20 прокрутов рулетки',
+                    description: 'Покупка 20 прокрутов рулетки',
+                    payload: json_encode([
+                        'payment_id' => $payment->id,
+                        'purpose' => $purpose,
+                        'stars_amount' => $amount,
+                        'tickets_amount' => $ticketsAmount,
+                    ]),
+                    providerToken: '', // Пусто для Telegram Stars
+                    currency: 'XTR', // XTR = Telegram Stars
+                    prices: [
+                        ['label' => '20 прокрутов', 'amount' => $amount],
+                    ]
+                );
+
+                if (!isset($invoiceResult['ok']) || !$invoiceResult['ok']) {
+                    throw new \Exception('Failed to create invoice: ' . ($invoiceResult['description'] ?? 'Unknown error'));
+                }
+
+                $invoiceUrl = $invoiceResult['result'] ?? null;
+
+                if (!$invoiceUrl) {
+                    throw new \Exception('Invoice URL not received from Telegram');
+                }
+
+                // Обновляем запись платежа с URL инвойса
+                $payment->invoice_url = $invoiceUrl;
+                $payment->telegram_response = $invoiceResult;
+                $payment->save();
+
+                Log::info('Stars payment invoice created', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'payment_id' => $payment->id,
+                    'invoice_url' => $invoiceUrl,
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'invoice_url' => $invoiceUrl,
+                    'payment_id' => $payment->id,
+                    'amount' => $amount,
+                    'tickets_amount' => $ticketsAmount,
+                ]);
+
+            } catch (\Exception $invoiceError) {
+                // Логируем ошибку создания инвойса
+                $errorMsg = 'Failed to create invoice: ' . $invoiceError->getMessage();
+                Log::error($errorMsg, [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'payment_id' => $payment->id,
+                    'error' => $invoiceError->getMessage(),
+                    'trace' => $invoiceError->getTraceAsString(),
+                ]);
+
+                $payment->status = 'failed';
+                $payment->save();
+
+                PaymentError::logError(
+                    'invoice_creation_error',
+                    $errorMsg,
+                    $user->id,
+                    $request->all(),
+                    null,
+                    ['error' => $invoiceError->getMessage()],
+                    (string) $payment->id
+                );
+
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Failed to create invoice',
+                    'message' => 'Ошибка при создании платежа. Попробуйте ещё раз.'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error in createInvoice', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Internal server error',
+                'message' => 'Произошла ошибка при обработке запроса'
+            ], 500);
+        }
+    }
+
+    /**
+     * Webhook для обработки успешной оплаты от Telegram
+     * Вызывается после успешной оплаты через Telegram Stars
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function webhook(Request $request): JsonResponse
+    {
+        try {
+            // Telegram отправляет данные в формате:
+            // {
+            //   "query_id": "...",
+            //   "user": {...},
+            //   "payload": "...",
+            //   "charge": {...}
+            // }
+            
+            $queryId = $request->input('query_id');
+            $payload = $request->input('payload');
+            $charge = $request->input('charge');
+            $userData = $request->input('user');
+
+            Log::info('Stars payment webhook received', [
+                'query_id' => $queryId,
+                'payload' => $payload,
+                'charge' => $charge,
+                'user' => $userData,
+            ]);
+
+            // Парсим payload для получения payment_id
+            $payloadData = json_decode($payload, true);
+            $paymentId = $payloadData['payment_id'] ?? null;
+
+            if (!$paymentId) {
+                Log::warning('Payment ID not found in webhook payload', [
+                    'payload' => $payload,
+                ]);
+                return response()->json([
+                    'error' => 'Payment ID not found'
+                ], 400);
+            }
+
+            // Находим запись о платеже
+            $payment = StarPayment::find($paymentId);
+
+            if (!$payment) {
+                Log::warning('Payment not found', ['payment_id' => $paymentId]);
+                return response()->json([
+                    'error' => 'Payment not found'
+                ], 404);
+            }
+
+            // Проверяем, что транзакция еще не обработана
+            if ($payment->status === 'success') {
+                Log::warning('Payment already processed', ['payment_id' => $paymentId]);
+                return response()->json([
+                    'error' => 'Payment already processed'
+                ], 400);
+            }
+
+            // Валидация транзакции
+            $isValid = true;
+            $validationErrors = [];
+
+            // Проверяем purpose
+            if (($payloadData['purpose'] ?? null) !== 'buy_20_spins') {
+                $isValid = false;
+                $validationErrors[] = 'Invalid purpose';
+            }
+
+            // Проверяем amount
+            if (($payloadData['stars_amount'] ?? 0) !== 50) {
+                $isValid = false;
+                $validationErrors[] = 'Invalid amount';
+            }
+
+            // Проверяем charge (данные о списании)
+            if (!$charge || !isset($charge['status']) || $charge['status'] !== 'paid') {
+                $isValid = false;
+                $validationErrors[] = 'Charge not paid';
+            }
+
+            if (!$isValid) {
+                $errorMsg = 'Payment validation failed: ' . implode(', ', $validationErrors);
+                Log::error($errorMsg, [
+                    'payment_id' => $paymentId,
+                    'payload' => $payloadData,
+                    'charge' => $charge,
+                ]);
+
+                $payment->status = 'failed';
+                $payment->telegram_response = [
+                    'query_id' => $queryId,
+                    'payload' => $payloadData,
+                    'charge' => $charge,
+                    'validation_errors' => $validationErrors,
+                ];
+                $payment->save();
+
+                PaymentError::logError(
+                    'payment_validation_error',
+                    $errorMsg,
+                    $payment->user_id,
+                    $request->all(),
+                    400,
+                    ['validation_errors' => $validationErrors],
+                    (string) $paymentId
+                );
+
+                return response()->json([
+                    'error' => 'Payment validation failed'
+                ], 400);
+            }
+
+            // Транзакция валидна - начисляем билеты
+            DB::beginTransaction();
+
+            try {
+                // ВАЖНО: Блокируем строку платежа для защиты от двойного списания
+                $payment = StarPayment::where('id', $paymentId)->lockForUpdate()->first();
+                
+                if (!$payment) {
+                    DB::rollBack();
+                    return response()->json([
+                        'error' => 'Payment not found'
+                    ], 404);
+                }
+
+                // Повторная проверка статуса после блокировки
+                if ($payment->status === 'success') {
+                    DB::rollBack();
+                    Log::warning('Payment already processed (after lock)', ['payment_id' => $paymentId]);
+                    return response()->json([
+                        'error' => 'Payment already processed'
+                    ], 400);
+                }
+
+                // Обновляем статус платежа
+                $payment->status = 'success';
+                $payment->payment_id = $charge['telegram_payment_charge_id'] ?? $queryId;
+                $payment->paid_at = now();
+                $payment->telegram_response = [
+                    'query_id' => $queryId,
+                    'payload' => $payloadData,
+                    'charge' => $charge,
+                    'user' => $userData,
+                ];
+                $payment->save();
+
+                // Начисляем билеты пользователю
+                // ВАЖНО: Блокируем строку пользователя для защиты от race condition
+                $user = User::where('id', $payment->user_id)->lockForUpdate()->first();
+                
+                if (!$user) {
+                    DB::rollBack();
+                    Log::error('User not found after lock', ['user_id' => $payment->user_id]);
+                    return response()->json([
+                        'error' => 'User not found'
+                    ], 404);
+                }
+
+                $ticketsBefore = $user->tickets_available;
+                $ticketsToAdd = 20; // Фиксированное количество
+
+                $user->tickets_available = $user->tickets_available + $ticketsToAdd;
+                
+                // Если билеты стали больше 0, сбрасываем точку восстановления
+                if ($user->tickets_available > 0) {
+                    $user->tickets_depleted_at = null;
+                    $user->referral_popup_shown_at = null;
+                }
+                
+                $user->save();
+
+                // Создаем запись в истории билетов
+                UserTicket::create([
+                    'user_id' => $user->id,
+                    'tickets_count' => $ticketsToAdd,
+                    'restored_at' => null,
+                    'source' => 'stars_payment',
+                ]);
+
+                Log::info('Stars payment processed successfully', [
+                    'payment_id' => $paymentId,
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'tickets_before' => $ticketsBefore,
+                    'tickets_after' => $user->tickets_available,
+                    'tickets_added' => $ticketsToAdd,
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Payment processed successfully'
+                ]);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                
+                $errorMsg = 'Error processing payment: ' . $e->getMessage();
+                Log::error($errorMsg, [
+                    'payment_id' => $paymentId,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                $payment->status = 'failed';
+                $payment->save();
+
+                PaymentError::logError(
+                    'payment_processing_error',
+                    $errorMsg,
+                    $payment->user_id,
+                    $request->all(),
+                    500,
+                    ['error' => $e->getMessage()],
+                    (string) $paymentId
+                );
+
+                return response()->json([
+                    'error' => 'Error processing payment'
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Error in payment webhook', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request' => $request->all(),
+            ]);
+
+            return response()->json([
+                'error' => 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Получить баланс звезд пользователя (через Telegram WebApp SDK)
+     * Этот метод возвращает информацию для проверки баланса на фронтенде
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getStarsBalance(Request $request): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            if (!$initData) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Init data not provided'
+                ], 401);
+            }
+
+            $telegramId = TelegramService::getTelegramId($initData);
+            
+            if (!$telegramId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User ID not found'
+                ], 401);
+            }
+
+            $user = User::where('telegram_id', $telegramId)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User not found'
+                ], 404);
+            }
+
+            // Возвращаем информацию о балансе
+            // Фактический баланс должен проверяться через Telegram.WebApp.cloudStorage.get() или через Bot API
+            return response()->json([
+                'success' => true,
+                'note' => 'Use Telegram.WebApp.cloudStorage.get("stars_balance") or Telegram Bot API to get actual balance',
+                'user_id' => $user->id,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting stars balance', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Internal server error'
+            ], 500);
+        }
+    }
+}

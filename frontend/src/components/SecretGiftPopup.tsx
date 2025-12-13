@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Star } from "lucide-react";
 import { toast } from "sonner";
 import popupBunnyHeart from "@/assets/popup-bunny-heart.png";
@@ -13,20 +13,94 @@ interface SecretGiftPopupProps {
 
 const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [starsBalance, setStarsBalance] = useState<number | null>(null);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(false);
+  const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false);
   const { initData: telegramInitData } = useTelegramWebApp();
 
-  if (!isOpen) return null;
+  // Проверка баланса звезд при открытии popup
+  useEffect(() => {
+    if (!isOpen) return;
 
-  // Обмен 50 звезд на 20 билетов
+    const checkStarsBalance = async () => {
+      setIsBalanceLoading(true);
+      setHasInsufficientBalance(false);
+
+      try {
+        // Используем Telegram WebApp SDK для получения баланса
+        const tg = window.Telegram?.WebApp;
+        
+        if (tg && tg.initDataUnsafe?.user) {
+          // Пытаемся получить баланс через cloudStorage или через Bot API
+          // Telegram WebApp SDK не предоставляет прямой метод для получения баланса
+          // Баланс будет проверен при открытии инвойса
+          // Для проверки можно использовать cloudStorage
+          const balance = await tg.cloudStorage?.get('stars_balance');
+          
+          if (balance !== null && balance !== undefined) {
+            const balanceNum = parseInt(balance, 10);
+            setStarsBalance(balanceNum);
+            setHasInsufficientBalance(balanceNum < 50);
+          } else {
+            // Если баланс не доступен через cloudStorage, проверяем при создании инвойса
+            setStarsBalance(null);
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to get stars balance:', error);
+        // Продолжаем без проверки баланса - Telegram проверит при открытии инвойса
+        setStarsBalance(null);
+      } finally {
+        setIsBalanceLoading(false);
+      }
+    };
+
+    checkStarsBalance();
+  }, [isOpen]);
+
+  // Обработка успешной оплаты через callback от Telegram
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    
+    if (!tg) return;
+
+    const handleInvoiceClosed = (event: any) => {
+      const status = event?.status || event;
+      
+      if (status === 'paid') {
+        // Оплата успешна - начисляем билеты
+        haptic.success();
+        onExchange(20);
+        toast.success('+20 прокрутов за 50 звёзд успешно начислены!', { duration: 3000 });
+        onClose();
+      } else if (status === 'cancelled' || status === 'failed') {
+        // Пользователь отменил или произошла ошибка
+        setIsProcessing(false);
+        haptic.error();
+        toast.error('Оплата не прошла. Попробуйте ещё раз.', { duration: 3000 });
+      } else {
+        setIsProcessing(false);
+      }
+    };
+
+    // Подписываемся на событие закрытия инвойса
+    tg.onEvent('invoiceClosed', handleInvoiceClosed);
+
+    return () => {
+      tg.offEvent('invoiceClosed', handleInvoiceClosed);
+    };
+  }, [onExchange, onClose]);
+
+  // Обмен 50 звезд на 20 билетов через Telegram Stars Invoice
   const handleExchangeStars = async () => {
-    if (isProcessing) return;
+    if (isProcessing || hasInsufficientBalance) return;
     
     haptic.mediumTap();
     setIsProcessing(true);
     
     try {
       const apiUrl = import.meta.env.VITE_API_URL || '';
-      const apiPath = apiUrl ? `${apiUrl}/api/stars/exchange` : `/api/stars/exchange`;
+      const apiPath = apiUrl ? `${apiUrl}/api/payments/stars/create-invoice` : `/api/payments/stars/create-invoice`;
       
       const response = await fetch(apiPath, {
         method: 'POST',
@@ -40,26 +114,47 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || data.error || 'Ошибка при обмене звезд');
+        throw new Error(data.message || data.error || 'Ошибка при создании платежа');
       }
 
-      if (data.success) {
-        haptic.success();
-        onExchange(data.tickets_received || 20);
-        toast.success(`Получено ${data.tickets_received || 20} билетов!`, { duration: 3000 });
-        onClose();
+      if (data.success && data.invoice_url) {
+        // Открываем инвойс через Telegram WebApp SDK
+        const tg = window.Telegram?.WebApp;
+        
+        if (!tg || !tg.openInvoice) {
+          throw new Error('Telegram WebApp SDK не доступен');
+        }
+
+        // Открываем инвойс
+        tg.openInvoice(data.invoice_url, (status: string) => {
+          setIsProcessing(false);
+          
+          if (status === 'paid') {
+            // Оплата успешна
+            haptic.success();
+            onExchange(20);
+            toast.success('+20 прокрутов за 50 звёзд успешно начислены!', { duration: 3000 });
+            onClose();
+          } else if (status === 'cancelled' || status === 'failed') {
+            // Пользователь отменил или произошла ошибка
+            haptic.error();
+            toast.error('Оплата не прошла. Попробуйте ещё раз.', { duration: 3000 });
+          }
+        });
       } else {
-        throw new Error(data.message || 'Ошибка при обмене звезд');
+        throw new Error(data.message || 'Ошибка при создании платежа');
       }
     } catch (error: any) {
       setIsProcessing(false);
       haptic.error();
       const errorMessage = error.message || 'Ошибка при обмене звезд';
       toast.error(errorMessage, { duration: 3000 });
-    } finally {
-      setIsProcessing(false);
     }
   };
+
+  if (!isOpen) return null;
+
+  const isButtonDisabled = isProcessing || hasInsufficientBalance || isBalanceLoading;
 
   return (
     <div 
@@ -177,6 +272,43 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
             </span>
           </div>
 
+          {/* Недостаточно звёзд сообщение */}
+          {hasInsufficientBalance && (
+            <div 
+              style={{
+                background: 'rgba(255, 0, 0, 0.1)',
+                border: '1px solid rgba(255, 0, 0, 0.3)',
+                borderRadius: '12px',
+                padding: '12px',
+                marginBottom: '16px',
+                textAlign: 'center'
+              }}
+            >
+              <p 
+                style={{
+                  fontSize: '14px',
+                  color: '#8B0000',
+                  fontWeight: 600,
+                  margin: 0
+                }}
+              >
+                Недостаточно звёзд для обмена
+              </p>
+              {starsBalance !== null && (
+                <p 
+                  style={{
+                    fontSize: '12px',
+                    color: '#8B0000',
+                    margin: '4px 0 0 0',
+                    opacity: 0.8
+                  }}
+                >
+                  У вас {starsBalance} звёзд, требуется 50
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Bunny Image */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <img 
@@ -192,11 +324,11 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           </div>
         </div>
 
-        {/* Exchange Button - TG Stars ready */}
+        {/* Exchange Button */}
         <button
           id="exchange-stars-btn"
           onClick={handleExchangeStars}
-          disabled={isProcessing}
+          disabled={isButtonDisabled}
           aria-label="Обменять 50 звезд на 20 прокруток"
           style={{
             width: '100%',
@@ -207,22 +339,32 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
             alignItems: 'center',
             justifyContent: 'center',
             gap: '10px',
-            background: isProcessing 
-              ? 'rgba(255,255,255,0.7)' 
+            background: isButtonDisabled
+              ? 'rgba(255,255,255,0.5)' 
               : 'linear-gradient(135deg, #FFFFFF 0%, #FFF8F5 100%)',
             fontSize: '17px',
             fontWeight: 700,
-            color: '#E07C63',
+            color: isButtonDisabled ? '#999999' : '#E07C63',
             fontFamily: "'SF Pro Display', -apple-system, sans-serif",
             border: 'none',
-            cursor: isProcessing ? 'not-allowed' : 'pointer',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+            cursor: isButtonDisabled ? 'not-allowed' : 'pointer',
+            boxShadow: isButtonDisabled ? 'none' : '0 4px 16px rgba(0,0,0,0.1)',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            transform: isProcessing ? 'scale(0.98)' : 'scale(1)'
+            transform: isButtonDisabled ? 'scale(0.98)' : 'scale(1)',
+            opacity: isButtonDisabled ? 0.6 : 1
           }}
         >
-          <Star size={20} fill="#FFD700" color="#FFD700" />
-          <span>{isProcessing ? "Обработка..." : "Обменять 50 звезд сейчас"}</span>
+          <Star size={20} fill={isButtonDisabled ? "#999999" : "#FFD700"} color={isButtonDisabled ? "#999999" : "#FFD700"} />
+          <span>
+            {isProcessing 
+              ? "Обработка..." 
+              : isBalanceLoading
+              ? "Проверка баланса..."
+              : hasInsufficientBalance
+              ? "Недостаточно звёзд"
+              : "Обменять 50 звезд сейчас"
+            }
+          </span>
         </button>
       </div>
 
