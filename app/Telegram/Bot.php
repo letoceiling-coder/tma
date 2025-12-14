@@ -3,6 +3,8 @@
 namespace App\Telegram;
 
 use App\Telegram\TelegramClient;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Класс для работы с Telegram Bot API
@@ -517,6 +519,11 @@ class Bot extends TelegramClient
 
     /**
      * Создать ссылку на инвойс
+     * 
+     * Примечание: createInvoiceLink возвращает строку (URL) в поле result, а не массив
+     * Поэтому переопределяем метод, чтобы правильно обработать ответ
+     * 
+     * @return array ['ok' => bool, 'result' => string (invoice URL)]
      */
     public function createInvoiceLink(
         string $title,
@@ -527,14 +534,44 @@ class Bot extends TelegramClient
         array $prices,
         array $params = []
     ): array {
-        return $this->request('createInvoiceLink', array_merge([
-            'title' => $title,
-            'description' => $description,
-            'payload' => $payload,
-            'provider_token' => $providerToken,
-            'currency' => $currency,
-            'prices' => json_encode($prices),
-        ], $params));
+        // Используем protected свойство baseUrl и token из родительского класса TelegramClient
+        $url = $this->baseUrl . $this->token . '/createInvoiceLink';
+        
+        try {
+            $response = Http::timeout(30)->post($url, array_merge([
+                'title' => $title,
+                'description' => $description,
+                'payload' => $payload,
+                'provider_token' => $providerToken,
+                'currency' => $currency,
+                'prices' => json_encode($prices),
+            ], $params));
+
+            $result = $response->json();
+
+            if (!isset($result['ok']) || !$result['ok']) {
+                $errorMessage = $result['description'] ?? 'Unknown error';
+                Log::error('Telegram API error (createInvoiceLink)', [
+                    'error' => $errorMessage,
+                    'response' => $result,
+                ]);
+                throw new \App\Telegram\Exceptions\TelegramException($errorMessage);
+            }
+
+            // createInvoiceLink возвращает строку (URL) в поле result, а не массив
+            // Возвращаем полный ответ в формате ['ok' => true, 'result' => string]
+            return [
+                'ok' => true,
+                'result' => $result['result'] ?? null,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Telegram API request failed (createInvoiceLink)', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw new \App\Telegram\Exceptions\TelegramException('Failed to execute Telegram API request: ' . $e->getMessage());
+        }
     }
 
     /**
