@@ -99,6 +99,15 @@ class StarsPaymentController extends Controller
             try {
                 $bot = new Bot();
                 
+                // Логируем начало создания инвойса
+                Log::channel('stars-payments')->info('Creating Stars invoice', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'payment_id' => $payment->id,
+                    'amount' => $amount,
+                    'tickets_amount' => $ticketsAmount,
+                ]);
+                
                 // Используем createStarsInvoice для правильного формата Stars
                 // Для Stars: amount передается напрямую в единицах звёзд
                 $invoiceResult = $bot->createStarsInvoice(
@@ -114,12 +123,21 @@ class StarsPaymentController extends Controller
                     amount: $amount, // Количество звёзд из настроек (передается напрямую, без умножения)
                     params: []
                 );
+                
+                // Логируем результат создания инвойса
+                Log::channel('stars-payments')->info('Stars invoice created', [
+                    'user_id' => $user->id,
+                    'payment_id' => $payment->id,
+                    'invoice_result_ok' => $invoiceResult['ok'] ?? false,
+                    'has_invoice_url' => isset($invoiceResult['result']),
+                ]);
 
                 if (!isset($invoiceResult['ok']) || !$invoiceResult['ok']) {
                     $errorDescription = $invoiceResult['description'] ?? 'Unknown error';
                     $errorCode = $invoiceResult['error_code'] ?? null;
                     
-                    Log::error('Telegram API failed to create invoice', [
+                    // Логируем в отдельный файл для Stars платежей
+                    Log::channel('stars-payments')->error('Telegram API failed to create invoice', [
                         'user_id' => $user->id,
                         'telegram_id' => $telegramId,
                         'payment_id' => $payment->id,
@@ -127,6 +145,16 @@ class StarsPaymentController extends Controller
                         'error_description' => $errorDescription,
                         'invoice_result' => $invoiceResult,
                         'amount' => $amount,
+                        'tickets_amount' => $ticketsAmount,
+                    ]);
+                    
+                    // Также логируем в основной лог
+                    Log::error('Telegram API failed to create invoice', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'payment_id' => $payment->id,
+                        'error_code' => $errorCode,
+                        'error_description' => $errorDescription,
                     ]);
                     
                     throw new \Exception('Failed to create invoice: ' . $errorDescription . ($errorCode ? ' (code: ' . $errorCode . ')' : ''));
@@ -177,7 +205,8 @@ class StarsPaymentController extends Controller
                 ]);
                 $payment->save();
 
-                Log::info('Stars payment invoice created successfully', [
+                // Логируем успешное создание инвойса в отдельный файл
+                Log::channel('stars-payments')->info('Stars payment invoice created successfully', [
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
                     'payment_id' => $payment->id,
@@ -185,7 +214,18 @@ class StarsPaymentController extends Controller
                     'amount' => $amount,
                     'purpose' => $purpose,
                     'tickets_amount' => $ticketsAmount,
-                    'invoice_result' => $invoiceResult,
+                    'invoice_url_length' => strlen($invoiceUrl),
+                    'invoice_url_starts_with' => substr($invoiceUrl, 0, 20),
+                ]);
+                
+                // Также логируем в основной лог
+                Log::info('Stars payment invoice created successfully', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'payment_id' => $payment->id,
+                    'invoice_url' => $invoiceUrl,
+                    'amount' => $amount,
+                    'tickets_amount' => $ticketsAmount,
                 ]);
 
                 return response()->json([
@@ -273,11 +313,19 @@ class StarsPaymentController extends Controller
             $charge = $request->input('charge');
             $userData = $request->input('user');
 
+            // Логируем получение webhook в отдельный файл для Stars платежей
+            Log::channel('stars-payments')->info('Stars payment webhook received', [
+                'query_id' => $queryId,
+                'has_payload' => !empty($payload),
+                'has_charge' => !empty($charge),
+                'has_user' => !empty($userData),
+                'charge_status' => $charge['status'] ?? null,
+            ]);
+            
+            // Также логируем в основной лог
             Log::info('Stars payment webhook received', [
                 'query_id' => $queryId,
-                'payload' => $payload,
-                'charge' => $charge,
-                'user' => $userData,
+                'charge_status' => $charge['status'] ?? null,
             ]);
 
             // Парсим payload для получения payment_id
@@ -404,10 +452,19 @@ class StarsPaymentController extends Controller
 
             if (!$isValid) {
                 $errorMsg = 'Payment validation failed: ' . implode(', ', $validationErrors);
+                
+                // Логируем ошибку валидации в отдельный файл
+                Log::channel('stars-payments')->error('Stars payment validation failed', [
+                    'payment_id' => $paymentId,
+                    'validation_errors' => $validationErrors,
+                    'payload' => $payloadData,
+                    'charge_status' => $charge['status'] ?? null,
+                ]);
+                
+                // Также логируем в основной лог
                 Log::error($errorMsg, [
                     'payment_id' => $paymentId,
-                    'payload' => $payloadData,
-                    'charge' => $charge,
+                    'validation_errors' => $validationErrors,
                 ]);
 
                 $payment->status = 'failed';
@@ -524,6 +581,16 @@ class StarsPaymentController extends Controller
                 ]);
 
                 DB::commit();
+
+                // Логируем успешную обработку платежа в отдельный файл
+                Log::channel('stars-payments')->info('Stars payment processed successfully', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'payment_id' => $paymentId,
+                    'query_id' => $queryId,
+                    'stars_amount' => $payloadData['stars_amount'] ?? null,
+                    'tickets_amount' => $payloadData['tickets_amount'] ?? null,
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -726,8 +793,8 @@ class StarsPaymentController extends Controller
             $invoiceSlug = $request->input('invoice_slug');
             $stack = $request->input('stack');
 
-            // Логируем ошибку
-            Log::error('Stars payment invoice open error', [
+            // Логируем ошибку в отдельный файл для Stars платежей
+            Log::channel('stars-payments')->error('Stars payment invoice open error', [
                 'user_id' => $user->id,
                 'telegram_id' => $telegramId,
                 'payment_id' => $paymentId,
@@ -736,6 +803,15 @@ class StarsPaymentController extends Controller
                 'invoice_slug' => $invoiceSlug,
                 'stack' => $stack,
                 'request_data' => $request->all(),
+            ]);
+            
+            // Также логируем в основной лог
+            Log::error('Stars payment invoice open error', [
+                'user_id' => $user->id,
+                'telegram_id' => $telegramId,
+                'payment_id' => $paymentId,
+                'error_type' => $errorType,
+                'error_message' => $errorMessage,
             ]);
 
             // Если есть payment_id, обновляем статус платежа

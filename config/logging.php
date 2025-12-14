@@ -143,6 +143,14 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'stars-payments' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/stars-payments.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_STARS_PAYMENTS_DAYS', 90), // Хранить логи 90 дней
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

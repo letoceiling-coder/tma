@@ -547,21 +547,28 @@ class Bot extends TelegramClient
                 'prices' => json_encode($prices),
             ], $params);
 
-            Log::debug('Creating invoice link', [
-                'url' => $url,
+            // Логируем запрос в отдельный файл для Stars платежей
+            Log::channel('stars-payments')->debug('Creating invoice link request', [
                 'currency' => $currency,
                 'title' => $title,
+                'description' => $description,
                 'amount' => $prices[0]['amount'] ?? null,
+                'provider_token_empty' => empty($providerToken),
+                'prices' => $prices,
             ]);
 
             $response = Http::timeout(30)->post($url, $requestData);
 
             $result = $response->json();
             
-            Log::debug('Invoice link response', [
+            // Логируем ответ в отдельный файл для Stars платежей
+            Log::channel('stars-payments')->debug('Invoice link response', [
                 'ok' => $result['ok'] ?? false,
                 'has_result' => isset($result['result']),
                 'result_type' => gettype($result['result'] ?? null),
+                'result_length' => isset($result['result']) ? strlen($result['result']) : null,
+                'result_preview' => isset($result['result']) ? substr($result['result'], 0, 50) : null,
+                'error_code' => $result['error_code'] ?? null,
                 'description' => $result['description'] ?? null,
             ]);
 
@@ -569,15 +576,26 @@ class Bot extends TelegramClient
                 $errorMessage = $result['description'] ?? 'Unknown error';
                 $errorCode = $result['error_code'] ?? null;
                 
-                Log::error('Telegram API error (createInvoiceLink)', [
+                // Логируем ошибку в отдельный файл для Stars платежей
+                Log::channel('stars-payments')->error('Telegram API error (createInvoiceLink)', [
                     'error' => $errorMessage,
                     'error_code' => $errorCode,
                     'response' => $result,
                     'request_data' => [
                         'title' => $title,
+                        'description' => $description,
                         'currency' => $currency,
                         'amount' => $prices[0]['amount'] ?? null,
+                        'provider_token_empty' => empty($providerToken),
+                        'prices' => $prices,
                     ],
+                ]);
+                
+                // Также логируем в основной лог
+                Log::error('Telegram API error (createInvoiceLink)', [
+                    'error' => $errorMessage,
+                    'error_code' => $errorCode,
+                    'currency' => $currency,
                 ]);
                 
                 // Формируем более информативное сообщение об ошибке

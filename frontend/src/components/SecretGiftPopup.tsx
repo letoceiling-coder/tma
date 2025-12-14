@@ -286,10 +286,32 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         
         console.log('Opening invoice with URL:', invoiceUrl);
         console.log('Telegram WebApp available:', !!tg, 'openInvoice function:', typeof tg?.openInvoice);
+        console.log('Invoice URL validation:', {
+          isString: typeof invoiceUrl === 'string',
+          startsWithHttps: invoiceUrl.startsWith('https://'),
+          startsWithTelegram: invoiceUrl.startsWith('https://t.me/'),
+          urlLength: invoiceUrl.length,
+          urlPreview: invoiceUrl.substring(0, 50) + '...',
+        });
         
         // Проверяем готовность WebApp
         if (tg.readyState !== 'ready' && tg.readyState !== 'loading') {
           console.warn('WebApp not ready, readyState:', tg.readyState);
+        }
+        
+        // Логируем попытку открытия инвойса
+        try {
+          const logData = {
+            payment_id: data.payment_id,
+            invoice_url: invoiceUrl,
+            webapp_version: tg?.version,
+            platform: tg?.platform,
+            ready_state: tg?.readyState,
+            has_openInvoice: typeof tg?.openInvoice === 'function',
+          };
+          console.log('Attempting to open invoice:', logData);
+        } catch (logError) {
+          console.error('Failed to log invoice opening attempt:', logError);
         }
 
         // Устанавливаем таймаут для открытия инвойса (15 секунд)
