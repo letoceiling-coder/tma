@@ -10,6 +10,11 @@ class StarPayment extends Model
 {
     use HasFactory;
 
+    /**
+     * Название таблицы в БД
+     */
+    protected $table = 'stars_payments';
+
     protected $fillable = [
         'user_id',
         'amount',
