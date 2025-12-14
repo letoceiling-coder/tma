@@ -48,6 +48,10 @@ class TicketController extends Controller
                 ], 500);
             }
 
+            // Получаем настройки для определения количества стартовых билетов
+            $settings = \App\Models\WheelSetting::getSettings();
+            $initialTicketsCount = $settings->getValidStartTickets(); // Валидированное значение (по умолчанию 1)
+
             // Находим или создаем пользователя, если его нет
             $user = User::firstOrCreate(
                 ['telegram_id' => $telegramId],
@@ -55,12 +59,28 @@ class TicketController extends Controller
                     'name' => 'Telegram User',
                     'email' => "telegram_{$telegramId}@telegram.local",
                     'password' => bcrypt(str()->random(32)),
-                    'tickets_available' => 3, // Начальное количество билетов
+                    'tickets_available' => $initialTicketsCount, // Используем настройку из админки
                     'stars_balance' => 0,
                     'total_spins' => 0,
                     'total_wins' => 0,
                 ]
             );
+
+            // Если это новый пользователь, создаем запись в user_tickets для отслеживания источника
+            if ($user->wasRecentlyCreated) {
+                \App\Models\UserTicket::create([
+                    'user_id' => $user->id,
+                    'tickets_count' => $initialTicketsCount,
+                    'restored_at' => null, // Стартовые билеты доступны сразу
+                    'source' => 'initial_bonus',
+                ]);
+                
+                Log::info('Initial tickets granted to new user (from getTickets)', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'initial_tickets_count' => $initialTicketsCount,
+                ]);
+            }
 
             // Получаем настройки для расчета времени
             $settings = \App\Models\WheelSetting::getSettings();

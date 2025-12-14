@@ -80,11 +80,53 @@ class WowUserController extends Controller
             ->limit(10)
             ->get();
 
+        // История выигрышей (только не пустые призы)
+        $winHistory = Spin::where('user_id', $user->id)
+            ->where('prize_type', '!=', 'empty')
+            ->with('sector')
+            ->orderBy('spin_time', 'desc')
+            ->get()
+            ->map(function ($spin) {
+                return [
+                    'id' => $spin->id,
+                    'spin_time' => $spin->spin_time,
+                    'prize_type' => $spin->prize_type,
+                    'prize_name' => $spin->prize_name ?? $this->getPrizeName($spin->prize_type, $spin->prize_value ?? 0),
+                    'prize_value' => $spin->prize_value,
+                    'sector_number' => $spin->sector_number ?? ($spin->sector ? $spin->sector->sector_number : null),
+                    'sponsor_name' => $spin->sponsor_name,
+                    'delivery_status' => $spin->delivery_status,
+                ];
+            });
+
         return response()->json([
             'data' => $user,
             'spins_stats' => $spinsStats,
             'recent_spins' => $recentSpins,
+            'win_history' => $winHistory,
         ]);
+    }
+
+    /**
+     * Получить название приза в читаемом формате
+     */
+    private function getPrizeName(string $prizeType, int $prizeValue): string
+    {
+        switch ($prizeType) {
+            case 'money':
+                return $prizeValue . ' рублей';
+            case 'ticket':
+                return 'плюс ' . $prizeValue . ' билет' . ($prizeValue > 1 ? 'а' : '');
+            case 'secret_box':
+                return 'WOW Secret Box';
+            case 'gift':
+                return 'Подарок';
+            case 'sponsor_gift':
+                return 'Подарок от спонсора';
+            case 'empty':
+            default:
+                return 'пусто';
+        }
     }
 
     /**

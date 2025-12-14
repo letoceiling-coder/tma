@@ -53,5 +53,31 @@ class WheelSetting extends Model
         $settings->update($data);
         return $settings;
     }
+
+    /**
+     * Получить валидное значение стартовых билетов
+     * Если значение не задано, пустое, > 100 или < 0 — возвращает дефолтное значение 1
+     * 
+     * @return int
+     */
+    public function getValidStartTickets(): int
+    {
+        $startTickets = $this->initial_tickets_count;
+        
+        // Если значение не задано, пустое или null — возвращаем 1
+        if ($startTickets === null || $startTickets === '') {
+            return 1;
+        }
+        
+        // Преобразуем в integer для проверки
+        $startTickets = (int) $startTickets;
+        
+        // Если значение > 100 или < 0 — сбрасываем к 1
+        if ($startTickets > 100 || $startTickets < 0) {
+            return 1;
+        }
+        
+        return $startTickets;
+    }
 }
 

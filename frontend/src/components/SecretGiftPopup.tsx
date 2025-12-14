@@ -16,7 +16,14 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
   const [starsBalance, setStarsBalance] = useState<number | null>(null);
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false);
+  const [isInvoiceHandled, setIsInvoiceHandled] = useState(false); // Защита от двойной обработки
   const { initData: telegramInitData } = useTelegramWebApp();
+
+  // Сброс состояния при открытии popup
+  useEffect(() => {
+    if (!isOpen) return;
+    setIsInvoiceHandled(false);
+  }, [isOpen]);
 
   // Проверка баланса звезд при открытии popup
   useEffect(() => {
@@ -31,10 +38,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         const tg = window.Telegram?.WebApp;
         
         if (tg && tg.initDataUnsafe?.user) {
-          // Пытаемся получить баланс через cloudStorage или через Bot API
-          // Telegram WebApp SDK не предоставляет прямой метод для получения баланса
-          // Баланс будет проверен при открытии инвойса
-          // Для проверки можно использовать cloudStorage
+          // Пытаемся получить баланс через cloudStorage
           const balance = await tg.cloudStorage?.get('stars_balance');
           
           if (balance !== null && balance !== undefined) {
@@ -42,8 +46,29 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
             setStarsBalance(balanceNum);
             setHasInsufficientBalance(balanceNum < 50);
           } else {
-            // Если баланс не доступен через cloudStorage, проверяем при создании инвойса
-            setStarsBalance(null);
+            // Если баланс не доступен через cloudStorage, проверяем через API
+            try {
+              const apiUrl = import.meta.env.VITE_API_URL || '';
+              const apiPath = apiUrl ? `${apiUrl}/api/payments/stars/balance` : `/api/payments/stars/balance`;
+              
+              const response = await fetch(apiPath, {
+                method: 'GET',
+                headers: {
+                  'X-Telegram-Init-Data': telegramInitData || '',
+                  'Accept': 'application/json',
+                },
+              });
+
+              if (response.ok) {
+                // Баланс будет проверен при открытии инвойса
+                setStarsBalance(null);
+              } else {
+                setStarsBalance(null);
+              }
+            } catch (apiError) {
+              console.warn('Failed to check balance via API:', apiError);
+              setStarsBalance(null);
+            }
           }
         }
       } catch (error) {
@@ -56,22 +81,28 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
     };
 
     checkStarsBalance();
-  }, [isOpen]);
+  }, [isOpen, telegramInitData]);
 
   // Обработка успешной оплаты через callback от Telegram
+  // Примечание: Обработка происходит через callback в openInvoice, 
+  // но оставляем обработчик событий как резервный
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     
     if (!tg) return;
 
     const handleInvoiceClosed = (event: any) => {
+      // Защита от двойной обработки
+      if (isInvoiceHandled) return;
+      
       const status = event?.status || event;
       
       if (status === 'paid') {
         // Оплата успешна - начисляем билеты
+        setIsInvoiceHandled(true);
         haptic.success();
         onExchange(20);
-        toast.success('+20 прокрутов за 50 звёзд успешно начислены!', { duration: 3000 });
+        toast.success('Успешно! Вам начислено 20 прокрутов.', { duration: 3000 });
         onClose();
       } else if (status === 'cancelled' || status === 'failed') {
         // Пользователь отменил или произошла ошибка
@@ -83,7 +114,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
       }
     };
 
-    // Подписываемся на событие закрытия инвойса
+    // Подписываемся на событие закрытия инвойса (резервный обработчик)
     tg.onEvent('invoiceClosed', handleInvoiceClosed);
 
     return () => {
@@ -99,6 +130,28 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
     setIsProcessing(true);
     
     try {
+      // Дополнительная проверка баланса перед созданием инвойса
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        try {
+          const balance = await tg.cloudStorage?.get('stars_balance');
+          if (balance !== null && balance !== undefined) {
+            const balanceNum = parseInt(balance, 10);
+            if (balanceNum < 50) {
+              setIsProcessing(false);
+              setHasInsufficientBalance(true);
+              setStarsBalance(balanceNum);
+              haptic.error();
+              toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
+              return;
+            }
+          }
+        } catch (balanceError) {
+          console.warn('Failed to check balance before invoice:', balanceError);
+          // Продолжаем - Telegram проверит баланс при открытии инвойса
+        }
+      }
+
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const apiPath = apiUrl ? `${apiUrl}/api/payments/stars/create-invoice` : `/api/payments/stars/create-invoice`;
       
@@ -114,31 +167,49 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || data.error || 'Ошибка при создании платежа');
+        const errorMsg = data.message || data.error || 'Ошибка при создании платежа';
+        
+        // Если ошибка связана с недостаточным балансом
+        if (errorMsg.includes('Недостаточно') || errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
+          setHasInsufficientBalance(true);
+          haptic.error();
+          toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
+        } else {
+          throw new Error(errorMsg);
+        }
+        setIsProcessing(false);
+        return;
       }
 
-      if (data.success && data.invoice_url) {
+      if (data.success && (data.invoice_id || data.invoice_url)) {
         // Открываем инвойс через Telegram WebApp SDK
-        const tg = window.Telegram?.WebApp;
-        
         if (!tg || !tg.openInvoice) {
           throw new Error('Telegram WebApp SDK не доступен');
         }
 
+        // Используем invoice_id если доступен, иначе invoice_url
+        const invoiceIdentifier = data.invoice_id || data.invoice_url;
+        
         // Открываем инвойс
-        tg.openInvoice(data.invoice_url, (status: string) => {
+        tg.openInvoice(invoiceIdentifier, (status: string) => {
+          // Защита от двойной обработки
+          if (isInvoiceHandled) return;
+          
           setIsProcessing(false);
           
           if (status === 'paid') {
             // Оплата успешна
+            setIsInvoiceHandled(true);
             haptic.success();
             onExchange(20);
-            toast.success('+20 прокрутов за 50 звёзд успешно начислены!', { duration: 3000 });
+            toast.success('Успешно! Вам начислено 20 прокрутов.', { duration: 3000 });
             onClose();
           } else if (status === 'cancelled' || status === 'failed') {
             // Пользователь отменил или произошла ошибка
             haptic.error();
             toast.error('Оплата не прошла. Попробуйте ещё раз.', { duration: 3000 });
+          } else {
+            setIsProcessing(false);
           }
         });
       } else {
@@ -292,7 +363,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
                   margin: 0
                 }}
               >
-                Недостаточно звёзд для обмена
+                Недостаточно звёзд для обмена. Требуется 50 звёзд.
               </p>
               {starsBalance !== null && (
                 <p 
@@ -303,7 +374,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
                     opacity: 0.8
                   }}
                 >
-                  У вас {starsBalance} звёзд, требуется 50
+                  У вас {starsBalance} звёзд
                 </p>
               )}
             </div>

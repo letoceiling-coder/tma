@@ -15,13 +15,18 @@ class Spin extends Model
         'spin_time',
         'prize_type',
         'prize_value',
+        'prize_name',
         'sector_id',
         'sector_number',
+        'external_gift_id',
+        'sponsor_name',
+        'delivery_status',
     ];
 
     protected $casts = [
         'spin_time' => 'datetime',
         'prize_value' => 'integer',
+        'sector_number' => 'integer',
     ];
 
     /**

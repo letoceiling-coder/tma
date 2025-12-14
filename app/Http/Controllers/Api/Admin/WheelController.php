@@ -324,7 +324,14 @@ class WheelController extends Controller
         }
         
         if ($request->has('initial_tickets_count')) {
-            $updateData['initial_tickets_count'] = $request->initial_tickets_count;
+            $value = $request->initial_tickets_count;
+            // Если значение null, пустое, > 100 или < 0 — не сохраняем (будет использовано дефолтное значение 1)
+            if ($value !== null && $value !== '' && $value >= 0 && $value <= 100) {
+                $updateData['initial_tickets_count'] = (int) $value;
+            } else {
+                // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 1)
+                $updateData['initial_tickets_count'] = null;
+            }
         }
 
         if (empty($updateData)) {

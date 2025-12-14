@@ -67,7 +67,7 @@ class WowAuthController extends Controller
             try {
                 // Получаем настройки для определения количества стартовых билетов
                 $settings = WheelSetting::getSettings();
-                $initialTicketsCount = $settings->initial_tickets_count ?? 1; // По умолчанию 1 билет
+                $initialTicketsCount = $settings->getValidStartTickets(); // Валидированное значение (по умолчанию 1)
 
                 // Находим или создаем пользователя
                 $user = User::firstOrCreate(
@@ -106,7 +106,7 @@ class WowAuthController extends Controller
                     $updateData['avatar_url'] = $telegramUser['photo_url'];
                 }
 
-                // Если это новый пользователь, начисляем стартовые билеты
+                // Если это новый пользователь, начисляем стартовые билеты (только один раз при первом входе)
                 if ($isNewUser) {
                     $updateData['tickets_available'] = $initialTicketsCount;
                     

@@ -44,6 +44,8 @@
                         <option value="money">Деньги</option>
                         <option value="ticket">Билет</option>
                         <option value="secret_box">Секретный бокс</option>
+                        <option value="gift">Подарок</option>
+                        <option value="sponsor_gift">Подарок от спонсора</option>
                         <option value="empty">Пусто</option>
                     </select>
                 </div>
@@ -218,6 +220,8 @@ export default {
                 money: 'Деньги',
                 ticket: 'Билет',
                 secret_box: 'Секретный бокс',
+                gift: 'Подарок',
+                sponsor_gift: 'Подарок от спонсора',
                 empty: 'Пусто',
             }
             return labels[type] || type
@@ -228,6 +232,8 @@ export default {
                 money: 'px-2 py-1 rounded bg-green-500/10 text-green-600 text-xs font-medium',
                 ticket: 'px-2 py-1 rounded bg-blue-500/10 text-blue-600 text-xs font-medium',
                 secret_box: 'px-2 py-1 rounded bg-purple-500/10 text-purple-600 text-xs font-medium',
+                gift: 'px-2 py-1 rounded bg-yellow-500/10 text-yellow-600 text-xs font-medium',
+                sponsor_gift: 'px-2 py-1 rounded bg-orange-500/10 text-orange-600 text-xs font-medium',
                 empty: 'px-2 py-1 rounded bg-gray-500/10 text-gray-600 text-xs font-medium',
             }
             return classes[type] || ''

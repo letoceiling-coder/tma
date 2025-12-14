@@ -99,7 +99,7 @@ class WheelController extends Controller
 
             // Получаем настройки для определения количества стартовых билетов
             $settings = WheelSetting::getSettings();
-            $initialTicketsCount = $settings->initial_tickets_count ?? 1; // По умолчанию 1 билет
+            $initialTicketsCount = $settings->getValidStartTickets(); // Валидированное значение (по умолчанию 1)
 
             // Найти или создать пользователя
             $user = User::firstOrCreate(
@@ -115,7 +115,7 @@ class WheelController extends Controller
                 ]
             );
             
-            // Если это новый пользователь, создаем запись в user_tickets
+            // Если это новый пользователь, создаем запись в user_tickets (только один раз при первом входе)
             if ($user->wasRecentlyCreated) {
                 UserTicket::create([
                     'user_id' => $user->id,
@@ -565,25 +565,44 @@ class WheelController extends Controller
                 // Загружаем тип приза, если он связан с сектором
                 $prizeType = null;
                 $prizeMessage = null;
+                $prizeName = null;
                 if ($winningSector->prize_type_id) {
                     $prizeType = \App\Models\PrizeType::find($winningSector->prize_type_id);
                     // Получаем сообщение из типа приза, если оно указано
                     if ($prizeType && $prizeType->message) {
                         $prizeMessage = $prizeType->message;
                     }
+                    // Получаем название приза из типа приза
+                    if ($prizeType && $prizeType->name) {
+                        $prizeName = $prizeType->name;
+                    }
+                }
+
+                // Формируем читаемое название приза
+                if (!$prizeName) {
+                    $prizeName = $this->getPrizeDisplayName($winningSector->prize_type, $winningSector->prize_value ?? 0, $prizeType);
                 }
 
                 // Сохраняем результат прокрута
                 // ВАЖНО: Оборачиваем в try-catch чтобы не прерывать вращение при ошибке сохранения
                 try {
-                    $spin = Spin::create([
+                    $spinData = [
                         'user_id' => $user->id,
                         'spin_time' => now(),
                         'prize_type' => $winningSector->prize_type,
                         'prize_value' => $winningSector->prize_value ?? 0,
+                        'prize_name' => $prizeName,
                         'sector_id' => $winningSector->id,
                         'sector_number' => $winningSector->sector_number, // Сохраняем номер сектора для админки
-                    ]);
+                    ];
+
+                    // Добавляем данные для подарков от спонсоров
+                    if ($winningSector->prize_type === 'sponsor_gift' && $prizeType) {
+                        // Можно добавить логику для получения данных спонсора из типа приза или внешней системы
+                        // Пока оставляем пустым, можно расширить позже
+                    }
+
+                    $spin = Spin::create($spinData);
                 } catch (\Exception $spinError) {
                     // Ошибка сохранения spin - логируем, но НЕ прерываем вращение
                     $errorMsg = 'Failed to save spin record: ' . $spinError->getMessage();
@@ -620,6 +639,24 @@ class WheelController extends Controller
                             $winningSector->prize_type,
                             $randomValue ?? null,
                             $expectedResult ?? null
+                        );
+                        
+                        // Также логируем в prize_issue_logs
+                        \App\Models\PrizeIssueLog::logError(
+                            $user->id,
+                            $winningSector->id,
+                            $winningSector->prize_type,
+                            $errorMsg,
+                            uniqid('spin_error_', true),
+                            [
+                                'request_id' => $requestId,
+                                'telegram_id' => $telegramId,
+                                'sector_number' => $winningSector->sector_number,
+                                'prize_value' => $winningSector->prize_value,
+                                'error_class' => get_class($spinError),
+                                'file' => $spinError->getFile(),
+                                'line' => $spinError->getLine(),
+                            ]
                         );
                     } catch (\Exception $logError) {
                         Log::error('Failed to log wheel error to database', ['error' => $logError->getMessage()]);
@@ -1166,6 +1203,34 @@ class WheelController extends Controller
                 'error' => 'Internal server error',
                 'message' => $errorMessage
             ], $statusCode);
+        }
+    }
+
+    /**
+     * Получить читаемое название приза для сохранения в БД
+     */
+    private function getPrizeDisplayName(string $prizeType, int $prizeValue, $prizeTypeModel = null): string
+    {
+        // Если есть модель типа приза с названием, используем её
+        if ($prizeTypeModel && $prizeTypeModel->name) {
+            return $prizeTypeModel->name;
+        }
+
+        // Формируем название на основе типа приза
+        switch ($prizeType) {
+            case 'money':
+                return $prizeValue . ' рублей';
+            case 'ticket':
+                return 'плюс ' . $prizeValue . ' билет' . ($prizeValue > 1 ? 'а' : '');
+            case 'secret_box':
+                return 'WOW Secret Box';
+            case 'gift':
+                return 'Подарок';
+            case 'sponsor_gift':
+                return 'Подарок от спонсора';
+            case 'empty':
+            default:
+                return 'пусто';
         }
     }
 }

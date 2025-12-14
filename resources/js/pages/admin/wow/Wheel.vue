@@ -98,7 +98,7 @@
                 <div class="flex-1">
                     <h3 class="text-base font-medium mb-1">Стартовые билеты</h3>
                     <p class="text-sm text-muted-foreground">
-                        Количество билетов, которые получает новый пользователь при первом входе (от 0 до 100)
+                        Количество билетов, которые получает новый пользователь при первом входе (от 0 до 100). Если не задано — будет использовано значение по умолчанию: 1
                     </p>
                 </div>
                 <div class="flex items-center gap-3">
@@ -109,6 +109,7 @@
                         min="0"
                         max="100"
                         step="1"
+                        placeholder="1"
                         class="w-24 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent text-center"
                     />
                     <span class="text-sm text-muted-foreground">билетов</span>

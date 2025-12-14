@@ -50,11 +50,17 @@ class WinsController extends Controller
                 'id' => $spin->id,
                 'telegram_id' => $spin->user ? $spin->user->telegram_id : null,
                 'username' => $spin->user ? $spin->user->username : null,
-                'prize_name' => $this->getPrizeName($spin->prize_type ?? 'empty', $spin->prize_value ?? 0),
+                'prize_name' => $this->getPrizeName(
+                    $spin->prize_type ?? 'empty', 
+                    $spin->prize_value ?? 0,
+                    $spin->prize_name ?? null
+                ),
                 'sector_number' => $spin->sector_number ?? ($spin->sector ? $spin->sector->sector_number : null),
                 'spin_time' => $spin->spin_time,
                 'prize_type' => $spin->prize_type,
                 'prize_value' => $spin->prize_value,
+                'sponsor_name' => $spin->sponsor_name ?? null,
+                'delivery_status' => $spin->delivery_status ?? null,
             ];
         });
 
@@ -72,15 +78,25 @@ class WinsController extends Controller
     /**
      * Получить название приза в читаемом формате
      */
-    private function getPrizeName(string $prizeType, int $prizeValue): string
+    private function getPrizeName(string $prizeType, int $prizeValue, string $prizeName = null): string
     {
+        // Если есть сохраненное название приза, используем его
+        if ($prizeName) {
+            return $prizeName;
+        }
+
+        // Формируем название на основе типа приза
         switch ($prizeType) {
             case 'money':
                 return $prizeValue . ' рублей';
             case 'ticket':
-                return 'плюс ' . $prizeValue . ' билет';
+                return 'плюс ' . $prizeValue . ' билет' . ($prizeValue > 1 ? 'а' : '');
             case 'secret_box':
                 return 'WOW Secret Box';
+            case 'gift':
+                return 'Подарок';
+            case 'sponsor_gift':
+                return 'Подарок от спонсора';
             case 'empty':
             default:
                 return 'пусто';
@@ -97,6 +113,8 @@ class WinsController extends Controller
             'total_money' => Spin::where('prize_type', 'money')->sum('prize_value'),
             'total_tickets' => Spin::where('prize_type', 'ticket')->sum('prize_value'),
             'total_secret_boxes' => Spin::where('prize_type', 'secret_box')->count(),
+            'total_gifts' => Spin::where('prize_type', 'gift')->count(),
+            'total_sponsor_gifts' => Spin::where('prize_type', 'sponsor_gift')->count(),
             'by_type' => Spin::select('prize_type', DB::raw('count(*) as count'))
                 ->where('prize_type', '!=', 'empty')
                 ->groupBy('prize_type')

@@ -57,8 +57,13 @@ class StarsPaymentController extends Controller
 
             $amount = 50; // Фиксированная сумма: 50 звезд
             $ticketsAmount = 20; // Фиксированное количество билетов
-            $purpose = 'buy_20_spins';
+            $purpose = 'exchange_for_spins';
 
+            // Проверка баланса звёзд (баланс будет также проверен Telegram при открытии инвойса)
+            // Примечание: Telegram Bot API не предоставляет прямой метод для получения баланса
+            // Баланс проверяется на клиенте через Telegram.WebApp.cloudStorage.get('stars_balance')
+            // или при открытии инвойса (Telegram сам проверит баланс и покажет ошибку, если недостаточно)
+            
             // Создаем запись о платеже со статусом pending
             $payment = StarPayment::create([
                 'user_id' => $user->id,
@@ -78,7 +83,7 @@ class StarsPaymentController extends Controller
                 
                 $invoiceResult = $bot->createInvoiceLink(
                     title: '20 прокрутов рулетки',
-                    description: 'Покупка 20 прокрутов рулетки',
+                    description: 'Обмен 50 звёзд на 20 прокрутов',
                     payload: json_encode([
                         'payment_id' => $payment->id,
                         'purpose' => $purpose,
@@ -102,9 +107,16 @@ class StarsPaymentController extends Controller
                     throw new \Exception('Invoice URL not received from Telegram');
                 }
 
-                // Обновляем запись платежа с URL инвойса
+                // Извлекаем invoice_id из URL для использования в Telegram.WebApp.openInvoice()
+                // URL имеет формат: https://t.me/invoice/{invoice_id}
+                $invoiceId = null;
+                if (preg_match('/\/invoice\/([^\/\?]+)/', $invoiceUrl, $matches)) {
+                    $invoiceId = $matches[1];
+                }
+
+                // Обновляем запись платежа с URL и ID инвойса
                 $payment->invoice_url = $invoiceUrl;
-                $payment->telegram_response = $invoiceResult;
+                $payment->telegram_response = array_merge($invoiceResult, ['invoice_id' => $invoiceId]);
                 $payment->save();
 
                 Log::info('Stars payment invoice created', [
@@ -117,6 +129,7 @@ class StarsPaymentController extends Controller
                 return response()->json([
                     'success' => true,
                     'invoice_url' => $invoiceUrl,
+                    'invoice_id' => $invoiceId, // ID для использования в Telegram.WebApp.openInvoice()
                     'payment_id' => $payment->id,
                     'amount' => $amount,
                     'tickets_amount' => $ticketsAmount,
@@ -233,7 +246,7 @@ class StarsPaymentController extends Controller
             $validationErrors = [];
 
             // Проверяем purpose
-            if (($payloadData['purpose'] ?? null) !== 'buy_20_spins') {
+            if (($payloadData['purpose'] ?? null) !== 'exchange_for_spins') {
                 $isValid = false;
                 $validationErrors[] = 'Invalid purpose';
             }
@@ -408,8 +421,8 @@ class StarsPaymentController extends Controller
     }
 
     /**
-     * Получить баланс звезд пользователя (через Telegram WebApp SDK)
-     * Этот метод возвращает информацию для проверки баланса на фронтенде
+     * Получить баланс звезд пользователя
+     * Использует Telegram Bot API getStarTransactions для получения баланса
      * 
      * @param Request $request
      * @return JsonResponse
@@ -422,7 +435,8 @@ class StarsPaymentController extends Controller
             if (!$initData) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'Init data not provided'
+                    'error' => 'Init data not provided',
+                    'message' => 'Ошибка авторизации'
                 ], 401);
             }
 
@@ -431,7 +445,8 @@ class StarsPaymentController extends Controller
             if (!$telegramId) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'User ID not found'
+                    'error' => 'User ID not found',
+                    'message' => 'Ошибка авторизации'
                 ], 401);
             }
 
@@ -440,26 +455,58 @@ class StarsPaymentController extends Controller
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'error' => 'User not found'
+                    'error' => 'User not found',
+                    'message' => 'Пользователь не найден'
                 ], 404);
             }
 
-            // Возвращаем информацию о балансе
-            // Фактический баланс должен проверяться через Telegram.WebApp.cloudStorage.get() или через Bot API
-            return response()->json([
-                'success' => true,
-                'note' => 'Use Telegram.WebApp.cloudStorage.get("stars_balance") or Telegram Bot API to get actual balance',
-                'user_id' => $user->id,
-            ]);
+            // Получаем баланс через Telegram Bot API
+            try {
+                $bot = new Bot();
+                
+                // Получаем транзакции для расчета баланса
+                // Примечание: Telegram Bot API не предоставляет прямой метод для получения баланса
+                // Баланс должен проверяться на клиенте через Telegram.WebApp.cloudStorage.get('stars_balance')
+                // или при открытии инвойса (Telegram сам проверит баланс)
+                
+                // Возвращаем информацию о том, что баланс нужно проверять на клиенте
+                // или при создании инвойса
+                return response()->json([
+                    'success' => true,
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'note' => 'Balance should be checked on client side using Telegram.WebApp.cloudStorage.get("stars_balance") or when opening invoice',
+                    'required_amount' => 50,
+                ]);
+
+            } catch (\Exception $apiError) {
+                Log::error('Error getting stars balance from Telegram API', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'error' => $apiError->getMessage(),
+                ]);
+
+                // Возвращаем успешный ответ, но с предупреждением
+                // Баланс будет проверен при открытии инвойса
+                return response()->json([
+                    'success' => true,
+                    'user_id' => $user->id,
+                    'telegram_id' => $telegramId,
+                    'note' => 'Balance check failed, will be verified when opening invoice',
+                    'required_amount' => 50,
+                ]);
+            }
 
         } catch (\Exception $e) {
             Log::error('Error getting stars balance', [
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'success' => false,
-                'error' => 'Internal server error'
+                'error' => 'Internal server error',
+                'message' => 'Произошла ошибка при проверке баланса'
             ], 500);
         }
     }

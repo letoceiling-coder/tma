@@ -300,6 +300,61 @@
                             <p class="text-sm font-medium">{{ selectedUser.total_wins || 0 }}</p>
                         </div>
                     </div>
+
+                    <!-- История выигрышей -->
+                    <div v-if="selectedUser.win_history && selectedUser.win_history.length > 0">
+                        <h4 class="text-base font-semibold mb-4">История выигрышей</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-muted/50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Время</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Тип приза</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Название приза</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Сектор</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase">Статус</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-border">
+                                    <tr v-for="win in selectedUser.win_history" :key="win.id" class="hover:bg-muted/10">
+                                        <td class="px-4 py-2">{{ formatDate(win.spin_time) }}</td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-1 rounded text-xs font-medium"
+                                                :class="{
+                                                    'bg-green-500/10 text-green-600': win.prize_type === 'money',
+                                                    'bg-blue-500/10 text-blue-600': win.prize_type === 'ticket',
+                                                    'bg-purple-500/10 text-purple-600': win.prize_type === 'secret_box',
+                                                    'bg-yellow-500/10 text-yellow-600': win.prize_type === 'gift',
+                                                    'bg-orange-500/10 text-orange-600': win.prize_type === 'sponsor_gift',
+                                                }"
+                                            >
+                                                {{ getPrizeTypeLabel(win.prize_type) }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2">{{ win.prize_name || '—' }}</td>
+                                        <td class="px-4 py-2">{{ win.sector_number ? '#' + win.sector_number : '—' }}</td>
+                                        <td class="px-4 py-2">
+                                            <span v-if="win.delivery_status" class="px-2 py-1 rounded text-xs"
+                                                :class="{
+                                                    'bg-yellow-500/10 text-yellow-600': win.delivery_status === 'pending',
+                                                    'bg-blue-500/10 text-blue-600': win.delivery_status === 'processing',
+                                                    'bg-purple-500/10 text-purple-600': win.delivery_status === 'shipped',
+                                                    'bg-green-500/10 text-green-600': win.delivery_status === 'delivered',
+                                                    'bg-red-500/10 text-red-600': win.delivery_status === 'cancelled',
+                                                }"
+                                            >
+                                                {{ getDeliveryStatusLabel(win.delivery_status) }}
+                                            </span>
+                                            <span v-else class="text-muted-foreground">—</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div v-else class="text-center py-8 text-muted-foreground">
+                        <p>История выигрышей пуста</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -393,10 +448,41 @@ export default {
                     throw new Error('Ошибка загрузки данных пользователя')
                 }
                 const data = await response.json()
-                selectedUser.value = data.data
+                selectedUser.value = {
+                    ...data.data,
+                    win_history: data.win_history || [],
+                }
             } catch (err) {
                 console.error('Error loading user details:', err)
             }
+        }
+
+        const getPrizeTypeLabel = (type) => {
+            const labels = {
+                money: 'Деньги',
+                ticket: 'Билет',
+                secret_box: 'Секретный бокс',
+                gift: 'Подарок',
+                sponsor_gift: 'Подарок от спонсора',
+                empty: 'Пусто',
+            }
+            return labels[type] || type
+        }
+
+        const getDeliveryStatusLabel = (status) => {
+            const labels = {
+                pending: 'В ожидании',
+                processing: 'В обработке',
+                shipped: 'Отправлено',
+                delivered: 'Доставлено',
+                cancelled: 'Отменено',
+            }
+            return labels[status] || status || '—'
+        }
+
+        const formatDate = (date) => {
+            if (!date) return '—'
+            return new Date(date).toLocaleString('ru-RU')
         }
 
         const showAddTicketsModal = ref(false)
@@ -532,6 +618,9 @@ export default {
             isRemovingTickets,
             openRemoveTicketsModal,
             removeTickets,
+            getPrizeTypeLabel,
+            getDeliveryStatusLabel,
+            formatDate,
         }
     },
 }

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->integer('amount')->default(50); // Количество звезд
-            $table->string('purpose', 100)->default('buy_20_spins'); // Назначение платежа
+            $table->string('purpose', 100)->default('exchange_for_spins'); // Назначение платежа
             $table->enum('status', ['pending', 'success', 'failed', 'cancelled'])->default('pending');
             $table->string('payment_id')->nullable()->unique(); // ID платежа от Telegram
             $table->string('invoice_url')->nullable(); // URL инвойса

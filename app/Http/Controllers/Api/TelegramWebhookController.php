@@ -8,6 +8,7 @@ use App\Telegram\Keyboard;
 use App\Models\User;
 use App\Models\Referral;
 use App\Models\WheelSetting;
+use App\Models\UserTicket;
 use App\Services\TelegramNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -304,6 +305,10 @@ class TelegramWebhookController extends Controller
                 return;
             }
 
+            // Получаем настройки для определения количества стартовых билетов
+            $settings = WheelSetting::getSettings();
+            $initialTicketsCount = $settings->getValidStartTickets(); // Валидированное значение (по умолчанию 1)
+
             // Создаем нового пользователя
             // ВАЖНО: Пользователь должен быть новым (проверка выше)
             $user = User::create([
@@ -311,10 +316,24 @@ class TelegramWebhookController extends Controller
                 'name' => 'Telegram User',
                 'email' => "telegram_{$chatId}@telegram.local",
                 'password' => bcrypt(str()->random(32)),
-                'tickets_available' => 3, // Начальное количество билетов для нового пользователя
+                'tickets_available' => $initialTicketsCount, // Используем настройку из админки
                 'stars_balance' => 0,
                 'total_spins' => 0,
                 'total_wins' => 0,
+            ]);
+
+            // Создаем запись в user_tickets для отслеживания источника стартовых билетов
+            UserTicket::create([
+                'user_id' => $user->id,
+                'tickets_count' => $initialTicketsCount,
+                'restored_at' => null, // Стартовые билеты доступны сразу
+                'source' => 'initial_bonus',
+            ]);
+            
+            Log::info('Initial tickets granted to new user (from referral)', [
+                'user_id' => $user->id,
+                'telegram_id' => $chatId,
+                'initial_tickets_count' => $initialTicketsCount,
             ]);
 
             // Проверяем, что реферальная связь еще не существует
