@@ -263,13 +263,24 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         }
         
         // Если это полный URL, извлекаем slug
+        // Telegram возвращает URL в форматах:
+        // 1. https://t.me/invoice/{slug} - старый формат
+        // 2. https://t.me/${slug} - новый формат для Stars (например: https://t.me/$iykFEgKK-ElOEgAAQiYCptpZxc0)
         if (typeof invoiceSlug === 'string' && invoiceSlug.includes('/invoice/')) {
+          // Формат 1: https://t.me/invoice/{slug}
           const match = invoiceSlug.match(/\/invoice\/([^\/\?]+)/);
           if (match && match[1]) {
             invoiceSlug = match[1];
           }
+        } else if (typeof invoiceSlug === 'string' && invoiceSlug.includes('/$')) {
+          // Формат 2: https://t.me/${slug} - новый формат для Stars
+          const match = invoiceSlug.match(/\/\$([^\/\?]+)$/);
+          if (match && match[1]) {
+            // Сохраняем символ $ в начале slug
+            invoiceSlug = '$' + match[1];
+          }
         } else if (typeof invoiceSlug === 'string' && invoiceSlug.startsWith('http')) {
-          // Если это полный URL без /invoice/, пытаемся извлечь последнюю часть
+          // Если это полный URL без известных паттернов, пытаемся извлечь последнюю часть
           const urlParts = invoiceSlug.split('/');
           invoiceSlug = urlParts[urlParts.length - 1] || invoiceSlug;
         }

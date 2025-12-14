@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\StarPayment;
 use App\Models\PaymentError;
+use Illuminate\Support\Facades\Schema;
 use App\Models\UserTicket;
 use App\Models\WheelSetting;
 use App\Services\TelegramService;
@@ -140,17 +141,31 @@ class StarsPaymentController extends Controller
                 }
 
                 // Извлекаем invoice slug из URL для использования в Telegram.WebApp.openInvoice()
-                // URL имеет формат: https://t.me/invoice/{slug} или просто slug
-                // Для Telegram Stars openInvoice принимает именно slug, а не полный URL
+                // Telegram возвращает URL в форматах:
+                // 1. https://t.me/invoice/{slug} - старый формат
+                // 2. https://t.me/${slug} - новый формат для Stars (например: https://t.me/$iykFEgKK-ElOEgAAQiYCptpZxc0)
+                // Для Telegram Stars openInvoice принимает именно slug (включая символ $ если есть), а не полный URL
                 $invoiceSlug = null;
+                
+                // Формат 1: https://t.me/invoice/{slug}
                 if (preg_match('/\/invoice\/([^\/\?]+)/', $invoiceUrl, $matches)) {
                     $invoiceSlug = $matches[1];
-                } elseif (preg_match('/^[a-zA-Z0-9_-]+$/', $invoiceUrl)) {
-                    // Если это уже slug (только буквы, цифры, дефисы и подчеркивания)
+                }
+                // Формат 2: https://t.me/${slug} - новый формат для Stars
+                elseif (preg_match('/\/\$([^\/\?]+)$/', $invoiceUrl, $matches)) {
+                    // Извлекаем slug с символом $ в начале
+                    $invoiceSlug = '$' . $matches[1];
+                }
+                // Если это уже slug (начинается с $ или только буквы/цифры)
+                elseif (preg_match('/^(\$)?[a-zA-Z0-9_-]+$/', $invoiceUrl)) {
                     $invoiceSlug = $invoiceUrl;
-                } else {
-                    // Если формат не распознан, используем весь URL как есть
-                    // Telegram может принять и полный URL
+                }
+                // Если это полный URL, пытаемся извлечь последнюю часть
+                elseif (preg_match('/\/([^\/\?]+)$/', $invoiceUrl, $matches)) {
+                    $invoiceSlug = $matches[1];
+                }
+                // Если формат не распознан, используем весь URL как есть
+                else {
                     $invoiceSlug = $invoiceUrl;
                     Log::warning('Could not extract invoice slug, using full URL', [
                         'invoice_url' => $invoiceUrl,
@@ -205,15 +220,24 @@ class StarsPaymentController extends Controller
                 $payment->status = 'failed';
                 $payment->save();
 
-                PaymentError::logError(
-                    'invoice_creation_error',
-                    $errorMsg,
-                    $user->id,
-                    $request->all(),
-                    null,
-                    ['error' => $invoiceError->getMessage()],
-                    (string) $payment->id
-                );
+                // Логируем в таблицу ошибок (если таблица существует)
+                try {
+                    if (class_exists(PaymentError::class) && Schema::hasTable('payment_errors')) {
+                        PaymentError::logError(
+                            'invoice_creation_error',
+                            $errorMsg,
+                            $user->id,
+                            $request->all(),
+                            null,
+                            ['error' => $invoiceError->getMessage()],
+                            (string) $payment->id
+                        );
+                    }
+                } catch (\Exception $logError) {
+                    Log::warning('Failed to log error to payment_errors table', [
+                        'error' => $logError->getMessage(),
+                    ]);
+                }
 
                 return response()->json([
                     'success' => false,
@@ -325,18 +349,27 @@ class StarsPaymentController extends Controller
                 ];
                 $payment->save();
                 
-                PaymentError::logError(
-                    'security_error',
-                    'Telegram user ID mismatch in webhook',
-                    $payment->user_id,
-                    $request->all(),
-                    403,
-                    [
-                        'payment_telegram_id' => $paymentUser->telegram_id,
-                        'webhook_telegram_id' => $webhookTelegramId,
-                    ],
-                    (string) $paymentId
-                );
+                // Логируем в таблицу ошибок (если таблица существует)
+                try {
+                    if (class_exists(PaymentError::class) && Schema::hasTable('payment_errors')) {
+                        PaymentError::logError(
+                            'security_error',
+                            'Telegram user ID mismatch in webhook',
+                            $payment->user_id,
+                            $request->all(),
+                            403,
+                            [
+                                'payment_telegram_id' => $paymentUser->telegram_id,
+                                'webhook_telegram_id' => $webhookTelegramId,
+                            ],
+                            (string) $paymentId
+                        );
+                    }
+                } catch (\Exception $logError) {
+                    Log::warning('Failed to log error to payment_errors table', [
+                        'error' => $logError->getMessage(),
+                    ]);
+                }
                 
                 return response()->json([
                     'error' => 'Security validation failed'
@@ -396,15 +429,24 @@ class StarsPaymentController extends Controller
                 ];
                 $payment->save();
 
-                PaymentError::logError(
-                    'payment_validation_error',
-                    $errorMsg,
-                    $payment->user_id,
-                    $request->all(),
-                    400,
-                    ['validation_errors' => $validationErrors],
-                    (string) $paymentId
-                );
+                // Логируем в таблицу ошибок (если таблица существует)
+                try {
+                    if (class_exists(PaymentError::class) && Schema::hasTable('payment_errors')) {
+                        PaymentError::logError(
+                            'payment_validation_error',
+                            $errorMsg,
+                            $payment->user_id,
+                            $request->all(),
+                            400,
+                            ['validation_errors' => $validationErrors],
+                            (string) $paymentId
+                        );
+                    }
+                } catch (\Exception $logError) {
+                    Log::warning('Failed to log error to payment_errors table', [
+                        'error' => $logError->getMessage(),
+                    ]);
+                }
 
                 return response()->json([
                     'error' => 'Payment validation failed'
@@ -511,15 +553,24 @@ class StarsPaymentController extends Controller
                 $payment->status = 'failed';
                 $payment->save();
 
-                PaymentError::logError(
-                    'payment_processing_error',
-                    $errorMsg,
-                    $payment->user_id,
-                    $request->all(),
-                    500,
-                    ['error' => $e->getMessage()],
-                    (string) $paymentId
-                );
+                // Логируем в таблицу ошибок (если таблица существует)
+                try {
+                    if (class_exists(PaymentError::class) && Schema::hasTable('payment_errors')) {
+                        PaymentError::logError(
+                            'payment_processing_error',
+                            $errorMsg,
+                            $payment->user_id,
+                            $request->all(),
+                            500,
+                            ['error' => $e->getMessage()],
+                            (string) $paymentId
+                        );
+                    }
+                } catch (\Exception $logError) {
+                    Log::warning('Failed to log error to payment_errors table', [
+                        'error' => $logError->getMessage(),
+                    ]);
+                }
 
                 return response()->json([
                     'error' => 'Error processing payment'
@@ -717,19 +768,28 @@ class StarsPaymentController extends Controller
                 }
             }
 
-            // Логируем в таблицу ошибок
-            PaymentError::logError(
-                $errorType,
-                $errorMessage,
-                $user->id,
-                $request->all(),
-                500,
-                [
-                    'invoice_slug' => $invoiceSlug,
-                    'stack' => $stack,
-                ],
-                (string) $paymentId
-            );
+            // Логируем в таблицу ошибок (если таблица существует)
+            try {
+                if (class_exists(PaymentError::class) && \Schema::hasTable('payment_errors')) {
+                    PaymentError::logError(
+                        $errorType,
+                        $errorMessage,
+                        $user->id,
+                        $request->all(),
+                        500,
+                        [
+                            'invoice_slug' => $invoiceSlug,
+                            'stack' => $stack,
+                        ],
+                        (string) $paymentId
+                    );
+                }
+            } catch (\Exception $logError) {
+                // Игнорируем ошибки логирования в БД, основное логирование уже выполнено через Log::error
+                Log::warning('Failed to log error to payment_errors table', [
+                    'error' => $logError->getMessage(),
+                ]);
+            }
 
             return response()->json([
                 'success' => true,
