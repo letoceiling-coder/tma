@@ -75,11 +75,14 @@ class WheelSector extends Model
             ];
         })->toArray();
         
-        // Проверяем, что сумма не превышает 100%
-        if ($totalProbability > 100.0) {
+        // Проверяем, что сумма не превышает 100% (с учетом погрешности округления)
+        // Допускаем отклонение до 0.01% из-за погрешности чисел с плавающей точкой
+        $epsilon = 0.01;
+        if ($totalProbability > (100.0 + $epsilon)) {
             \Log::channel('wheel-errors')->error('Total probability exceeds 100%', [
                 'total_probability' => $totalProbability,
                 'sectors' => $sectorDetails,
+                'difference' => $totalProbability - 100.0,
             ]);
             // В случае ошибки конфигурации возвращаем null
             return [
@@ -90,6 +93,18 @@ class WheelSector extends Model
                     'total_probability' => $totalProbability,
                 ],
             ];
+        }
+        
+        // Если сумма немного превышает 100% из-за погрешности округления, нормализуем её
+        if ($totalProbability > 100.0 && abs($totalProbability - 100.0) <= $epsilon) {
+            // Нормализуем: используем 100.0 вместо фактической суммы
+            $totalProbability = 100.0;
+            if ($testMode || config('app.debug')) {
+                \Log::info('Total probability normalized to 100% due to floating point precision', [
+                    'original_total' => $sectors->sum('probability_percent'),
+                    'normalized_total' => $totalProbability,
+                ]);
+            }
         }
         
         // Генерируем случайное число от 0 до 100 (включительно)
@@ -209,6 +224,11 @@ class WheelSector extends Model
         $sectors = static::getActiveSectors();
         $totalProbability = $sectors->sum('probability_percent');
         
+        // Учитываем погрешность округления чисел с плавающей точкой
+        // Допускаем отклонение до 0.01% (1e-14 в абсолютных единицах)
+        $epsilon = 0.01;
+        $diff = abs($totalProbability - 100.0);
+        
         $result = [
             'valid' => true,
             'total' => (float) $totalProbability,
@@ -216,16 +236,19 @@ class WheelSector extends Model
             'empty_sector_probability' => 100.0 - (float) $totalProbability,
         ];
         
-        if ($totalProbability > 100.0) {
+        // Если разница больше допустимой погрешности и сумма превышает 100%
+        if ($totalProbability > 100.0 && $diff > $epsilon) {
             $result['valid'] = false;
             $result['message'] = "Сумма вероятностей ({$totalProbability}%) превышает 100%";
         } elseif ($totalProbability < 0) {
             $result['valid'] = false;
             $result['message'] = "Сумма вероятностей ({$totalProbability}%) отрицательна";
-        } elseif ($totalProbability < 100.0) {
+        } elseif ($totalProbability < (100.0 - $epsilon)) {
+            // Если сумма меньше 100% (с учетом погрешности)
             $emptyProb = 100.0 - (float) $totalProbability;
             $result['message'] = "Сумма вероятностей ({$totalProbability}%). Остаток ({$emptyProb}%) трактуется как вероятность пустого сектора.";
         } else {
+            // Сумма равна 100% (с учетом погрешности округления)
             $result['message'] = "Сумма вероятностей равна 100%. Все секторы имеют ненулевую вероятность.";
         }
         

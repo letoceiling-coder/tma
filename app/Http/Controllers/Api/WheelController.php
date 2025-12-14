@@ -598,8 +598,15 @@ class WheelController extends Controller
 
                     // Добавляем данные для подарков от спонсоров
                     if ($winningSector->prize_type === 'sponsor_gift' && $prizeType) {
-                        // Можно добавить логику для получения данных спонсора из типа приза или внешней системы
-                        // Пока оставляем пустым, можно расширить позже
+                        // Сохраняем название спонсора из типа приза, если доступно
+                        // Можно расширить для получения из внешней системы
+                        if ($prizeType->name) {
+                            // Если название приза содержит информацию о спонсоре, используем его
+                            // Иначе можно добавить отдельное поле sponsor_name в prize_types
+                            $spinData['sponsor_name'] = $prizeType->name;
+                        }
+                        // Статус доставки по умолчанию - pending
+                        $spinData['delivery_status'] = 'pending';
                     }
 
                     $spin = Spin::create($spinData);
