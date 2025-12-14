@@ -116,7 +116,20 @@ class StarsPaymentController extends Controller
                 );
 
                 if (!isset($invoiceResult['ok']) || !$invoiceResult['ok']) {
-                    throw new \Exception('Failed to create invoice: ' . ($invoiceResult['description'] ?? 'Unknown error'));
+                    $errorDescription = $invoiceResult['description'] ?? 'Unknown error';
+                    $errorCode = $invoiceResult['error_code'] ?? null;
+                    
+                    Log::error('Telegram API failed to create invoice', [
+                        'user_id' => $user->id,
+                        'telegram_id' => $telegramId,
+                        'payment_id' => $payment->id,
+                        'error_code' => $errorCode,
+                        'error_description' => $errorDescription,
+                        'invoice_result' => $invoiceResult,
+                        'amount' => $amount,
+                    ]);
+                    
+                    throw new \Exception('Failed to create invoice: ' . $errorDescription . ($errorCode ? ' (code: ' . $errorCode . ')' : ''));
                 }
 
                 $invoiceUrl = $invoiceResult['result'] ?? null;
@@ -140,47 +153,27 @@ class StarsPaymentController extends Controller
                     throw new \Exception('Invalid invoice URL format received from Telegram');
                 }
 
-                // Извлекаем invoice slug из URL для использования в Telegram.WebApp.openInvoice()
-                // Telegram возвращает URL в форматах:
-                // 1. https://t.me/invoice/{slug} - старый формат
-                // 2. https://t.me/${slug} - новый формат для Stars (например: https://t.me/$iykFEgKK-ElOEgAAQiYCptpZxc0)
-                // Для Telegram Stars openInvoice принимает именно slug (включая символ $ если есть), а не полный URL
-                $invoiceSlug = null;
+                // ВАЖНО: Telegram.WebApp.openInvoice() требует полный HTTPS URL, а не slug!
+                // URL должен начинаться с https://t.me/ и быть валидным HTTPS URL
+                // Не нужно извлекать slug - передаем URL как есть
                 
-                // Формат 1: https://t.me/invoice/{slug}
-                if (preg_match('/\/invoice\/([^\/\?]+)/', $invoiceUrl, $matches)) {
-                    $invoiceSlug = $matches[1];
-                }
-                // Формат 2: https://t.me/${slug} - новый формат для Stars
-                elseif (preg_match('/\/\$([^\/\?]+)$/', $invoiceUrl, $matches)) {
-                    // Извлекаем slug с символом $ в начале
-                    $invoiceSlug = '$' . $matches[1];
-                }
-                // Если это уже slug (начинается с $ или только буквы/цифры)
-                elseif (preg_match('/^(\$)?[a-zA-Z0-9_-]+$/', $invoiceUrl)) {
-                    $invoiceSlug = $invoiceUrl;
-                }
-                // Если это полный URL, пытаемся извлечь последнюю часть
-                elseif (preg_match('/\/([^\/\?]+)$/', $invoiceUrl, $matches)) {
-                    $invoiceSlug = $matches[1];
-                }
-                // Если формат не распознан, используем весь URL как есть
-                else {
-                    $invoiceSlug = $invoiceUrl;
-                    Log::warning('Could not extract invoice slug, using full URL', [
+                // Валидация URL
+                if (!preg_match('/^https:\/\/t\.me\//', $invoiceUrl)) {
+                    Log::error('Invalid invoice URL format - must start with https://t.me/', [
                         'invoice_url' => $invoiceUrl,
+                        'user_id' => $user->id,
+                        'payment_id' => $payment->id,
                     ]);
+                    throw new \Exception('Invalid invoice URL format: must be a valid Telegram HTTPS URL');
                 }
 
-                if (!$invoiceSlug) {
-                    throw new \Exception('Could not extract invoice slug from URL: ' . $invoiceUrl);
-                }
-
-                // Обновляем запись платежа с URL и slug инвойса
+                // Убираем пробелы и лишние символы в конце URL
+                $invoiceUrl = trim($invoiceUrl);
+                
+                // Обновляем запись платежа с полным URL
                 $payment->invoice_url = $invoiceUrl;
                 $payment->telegram_response = array_merge($invoiceResult, [
-                    'invoice_id' => $invoiceSlug,
-                    'invoice_slug' => $invoiceSlug,
+                    'invoice_url_validated' => true,
                 ]);
                 $payment->save();
 
@@ -189,7 +182,6 @@ class StarsPaymentController extends Controller
                     'telegram_id' => $telegramId,
                     'payment_id' => $payment->id,
                     'invoice_url' => $invoiceUrl,
-                    'invoice_slug' => $invoiceSlug,
                     'amount' => $amount,
                     'purpose' => $purpose,
                     'tickets_amount' => $ticketsAmount,
@@ -198,9 +190,7 @@ class StarsPaymentController extends Controller
 
                 return response()->json([
                     'success' => true,
-                    'invoice_url' => $invoiceUrl,
-                    'invoice_id' => $invoiceSlug, // Slug для использования в Telegram.WebApp.openInvoice()
-                    'invoice_slug' => $invoiceSlug, // Дублируем для совместимости
+                    'invoice_url' => $invoiceUrl, // Полный HTTPS URL для Telegram.WebApp.openInvoice()
                     'payment_id' => $payment->id,
                     'amount' => $amount,
                     'tickets_amount' => $ticketsAmount,

@@ -245,54 +245,46 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           haptic.error();
           toast.error(`Недостаточно звёзд для обмена. Требуется ${requiredStarsAmount} звёзд.`, { duration: 3000 });
         } else {
+          // Показываем alert через Telegram WebApp SDK, если доступен
+          if (tg && typeof tg.showAlert === 'function') {
+            try {
+              tg.showAlert('Ошибка инициализации оплаты. Попробуйте снова через минуту.');
+            } catch (alertError) {
+              console.error('Failed to show Telegram alert:', alertError);
+            }
+          }
           throw new Error(errorMsg);
         }
         setIsProcessing(false);
         return;
       }
 
-      if (data.success && (data.invoice_url || data.invoice_id || data.invoice_slug)) {
-        // Для Telegram Stars используем invoice slug (часть после /invoice/)
-        // Формат: https://t.me/invoice/{slug} или просто slug
-        // Приоритет: invoice_slug > invoice_id > invoice_url
-        let invoiceSlug = data.invoice_slug || data.invoice_id || data.invoice_url;
+      if (data.success && data.invoice_url) {
+        // ВАЖНО: Telegram.WebApp.openInvoice() требует полный HTTPS URL от Telegram API
+        // Не нужно извлекать slug - используем URL как есть
+        let invoiceUrl = data.invoice_url;
         
-        if (!invoiceSlug) {
-          console.error('No invoice identifier received:', data);
-          throw new Error('Не удалось получить идентификатор инвойса от сервера');
+        if (!invoiceUrl) {
+          console.error('No invoice URL received:', data);
+          throw new Error('Не удалось получить URL инвойса от сервера');
         }
         
-        // Если это полный URL, извлекаем slug
-        // Telegram возвращает URL в форматах:
-        // 1. https://t.me/invoice/{slug} - старый формат
-        // 2. https://t.me/${slug} - новый формат для Stars (например: https://t.me/$iykFEgKK-ElOEgAAQiYCptpZxc0)
-        if (typeof invoiceSlug === 'string' && invoiceSlug.includes('/invoice/')) {
-          // Формат 1: https://t.me/invoice/{slug}
-          const match = invoiceSlug.match(/\/invoice\/([^\/\?]+)/);
-          if (match && match[1]) {
-            invoiceSlug = match[1];
-          }
-        } else if (typeof invoiceSlug === 'string' && invoiceSlug.includes('/$')) {
-          // Формат 2: https://t.me/${slug} - новый формат для Stars
-          const match = invoiceSlug.match(/\/\$([^\/\?]+)$/);
-          if (match && match[1]) {
-            // Сохраняем символ $ в начале slug
-            invoiceSlug = '$' + match[1];
-          }
-        } else if (typeof invoiceSlug === 'string' && invoiceSlug.startsWith('http')) {
-          // Если это полный URL без известных паттернов, пытаемся извлечь последнюю часть
-          const urlParts = invoiceSlug.split('/');
-          invoiceSlug = urlParts[urlParts.length - 1] || invoiceSlug;
+        // Валидация URL
+        if (typeof invoiceUrl !== 'string') {
+          console.error('Invalid invoice URL type:', typeof invoiceUrl, 'value:', invoiceUrl);
+          throw new Error('Неверный тип URL инвойса');
         }
         
-        if (!invoiceSlug || typeof invoiceSlug !== 'string') {
-          console.error('Invalid invoice slug format:', invoiceSlug, 'from data:', data);
-          throw new Error('Неверный формат идентификатора инвойса');
+        // Убираем пробелы и лишние символы
+        invoiceUrl = invoiceUrl.trim();
+        
+        // Проверяем, что это валидный HTTPS URL от Telegram
+        if (!invoiceUrl.startsWith('https://t.me/')) {
+          console.error('Invalid invoice URL format - must start with https://t.me/:', invoiceUrl);
+          throw new Error('Неверный формат URL инвойса. URL должен начинаться с https://t.me/');
         }
         
-        console.log('Invoice slug extracted:', invoiceSlug, 'from:', data.invoice_slug || data.invoice_id || data.invoice_url);
-
-        console.log('Opening invoice with slug:', invoiceSlug, 'Full URL:', data.invoice_url);
+        console.log('Opening invoice with URL:', invoiceUrl);
         console.log('Telegram WebApp available:', !!tg, 'openInvoice function:', typeof tg?.openInvoice);
         
         // Проверяем готовность WebApp
@@ -318,9 +310,9 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
 
         try {
           // Открываем инвойс через Telegram WebApp SDK
-          // Для Stars используем invoice slug (часть после /invoice/)
+          // ВАЖНО: openInvoice принимает полный HTTPS URL, а не slug!
           // ВАЖНО: openInvoice должен вызываться синхронно, не в async функции
-          console.log('Calling tg.openInvoice with slug:', invoiceSlug);
+          console.log('Calling tg.openInvoice with URL:', invoiceUrl);
           console.log('WebApp version:', tg.version, 'Platform:', tg.platform);
           
           // Проверяем, что openInvoice доступен
@@ -328,8 +320,8 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
             throw new Error('Telegram WebApp.openInvoice не является функцией. Убедитесь, что приложение открыто в Telegram.');
           }
           
-          // Вызываем openInvoice
-          tg.openInvoice(invoiceSlug, (status: string) => {
+          // Вызываем openInvoice с полным URL
+          tg.openInvoice(invoiceUrl, (status: string) => {
             clearTimeout(openInvoiceTimeout);
             callbackReceived = true;
             console.log('Invoice closed callback received with status:', status);
@@ -362,7 +354,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           
           // Помечаем, что вызов openInvoice выполнен
           invoiceOpened = true;
-          console.log('tg.openInvoice called successfully, waiting for callback...');
+          console.log('tg.openInvoice called successfully with URL:', invoiceUrl, 'waiting for callback...');
           
         } catch (openError: any) {
           clearTimeout(openInvoiceTimeout);
@@ -377,6 +369,15 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
             errorMsg = openError.message;
           } else if (openError?.toString) {
             errorMsg = openError.toString();
+          }
+          
+          // Показываем alert через Telegram WebApp SDK, если доступен
+          if (tg && typeof tg.showAlert === 'function') {
+            try {
+              tg.showAlert('Ошибка открытия оплаты. Попробуйте позже.');
+            } catch (alertError) {
+              console.error('Failed to show Telegram alert:', alertError);
+            }
           }
           
           toast.error(errorMsg, { duration: 3000 });
@@ -396,8 +397,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
                 payment_id: data.payment_id,
                 error_type: 'invoice_open_error',
                 error_message: errorMsg,
-                invoice_slug: invoiceSlug,
-                invoice_url: data.invoice_url,
+                invoice_url: invoiceUrl,
                 stack: openError?.stack,
                 error_details: {
                   name: openError?.name,
@@ -419,7 +419,23 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
       setIsProcessing(false);
       haptic.error();
       const errorMessage = error.message || 'Ошибка при обмене звезд';
-      toast.error(errorMessage, { duration: 3000 });
+      
+      // Показываем alert через Telegram WebApp SDK, если доступен
+      const tg = window.Telegram?.WebApp;
+      if (tg && typeof tg.showAlert === 'function') {
+        try {
+          // Если это ошибка создания инвойса, показываем сообщение с предложением повторить
+          if (errorMessage.includes('создании платежа') || errorMessage.includes('invoice') || errorMessage.includes('инициализации')) {
+            tg.showAlert('Ошибка инициализации оплаты. Попробуйте снова через минуту.');
+          } else {
+            tg.showAlert('Ошибка открытия оплаты. Попробуйте позже.');
+          }
+        } catch (alertError) {
+          console.error('Failed to show Telegram alert:', alertError);
+        }
+      }
+      
+      toast.error(errorMessage, { duration: 4000 });
     }
   };
 

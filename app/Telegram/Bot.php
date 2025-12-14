@@ -567,11 +567,26 @@ class Bot extends TelegramClient
 
             if (!isset($result['ok']) || !$result['ok']) {
                 $errorMessage = $result['description'] ?? 'Unknown error';
+                $errorCode = $result['error_code'] ?? null;
+                
                 Log::error('Telegram API error (createInvoiceLink)', [
                     'error' => $errorMessage,
+                    'error_code' => $errorCode,
                     'response' => $result,
+                    'request_data' => [
+                        'title' => $title,
+                        'currency' => $currency,
+                        'amount' => $prices[0]['amount'] ?? null,
+                    ],
                 ]);
-                throw new \App\Telegram\Exceptions\TelegramException($errorMessage);
+                
+                // Формируем более информативное сообщение об ошибке
+                $fullErrorMessage = $errorMessage;
+                if ($errorCode) {
+                    $fullErrorMessage .= ' (code: ' . $errorCode . ')';
+                }
+                
+                throw new \App\Telegram\Exceptions\TelegramException($fullErrorMessage);
             }
 
             // createInvoiceLink возвращает строку (URL) в поле result, а не массив
