@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\StarPayment;
 use App\Models\PaymentError;
 use App\Models\UserTicket;
+use App\Models\WheelSetting;
 use App\Services\TelegramService;
 use App\Telegram\Bot;
 use Illuminate\Http\Request;
@@ -55,7 +56,9 @@ class StarsPaymentController extends Controller
                 ], 404);
             }
 
-            $amount = 50; // Фиксированная сумма: 50 звезд
+            // Получаем настройки из админки
+            $settings = WheelSetting::getSettings();
+            $amount = $settings->getValidStarsPerTicketPurchase(); // Количество звёзд (по умолчанию 50)
             $ticketsAmount = 20; // Фиксированное количество билетов
             $purpose = 'buy_spin_bundle';
 
@@ -230,11 +233,22 @@ class StarsPaymentController extends Controller
 
             // Парсим payload для получения payment_id
             $payloadData = json_decode($payload, true);
+            
+            if (!is_array($payloadData)) {
+                Log::error('Invalid payload format in webhook', [
+                    'payload' => $payload,
+                ]);
+                return response()->json([
+                    'error' => 'Invalid payload format'
+                ], 400);
+            }
+            
             $paymentId = $payloadData['payment_id'] ?? null;
 
             if (!$paymentId) {
                 Log::warning('Payment ID not found in webhook payload', [
                     'payload' => $payload,
+                    'payload_data' => $payloadData,
                 ]);
                 return response()->json([
                     'error' => 'Payment ID not found'
@@ -245,10 +259,53 @@ class StarsPaymentController extends Controller
             $payment = StarPayment::find($paymentId);
 
             if (!$payment) {
-                Log::warning('Payment not found', ['payment_id' => $paymentId]);
+                Log::warning('Payment not found', [
+                    'payment_id' => $paymentId,
+                    'payload' => $payloadData,
+                ]);
                 return response()->json([
                     'error' => 'Payment not found'
                 ], 404);
+            }
+
+            // ВАЖНО: Проверяем, что telegram_id из webhook совпадает с user_id из платежа
+            $webhookTelegramId = $userData['id'] ?? null;
+            $paymentUser = User::find($payment->user_id);
+            
+            if ($paymentUser && $webhookTelegramId && (int) $webhookTelegramId !== (int) $paymentUser->telegram_id) {
+                Log::error('Telegram user ID mismatch in webhook', [
+                    'payment_id' => $paymentId,
+                    'payment_user_id' => $payment->user_id,
+                    'payment_telegram_id' => $paymentUser->telegram_id,
+                    'webhook_telegram_id' => $webhookTelegramId,
+                ]);
+                
+                $payment->status = 'failed';
+                $payment->telegram_response = [
+                    'query_id' => $queryId,
+                    'payload' => $payloadData,
+                    'charge' => $charge,
+                    'user' => $userData,
+                    'security_error' => 'Telegram user ID mismatch',
+                ];
+                $payment->save();
+                
+                PaymentError::logError(
+                    'security_error',
+                    'Telegram user ID mismatch in webhook',
+                    $payment->user_id,
+                    $request->all(),
+                    403,
+                    [
+                        'payment_telegram_id' => $paymentUser->telegram_id,
+                        'webhook_telegram_id' => $webhookTelegramId,
+                    ],
+                    (string) $paymentId
+                );
+                
+                return response()->json([
+                    'error' => 'Security validation failed'
+                ], 403);
             }
 
             // Проверяем, что транзакция еще не обработана
@@ -263,18 +320,22 @@ class StarsPaymentController extends Controller
             $isValid = true;
             $validationErrors = [];
 
-            // Проверяем purpose (может быть exchange_for_spins или buy_spin_bundle)
-            $validPurposes = ['exchange_for_spins', 'buy_spin_bundle'];
+            // Проверяем purpose (может быть exchange_for_spins, buy_spin_bundle или buy_tickets)
+            $validPurposes = ['exchange_for_spins', 'buy_spin_bundle', 'buy_tickets'];
             $purpose = $payloadData['purpose'] ?? null;
             if (!in_array($purpose, $validPurposes)) {
                 $isValid = false;
                 $validationErrors[] = 'Invalid purpose: ' . ($purpose ?? 'null');
             }
 
-            // Проверяем amount
-            if (($payloadData['stars_amount'] ?? 0) !== 50) {
+            // Проверяем amount - получаем настройку из базы
+            $settings = WheelSetting::getSettings();
+            $expectedAmount = $settings->getValidStarsPerTicketPurchase();
+            $receivedAmount = $payloadData['stars_amount'] ?? 0;
+            
+            if ($receivedAmount !== $expectedAmount) {
                 $isValid = false;
-                $validationErrors[] = 'Invalid amount';
+                $validationErrors[] = "Invalid amount: expected {$expectedAmount}, got {$receivedAmount}";
             }
 
             // Проверяем charge (данные о списании)
@@ -387,9 +448,12 @@ class StarsPaymentController extends Controller
                     'payment_id' => $paymentId,
                     'user_id' => $user->id,
                     'telegram_id' => $user->telegram_id,
+                    'stars_amount' => $payment->amount,
                     'tickets_before' => $ticketsBefore,
                     'tickets_after' => $user->tickets_available,
                     'tickets_added' => $ticketsToAdd,
+                    'purpose' => $payloadData['purpose'] ?? null,
+                    'query_id' => $queryId,
                 ]);
 
                 DB::commit();
@@ -508,7 +572,7 @@ class StarsPaymentController extends Controller
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
                     'balance' => $estimatedBalance, // null если не удалось рассчитать
-                    'required_amount' => 50,
+                    'required_amount' => WheelSetting::getSettings()->getValidStarsPerTicketPurchase(),
                     'note' => 'Balance should be checked on client side using Telegram.WebApp.cloudStorage.get("stars_balance") or Telegram.WebApp.getUser()',
                 ]);
 
@@ -526,7 +590,7 @@ class StarsPaymentController extends Controller
                     'user_id' => $user->id,
                     'telegram_id' => $telegramId,
                     'note' => 'Balance check failed, will be verified when opening invoice',
-                    'required_amount' => 50,
+                    'required_amount' => WheelSetting::getSettings()->getValidStarsPerTicketPurchase(),
                 ]);
             }
 
