@@ -109,18 +109,19 @@ class StarsPaymentController extends Controller
                 ]);
                 
                 // Используем createStarsInvoice для правильного формата Stars
-                // Для Stars: amount передается напрямую в единицах звёзд
+                // Для Stars: amount передается напрямую в единицах звёзд (из админ-панели)
+                // amount берется из настройки stars_per_ticket_purchase (по умолчанию 50)
                 $invoiceResult = $bot->createStarsInvoice(
                     userId: (int) $telegramId, // Используется для логирования, но не передается в API
                     title: 'Покупка билетов',
-                    description: "Вы обмениваете {$amount} звёзд и получаете {$ticketsAmount} прокрутов рулетки",
+                    description: "Обмен ⭐️ на прокрутки",
                     payload: json_encode([
                         'payment_id' => $payment->id,
                         'purpose' => 'buy_spin_bundle',
-                        'stars_amount' => $amount,
+                        'stars_amount' => $amount, // Количество звёзд из админ-панели
                         'tickets_amount' => $ticketsAmount,
                     ]),
-                    amount: $amount, // Количество звёзд из настроек (передается напрямую, без умножения)
+                    amount: $amount, // Количество звёзд из настроек админ-панели (stars_per_ticket_purchase)
                     params: []
                 );
                 

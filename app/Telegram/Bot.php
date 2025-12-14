@@ -538,14 +538,22 @@ class Bot extends TelegramClient
         $url = $this->baseUrl . $this->token . '/createInvoiceLink';
         
         try {
-            $requestData = array_merge([
+            // Для Telegram Stars (XTR) provider_token должен быть пустым или отсутствовать
+            $requestData = [
                 'title' => $title,
                 'description' => $description,
                 'payload' => $payload,
-                'provider_token' => $providerToken,
                 'currency' => $currency,
                 'prices' => json_encode($prices),
-            ], $params);
+            ];
+            
+            // Добавляем provider_token только если он не пустой (для других валют)
+            if (!empty($providerToken)) {
+                $requestData['provider_token'] = $providerToken;
+            }
+            
+            // Добавляем дополнительные параметры
+            $requestData = array_merge($requestData, $params);
 
             // Логируем запрос в отдельный файл для Stars платежей
             Log::channel('stars-payments')->debug('Creating invoice link request', [
@@ -684,7 +692,7 @@ class Bot extends TelegramClient
 
     /**
      * Создать инвойс для Telegram Stars
-     * Для Stars используется createInvoiceLink с currency="XTR" и provider_token=""
+     * Для Stars используется createInvoiceLink с currency="STARS" и provider_token="" (не передается)
      * 
      * @param int $userId Telegram user ID (используется для логирования, не передается в API)
      * @param string $title Название товара
@@ -704,16 +712,17 @@ class Bot extends TelegramClient
     ): array {
         // ВАЖНО: Для Telegram Stars API amount передается напрямую в единицах звёзд
         // НЕ нужно умножать на 1000! Telegram Stars не имеют дробных единиц.
-        // Для валюты XTR (Telegram Stars) amount - это целое число звёзд.
+        // Для валюты STARS amount - это целое число звёзд.
         
         // Для Stars инвойсов user_id не передается в createInvoiceLink
         // Пользователь определяется автоматически при открытии через Telegram.WebApp.openInvoice()
+        // provider_token должен быть пустым или отсутствовать для Stars
         return $this->createInvoiceLink(
             title: $title,
             description: $description,
             payload: $payload,
-            providerToken: '', // Пусто для Telegram Stars
-            currency: 'XTR', // XTR = Telegram Stars
+            providerToken: '', // Пусто для Telegram Stars (не передается в запрос)
+            currency: 'STARS', // STARS = Telegram Stars (валюта для оплаты звёздами)
             prices: [
                 ['label' => $title, 'amount' => $amount], // Передаем amount напрямую, без умножения
             ],

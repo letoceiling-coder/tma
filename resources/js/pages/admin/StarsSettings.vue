@@ -35,6 +35,8 @@
                         <p class="mt-2 text-sm text-muted-foreground">
                             Укажите, сколько Telegram Stars нужно списывать за покупку прокрутов. 
                             Если не указано — будет использоваться дефолтное значение 50.
+                            <br>
+                            <span class="text-xs">Это значение используется при создании инвойса через Telegram Bot API.</span>
                         </p>
                     </div>
 
