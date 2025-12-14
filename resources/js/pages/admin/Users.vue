@@ -1,6 +1,6 @@
 <template>
     <div class="users-page space-y-6">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between mb-6">
             <div>
                 <h1 class="text-3xl font-semibold text-foreground">Пользователи</h1>
                 <p class="text-muted-foreground mt-1">Управление пользователями системы</p>
@@ -12,6 +12,67 @@
                 <span>+</span>
                 <span>Создать пользователя</span>
             </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-card rounded-lg border border-border p-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Search -->
+                <div>
+                    <label class="block text-sm font-medium text-foreground mb-2">Поиск</label>
+                    <input
+                        v-model="filters.search"
+                        @input="debouncedFetchUsers"
+                        type="text"
+                        placeholder="Имя или email..."
+                        class="w-full h-10 px-3 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                </div>
+                
+                <!-- Role Filter -->
+                <div>
+                    <label class="block text-sm font-medium text-foreground mb-2">Роль</label>
+                    <select
+                        v-model="filters.role_id"
+                        @change="fetchUsers"
+                        class="w-full h-10 px-3 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                        <option value="">Все роли</option>
+                        <option v-for="role in allRoles" :key="role.id" :value="role.id">
+                            {{ role.name }}
+                        </option>
+                    </select>
+                </div>
+                
+                <!-- Sort -->
+                <div>
+                    <label class="block text-sm font-medium text-foreground mb-2">Сортировка</label>
+                    <div class="flex gap-2">
+                        <select
+                            v-model="filters.sort_by"
+                            @change="fetchUsers"
+                            class="flex-1 h-10 px-3 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        >
+                            <option value="id">ID</option>
+                            <option value="name">Имя</option>
+                            <option value="email">Email</option>
+                            <option value="created_at">Дата создания</option>
+                        </select>
+                        <button
+                            @click="toggleSortOrder"
+                            class="h-10 w-10 border border-border rounded-lg bg-background hover:bg-muted/10 flex items-center justify-center"
+                            :title="filters.sort_order === 'asc' ? 'По возрастанию' : 'По убыванию'"
+                        >
+                            <svg v-if="filters.sort_order === 'asc'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                            </svg>
+                            <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -84,6 +145,46 @@
         <!-- Empty State -->
         <div v-if="!loading && users.length === 0" class="bg-card rounded-lg border border-border p-12 text-center">
             <p class="text-muted-foreground">Пользователи не найдены</p>
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="!loading && pagination && pagination.last_page > 1" class="flex items-center justify-between bg-card rounded-lg border border-border p-4">
+            <div class="text-sm text-muted-foreground">
+                Показано {{ pagination.from }} - {{ pagination.to }} из {{ pagination.total }}
+            </div>
+            <div class="flex items-center gap-2">
+                <button
+                    @click="changePage(pagination.current_page - 1)"
+                    :disabled="pagination.current_page === 1"
+                    class="px-3 py-2 text-sm border border-border rounded-lg bg-background hover:bg-muted/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Назад
+                </button>
+                
+                <div class="flex items-center gap-1">
+                    <button
+                        v-for="page in visiblePages"
+                        :key="page"
+                        @click="changePage(page)"
+                        :class="[
+                            'px-3 py-2 text-sm border rounded-lg transition-colors',
+                            page === pagination.current_page
+                                ? 'bg-accent/10 text-accent border-accent/40'
+                                : 'bg-background border-border hover:bg-muted/10'
+                        ]"
+                    >
+                        {{ page }}
+                    </button>
+                </div>
+                
+                <button
+                    @click="changePage(pagination.current_page + 1)"
+                    :disabled="pagination.current_page === pagination.last_page"
+                    class="px-3 py-2 text-sm border border-border rounded-lg bg-background hover:bg-muted/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    Вперед
+                </button>
+            </div>
         </div>
 
         <!-- Create/Edit Modal -->
@@ -179,8 +280,17 @@ export default {
         const error = ref(null)
         const users = ref([])
         const allRoles = ref([])
+        const pagination = ref(null)
         const showCreateModal = ref(false)
         const showEditModal = ref(false)
+        const filters = ref({
+            search: '',
+            role_id: '',
+            sort_by: 'id',
+            sort_order: 'desc',
+            page: 1,
+            per_page: 15
+        })
         const form = ref({
             id: null,
             name: '',
@@ -191,28 +301,104 @@ export default {
 
         const currentUserId = computed(() => store.getters.user?.id)
 
+        // Debounce для поиска
+        let searchTimeout = null
+        const debouncedFetchUsers = () => {
+            if (searchTimeout) {
+                clearTimeout(searchTimeout)
+            }
+            searchTimeout = setTimeout(() => {
+                filters.value.page = 1 // Сбрасываем на первую страницу при поиске
+                fetchUsers()
+            }, 500)
+        }
+
+        // Вычисляемые страницы для пагинации
+        const visiblePages = computed(() => {
+            if (!pagination.value) return []
+            
+            const current = pagination.value.current_page
+            const last = pagination.value.last_page
+            const pages = []
+            
+            // Показываем максимум 7 страниц
+            let start = Math.max(1, current - 3)
+            let end = Math.min(last, current + 3)
+            
+            // Если в начале, показываем больше справа
+            if (current <= 4) {
+                end = Math.min(7, last)
+            }
+            
+            // Если в конце, показываем больше слева
+            if (current >= last - 3) {
+                start = Math.max(1, last - 6)
+            }
+            
+            for (let i = start; i <= end; i++) {
+                pages.push(i)
+            }
+            
+            return pages
+        })
+
         const fetchUsers = async () => {
             loading.value = true
             error.value = null
             try {
-                const response = await apiGet('/users')
+                // Формируем query параметры
+                const params = new URLSearchParams()
+                if (filters.value.search) {
+                    params.append('search', filters.value.search)
+                }
+                if (filters.value.role_id) {
+                    params.append('role_id', filters.value.role_id)
+                }
+                params.append('sort_by', filters.value.sort_by)
+                params.append('sort_order', filters.value.sort_order)
+                params.append('page', filters.value.page.toString())
+                params.append('per_page', filters.value.per_page.toString())
+                
+                const queryString = params.toString()
+                const url = queryString ? `/users?${queryString}` : '/users'
+                
+                const response = await apiGet(url)
                 if (!response.ok) {
                     throw new Error('Ошибка загрузки пользователей')
                 }
                 const data = await response.json()
-                // Обрабатываем пагинацию или обычный массив
+                
+                // Обрабатываем пагинацию
                 if (data.data && Array.isArray(data.data)) {
                     users.value = data.data
+                    if (data.meta) {
+                        pagination.value = data.meta
+                    }
                 } else if (Array.isArray(data)) {
+                    // Fallback для старого формата без пагинации
                     users.value = data
+                    pagination.value = null
                 } else {
                     users.value = []
+                    pagination.value = null
                 }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки пользователей'
             } finally {
                 loading.value = false
             }
+        }
+
+        const changePage = (page) => {
+            if (page >= 1 && page <= (pagination.value?.last_page || 1)) {
+                filters.value.page = page
+                fetchUsers()
+            }
+        }
+
+        const toggleSortOrder = () => {
+            filters.value.sort_order = filters.value.sort_order === 'asc' ? 'desc' : 'asc'
+            fetchUsers()
         }
 
         const fetchRoles = async () => {
@@ -349,6 +535,9 @@ export default {
             error,
             users,
             allRoles,
+            pagination,
+            filters,
+            visiblePages,
             showCreateModal,
             showEditModal,
             form,
@@ -356,7 +545,11 @@ export default {
             editUser,
             deleteUser,
             saveUser,
-            closeModal
+            closeModal,
+            fetchUsers,
+            changePage,
+            toggleSortOrder,
+            debouncedFetchUsers
         }
     }
 }

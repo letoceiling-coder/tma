@@ -86,7 +86,7 @@ export default {
 
         const loadSettings = async () => {
             try {
-                const response = await axios.get('/api/admin/wow/wheel/settings');
+                const response = await axios.get('/api/v1/wow/wheel/settings');
                 if (response.data?.settings) {
                     const settings = response.data.settings;
                     formData.value.stars_per_ticket_purchase = settings.stars_per_ticket_purchase ?? 50;
@@ -115,7 +115,7 @@ export default {
             }
 
             try {
-                const response = await axios.put('/api/admin/wow/wheel/settings', {
+                const response = await axios.put('/api/v1/wow/wheel/settings', {
                     stars_per_ticket_purchase: formData.value.stars_per_ticket_purchase,
                 });
 
