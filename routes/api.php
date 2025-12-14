@@ -62,6 +62,7 @@ Route::middleware(['telegram.initdata'])->group(function () {
     // Telegram Stars Payments (Invoice API)
     Route::post('/payments/stars/create-invoice', [\App\Http\Controllers\Api\StarsPaymentController::class, 'createInvoice']);
     Route::get('/payments/stars/balance', [\App\Http\Controllers\Api\StarsPaymentController::class, 'getStarsBalance']);
+    Route::post('/payments/stars/log-error', [\App\Http\Controllers\Api\StarsPaymentController::class, 'logError']);
 });
 
 // Webhook для Telegram Stars Exchange (не требует initData, но защищен токеном)

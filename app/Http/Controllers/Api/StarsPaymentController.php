@@ -121,19 +121,52 @@ class StarsPaymentController extends Controller
                 $invoiceUrl = $invoiceResult['result'] ?? null;
 
                 if (!$invoiceUrl) {
+                    Log::error('Invoice URL is null in response', [
+                        'invoice_result' => $invoiceResult,
+                        'user_id' => $user->id,
+                        'payment_id' => $payment->id,
+                    ]);
                     throw new \Exception('Invoice URL not received from Telegram');
                 }
 
-                // Извлекаем invoice_id из URL для использования в Telegram.WebApp.openInvoice()
-                // URL имеет формат: https://t.me/invoice/{invoice_id}
-                $invoiceId = null;
-                if (preg_match('/\/invoice\/([^\/\?]+)/', $invoiceUrl, $matches)) {
-                    $invoiceId = $matches[1];
+                // Проверяем тип результата
+                if (!is_string($invoiceUrl)) {
+                    Log::error('Invoice URL is not a string', [
+                        'invoice_url_type' => gettype($invoiceUrl),
+                        'invoice_url_value' => $invoiceUrl,
+                        'invoice_result' => $invoiceResult,
+                    ]);
+                    throw new \Exception('Invalid invoice URL format received from Telegram');
                 }
 
-                // Обновляем запись платежа с URL и ID инвойса
+                // Извлекаем invoice slug из URL для использования в Telegram.WebApp.openInvoice()
+                // URL имеет формат: https://t.me/invoice/{slug} или просто slug
+                // Для Telegram Stars openInvoice принимает именно slug, а не полный URL
+                $invoiceSlug = null;
+                if (preg_match('/\/invoice\/([^\/\?]+)/', $invoiceUrl, $matches)) {
+                    $invoiceSlug = $matches[1];
+                } elseif (preg_match('/^[a-zA-Z0-9_-]+$/', $invoiceUrl)) {
+                    // Если это уже slug (только буквы, цифры, дефисы и подчеркивания)
+                    $invoiceSlug = $invoiceUrl;
+                } else {
+                    // Если формат не распознан, используем весь URL как есть
+                    // Telegram может принять и полный URL
+                    $invoiceSlug = $invoiceUrl;
+                    Log::warning('Could not extract invoice slug, using full URL', [
+                        'invoice_url' => $invoiceUrl,
+                    ]);
+                }
+
+                if (!$invoiceSlug) {
+                    throw new \Exception('Could not extract invoice slug from URL: ' . $invoiceUrl);
+                }
+
+                // Обновляем запись платежа с URL и slug инвойса
                 $payment->invoice_url = $invoiceUrl;
-                $payment->telegram_response = array_merge($invoiceResult, ['invoice_id' => $invoiceId]);
+                $payment->telegram_response = array_merge($invoiceResult, [
+                    'invoice_id' => $invoiceSlug,
+                    'invoice_slug' => $invoiceSlug,
+                ]);
                 $payment->save();
 
                 Log::info('Stars payment invoice created successfully', [
@@ -141,16 +174,18 @@ class StarsPaymentController extends Controller
                     'telegram_id' => $telegramId,
                     'payment_id' => $payment->id,
                     'invoice_url' => $invoiceUrl,
-                    'invoice_id' => $invoiceId,
+                    'invoice_slug' => $invoiceSlug,
                     'amount' => $amount,
                     'purpose' => $purpose,
                     'tickets_amount' => $ticketsAmount,
+                    'invoice_result' => $invoiceResult,
                 ]);
 
                 return response()->json([
                     'success' => true,
                     'invoice_url' => $invoiceUrl,
-                    'invoice_id' => $invoiceId, // ID для использования в Telegram.WebApp.openInvoice()
+                    'invoice_id' => $invoiceSlug, // Slug для использования в Telegram.WebApp.openInvoice()
+                    'invoice_slug' => $invoiceSlug, // Дублируем для совместимости
                     'payment_id' => $payment->id,
                     'amount' => $amount,
                     'tickets_amount' => $ticketsAmount,
@@ -604,6 +639,112 @@ class StarsPaymentController extends Controller
                 'success' => false,
                 'error' => 'Internal server error',
                 'message' => 'Произошла ошибка при проверке баланса'
+            ], 500);
+        }
+    }
+
+    /**
+     * Логирование ошибок при открытии инвойса на клиенте
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function logError(Request $request): JsonResponse
+    {
+        try {
+            $initData = $request->header('X-Telegram-Init-Data') ?? $request->query('initData');
+            
+            if (!$initData) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Init data not provided',
+                ], 401);
+            }
+
+            $telegramId = TelegramService::getTelegramId($initData);
+            
+            if (!$telegramId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User ID not found',
+                ], 401);
+            }
+
+            $user = User::where('telegram_id', $telegramId)->first();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'User not found',
+                ], 404);
+            }
+
+            $paymentId = $request->input('payment_id');
+            $errorType = $request->input('error_type', 'unknown_error');
+            $errorMessage = $request->input('error_message', 'Unknown error');
+            $invoiceSlug = $request->input('invoice_slug');
+            $stack = $request->input('stack');
+
+            // Логируем ошибку
+            Log::error('Stars payment invoice open error', [
+                'user_id' => $user->id,
+                'telegram_id' => $telegramId,
+                'payment_id' => $paymentId,
+                'error_type' => $errorType,
+                'error_message' => $errorMessage,
+                'invoice_slug' => $invoiceSlug,
+                'stack' => $stack,
+                'request_data' => $request->all(),
+            ]);
+
+            // Если есть payment_id, обновляем статус платежа
+            if ($paymentId) {
+                $payment = StarPayment::find($paymentId);
+                if ($payment) {
+                    $payment->status = 'failed';
+                    $payment->telegram_response = array_merge(
+                        $payment->telegram_response ?? [],
+                        [
+                            'client_error' => [
+                                'type' => $errorType,
+                                'message' => $errorMessage,
+                                'invoice_slug' => $invoiceSlug,
+                                'timestamp' => now()->toIso8601String(),
+                            ],
+                        ]
+                    );
+                    $payment->save();
+                }
+            }
+
+            // Логируем в таблицу ошибок
+            PaymentError::logError(
+                $errorType,
+                $errorMessage,
+                $user->id,
+                $request->all(),
+                500,
+                [
+                    'invoice_slug' => $invoiceSlug,
+                    'stack' => $stack,
+                ],
+                (string) $paymentId
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Error logged successfully',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error logging invoice open error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to log error',
             ], 500);
         }
     }

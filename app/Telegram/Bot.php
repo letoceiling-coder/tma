@@ -538,16 +538,32 @@ class Bot extends TelegramClient
         $url = $this->baseUrl . $this->token . '/createInvoiceLink';
         
         try {
-            $response = Http::timeout(30)->post($url, array_merge([
+            $requestData = array_merge([
                 'title' => $title,
                 'description' => $description,
                 'payload' => $payload,
                 'provider_token' => $providerToken,
                 'currency' => $currency,
                 'prices' => json_encode($prices),
-            ], $params));
+            ], $params);
+
+            Log::debug('Creating invoice link', [
+                'url' => $url,
+                'currency' => $currency,
+                'title' => $title,
+                'amount' => $prices[0]['amount'] ?? null,
+            ]);
+
+            $response = Http::timeout(30)->post($url, $requestData);
 
             $result = $response->json();
+            
+            Log::debug('Invoice link response', [
+                'ok' => $result['ok'] ?? false,
+                'has_result' => isset($result['result']),
+                'result_type' => gettype($result['result'] ?? null),
+                'description' => $result['description'] ?? null,
+            ]);
 
             if (!isset($result['ok']) || !$result['ok']) {
                 $errorMessage = $result['description'] ?? 'Unknown error';

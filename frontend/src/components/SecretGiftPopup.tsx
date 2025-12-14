@@ -94,23 +94,28 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
     loadRequiredAmountAndCheckBalance();
   }, [isOpen, telegramInitData, requiredStarsAmount]);
 
-  // Обработка успешной оплаты через callback от Telegram
-  // Примечание: Обработка происходит через callback в openInvoice, 
-  // но оставляем обработчик событий как резервный
+  // Обработка успешной оплаты через событие invoiceClosed от Telegram
+  // Это резервный обработчик на случай, если callback в openInvoice не сработает
   useEffect(() => {
     const tg = window.Telegram?.WebApp;
     
-    if (!tg) return;
+    if (!tg || !isOpen) return;
 
     const handleInvoiceClosed = (event: any) => {
+      console.log('Invoice closed event received:', event);
+      
       // Защита от двойной обработки
-      if (isInvoiceHandled) return;
+      if (isInvoiceHandled) {
+        console.warn('Invoice already handled, ignoring event');
+        return;
+      }
       
       const status = event?.status || event;
       
       if (status === 'paid') {
         // Оплата успешна - начисляем билеты
         setIsInvoiceHandled(true);
+        setIsProcessing(false);
         haptic.success();
         onExchange(20);
         toast.success('Успешно! Вам начислено 20 прокрутов.', { duration: 3000 });
@@ -126,12 +131,16 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
     };
 
     // Подписываемся на событие закрытия инвойса (резервный обработчик)
-    tg.onEvent('invoiceClosed', handleInvoiceClosed);
+    if (typeof tg.onEvent === 'function') {
+      tg.onEvent('invoiceClosed', handleInvoiceClosed);
+    }
 
     return () => {
-      tg.offEvent('invoiceClosed', handleInvoiceClosed);
+      if (typeof tg.offEvent === 'function') {
+        tg.offEvent('invoiceClosed', handleInvoiceClosed);
+      }
     };
-  }, [onExchange, onClose]);
+  }, [isOpen, onExchange, onClose, isInvoiceHandled]);
 
   // Обмен 50 звезд на 20 билетов через Telegram Stars Invoice
   const handleExchangeStars = async () => {
@@ -144,6 +153,16 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
       const tg = window.Telegram?.WebApp;
       if (!tg) {
         throw new Error('Telegram WebApp SDK не доступен');
+      }
+
+      // Проверяем, что WebApp готов и поддерживает openInvoice
+      if (typeof tg.openInvoice !== 'function') {
+        throw new Error('Telegram WebApp не поддерживает openInvoice. Убедитесь, что приложение открыто в Telegram.');
+      }
+
+      // Проверяем, что initData доступен
+      if (!telegramInitData) {
+        throw new Error('Не удалось получить данные авторизации Telegram');
       }
 
       // Получаем user_id из Telegram WebApp
@@ -232,33 +251,156 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         return;
       }
 
-      if (data.success && data.invoice_url) {
-        // Открываем инвойс через Telegram WebApp SDK
-        // Для Stars используем invoice_url напрямую
-        // Это должно открыть системное окно оплаты Telegram Stars внутри Mini App
-        console.log('Opening invoice:', data.invoice_url);
-        tg.openInvoice(data.invoice_url, (status: string) => {
-          console.log('Invoice closed with status:', status);
-          // Защита от двойной обработки
-          if (isInvoiceHandled) return;
-          
-          setIsProcessing(false);
-          
-          if (status === 'paid') {
-            // Оплата успешна
-            setIsInvoiceHandled(true);
-            haptic.success();
-            onExchange(20);
-            toast.success('Успешно! Вам начислено 20 прокрутов.', { duration: 3000 });
-            onClose();
-          } else if (status === 'cancelled' || status === 'failed') {
-            // Пользователь отменил или произошла ошибка
-            haptic.error();
-            toast.error('Оплата не была завершена. Попробуйте снова.', { duration: 3000 });
-          } else {
-            setIsProcessing(false);
+      if (data.success && (data.invoice_url || data.invoice_id || data.invoice_slug)) {
+        // Для Telegram Stars используем invoice slug (часть после /invoice/)
+        // Формат: https://t.me/invoice/{slug} или просто slug
+        // Приоритет: invoice_slug > invoice_id > invoice_url
+        let invoiceSlug = data.invoice_slug || data.invoice_id || data.invoice_url;
+        
+        if (!invoiceSlug) {
+          console.error('No invoice identifier received:', data);
+          throw new Error('Не удалось получить идентификатор инвойса от сервера');
+        }
+        
+        // Если это полный URL, извлекаем slug
+        if (typeof invoiceSlug === 'string' && invoiceSlug.includes('/invoice/')) {
+          const match = invoiceSlug.match(/\/invoice\/([^\/\?]+)/);
+          if (match && match[1]) {
+            invoiceSlug = match[1];
           }
-        });
+        } else if (typeof invoiceSlug === 'string' && invoiceSlug.startsWith('http')) {
+          // Если это полный URL без /invoice/, пытаемся извлечь последнюю часть
+          const urlParts = invoiceSlug.split('/');
+          invoiceSlug = urlParts[urlParts.length - 1] || invoiceSlug;
+        }
+        
+        if (!invoiceSlug || typeof invoiceSlug !== 'string') {
+          console.error('Invalid invoice slug format:', invoiceSlug, 'from data:', data);
+          throw new Error('Неверный формат идентификатора инвойса');
+        }
+        
+        console.log('Invoice slug extracted:', invoiceSlug, 'from:', data.invoice_slug || data.invoice_id || data.invoice_url);
+
+        console.log('Opening invoice with slug:', invoiceSlug, 'Full URL:', data.invoice_url);
+        console.log('Telegram WebApp available:', !!tg, 'openInvoice function:', typeof tg?.openInvoice);
+        
+        // Проверяем готовность WebApp
+        if (tg.readyState !== 'ready' && tg.readyState !== 'loading') {
+          console.warn('WebApp not ready, readyState:', tg.readyState);
+        }
+
+        // Устанавливаем таймаут для открытия инвойса (15 секунд)
+        // Если инвойс не открылся за это время, считаем это ошибкой
+        let invoiceOpened = false;
+        let callbackReceived = false;
+        
+        const openInvoiceTimeout = setTimeout(() => {
+          if (!callbackReceived && !isInvoiceHandled) {
+            console.error('Invoice opening timeout - no callback received within 15 seconds');
+            console.error('Invoice opened flag:', invoiceOpened, 'Invoice handled:', isInvoiceHandled);
+            setIsProcessing(false);
+            setIsInvoiceHandled(false);
+            haptic.error();
+            toast.error('Не удалось открыть окно оплаты. Попробуйте позже или обновите страницу.', { duration: 4000 });
+          }
+        }, 15000);
+
+        try {
+          // Открываем инвойс через Telegram WebApp SDK
+          // Для Stars используем invoice slug (часть после /invoice/)
+          // ВАЖНО: openInvoice должен вызываться синхронно, не в async функции
+          console.log('Calling tg.openInvoice with slug:', invoiceSlug);
+          console.log('WebApp version:', tg.version, 'Platform:', tg.platform);
+          
+          // Проверяем, что openInvoice доступен
+          if (typeof tg.openInvoice !== 'function') {
+            throw new Error('Telegram WebApp.openInvoice не является функцией. Убедитесь, что приложение открыто в Telegram.');
+          }
+          
+          // Вызываем openInvoice
+          tg.openInvoice(invoiceSlug, (status: string) => {
+            clearTimeout(openInvoiceTimeout);
+            callbackReceived = true;
+            console.log('Invoice closed callback received with status:', status);
+            
+            // Защита от двойной обработки
+            if (isInvoiceHandled) {
+              console.warn('Invoice already handled, ignoring callback');
+              return;
+            }
+            
+            setIsProcessing(false);
+            
+            if (status === 'paid') {
+              // Оплата успешна
+              setIsInvoiceHandled(true);
+              haptic.success();
+              onExchange(20);
+              toast.success('Успешно! Вам начислено 20 прокрутов.', { duration: 3000 });
+              onClose();
+            } else if (status === 'cancelled' || status === 'failed') {
+              // Пользователь отменил или произошла ошибка
+              haptic.error();
+              toast.error('Оплата не была завершена. Попробуйте снова.', { duration: 3000 });
+            } else {
+              // Неизвестный статус
+              console.warn('Unknown invoice status:', status);
+              setIsProcessing(false);
+            }
+          });
+          
+          // Помечаем, что вызов openInvoice выполнен
+          invoiceOpened = true;
+          console.log('tg.openInvoice called successfully, waiting for callback...');
+          
+        } catch (openError: any) {
+          clearTimeout(openInvoiceTimeout);
+          console.error('Error opening invoice:', openError);
+          setIsProcessing(false);
+          setIsInvoiceHandled(false);
+          haptic.error();
+          
+          // Показываем понятное сообщение пользователю
+          let errorMsg = 'Не удалось открыть окно оплаты';
+          if (openError?.message) {
+            errorMsg = openError.message;
+          } else if (openError?.toString) {
+            errorMsg = openError.toString();
+          }
+          
+          toast.error(errorMsg, { duration: 3000 });
+          
+          // Логируем ошибку для отладки
+          try {
+            const apiUrl = import.meta.env.VITE_API_URL || '';
+            const logPath = apiUrl ? `${apiUrl}/api/payments/stars/log-error` : `/api/payments/stars/log-error`;
+            
+            fetch(logPath, {
+              method: 'POST',
+              headers: {
+                'X-Telegram-Init-Data': telegramInitData || '',
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                payment_id: data.payment_id,
+                error_type: 'invoice_open_error',
+                error_message: errorMsg,
+                invoice_slug: invoiceSlug,
+                invoice_url: data.invoice_url,
+                stack: openError?.stack,
+                error_details: {
+                  name: openError?.name,
+                  message: openError?.message,
+                  toString: openError?.toString(),
+                },
+              }),
+            }).catch(logError => {
+              console.error('Failed to log error to backend:', logError);
+            });
+          } catch (logError) {
+            console.error('Failed to prepare error log:', logError);
+          }
+        }
       } else {
         throw new Error(data.message || 'Ошибка при создании платежа');
       }
