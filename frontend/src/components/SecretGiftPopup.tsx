@@ -17,6 +17,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
   const [isBalanceLoading, setIsBalanceLoading] = useState(false);
   const [hasInsufficientBalance, setHasInsufficientBalance] = useState(false);
   const [isInvoiceHandled, setIsInvoiceHandled] = useState(false); // Защита от двойной обработки
+  const [requiredStarsAmount, setRequiredStarsAmount] = useState<number>(50); // Динамическое значение из настроек
   const { initData: telegramInitData } = useTelegramWebApp();
 
   // Сброс состояния при открытии popup
@@ -25,15 +26,35 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
     setIsInvoiceHandled(false);
   }, [isOpen]);
 
-  // Проверка баланса звезд при открытии popup
+  // Загрузка требуемого количества звёзд и проверка баланса при открытии popup
   useEffect(() => {
     if (!isOpen) return;
 
-    const checkStarsBalance = async () => {
+    const loadRequiredAmountAndCheckBalance = async () => {
       setIsBalanceLoading(true);
       setHasInsufficientBalance(false);
 
       try {
+        // Сначала загружаем требуемое количество звёзд из API
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const balanceApiPath = apiUrl ? `${apiUrl}/api/payments/stars/balance` : `/api/payments/stars/balance`;
+        
+        const balanceResponse = await fetch(balanceApiPath, {
+          method: 'GET',
+          headers: {
+            'X-Telegram-Init-Data': telegramInitData || '',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (balanceResponse.ok) {
+          const balanceData = await balanceResponse.json();
+          // Обновляем requiredStarsAmount из ответа API
+          if (balanceData.required_amount) {
+            setRequiredStarsAmount(balanceData.required_amount);
+          }
+        }
+
         // Используем Telegram WebApp SDK для получения баланса
         const tg = window.Telegram?.WebApp;
         
@@ -44,29 +65,19 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           if (balance !== null && balance !== undefined) {
             const balanceNum = parseInt(balance, 10);
             setStarsBalance(balanceNum);
-            setHasInsufficientBalance(balanceNum < 50);
+            setHasInsufficientBalance(balanceNum < requiredStarsAmount);
           } else {
-            // Если баланс не доступен через cloudStorage, проверяем через API
-            try {
-              const apiUrl = import.meta.env.VITE_API_URL || '';
-              const apiPath = apiUrl ? `${apiUrl}/api/payments/stars/balance` : `/api/payments/stars/balance`;
-              
-              const response = await fetch(apiPath, {
-                method: 'GET',
-                headers: {
-                  'X-Telegram-Init-Data': telegramInitData || '',
-                  'Accept': 'application/json',
-                },
-              });
-
-              if (response.ok) {
-                // Баланс будет проверен при открытии инвойса
-                setStarsBalance(null);
+            // Если баланс не доступен через cloudStorage, используем значение из API
+            if (balanceResponse.ok) {
+              const balanceData = await balanceResponse.json();
+              if (balanceData.balance !== null && balanceData.balance !== undefined) {
+                setStarsBalance(balanceData.balance);
+                const requiredAmount = balanceData.required_amount || requiredStarsAmount;
+                setHasInsufficientBalance(balanceData.balance < requiredAmount);
               } else {
                 setStarsBalance(null);
               }
-            } catch (apiError) {
-              console.warn('Failed to check balance via API:', apiError);
+            } else {
               setStarsBalance(null);
             }
           }
@@ -80,8 +91,8 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
       }
     };
 
-    checkStarsBalance();
-  }, [isOpen, telegramInitData]);
+    loadRequiredAmountAndCheckBalance();
+  }, [isOpen, telegramInitData, requiredStarsAmount]);
 
   // Обработка успешной оплаты через callback от Telegram
   // Примечание: Обработка происходит через callback в openInvoice, 
@@ -147,12 +158,12 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         const balance = await tg.cloudStorage?.get('stars_balance');
         if (balance !== null && balance !== undefined) {
           const balanceNum = parseInt(balance, 10);
-          if (balanceNum < 50) {
+          if (balanceNum < requiredStarsAmount) {
             setIsProcessing(false);
             setHasInsufficientBalance(true);
             setStarsBalance(balanceNum);
             haptic.error();
-            toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
+            toast.error(`Недостаточно звёзд для обмена. Требуется ${requiredStarsAmount} звёзд.`, { duration: 3000 });
             return;
           }
         }
@@ -161,26 +172,31 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         const apiUrl = import.meta.env.VITE_API_URL || '';
         const balanceApiPath = apiUrl ? `${apiUrl}/api/payments/stars/balance` : `/api/payments/stars/balance`;
         
-        const balanceResponse = await fetch(balanceApiPath, {
-          method: 'GET',
-          headers: {
-            'X-Telegram-Init-Data': telegramInitData || '',
-            'Accept': 'application/json',
-          },
-        });
+            const balanceResponse = await fetch(balanceApiPath, {
+              method: 'GET',
+              headers: {
+                'X-Telegram-Init-Data': telegramInitData || '',
+                'Accept': 'application/json',
+              },
+            });
 
-        if (balanceResponse.ok) {
-          const balanceData = await balanceResponse.json();
-          // Если API вернул баланс и он меньше 50, прерываем
-          if (balanceData.balance !== null && balanceData.balance !== undefined && balanceData.balance < 50) {
-            setIsProcessing(false);
-            setHasInsufficientBalance(true);
-            setStarsBalance(balanceData.balance);
-            haptic.error();
-            toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
-            return;
-          }
-        }
+            if (balanceResponse.ok) {
+              const balanceData = await balanceResponse.json();
+              // Обновляем requiredStarsAmount из ответа API
+              if (balanceData.required_amount) {
+                setRequiredStarsAmount(balanceData.required_amount);
+              }
+              // Если API вернул баланс и он меньше требуемого, прерываем
+              const requiredAmount = balanceData.required_amount || requiredStarsAmount;
+              if (balanceData.balance !== null && balanceData.balance !== undefined && balanceData.balance < requiredAmount) {
+                setIsProcessing(false);
+                setHasInsufficientBalance(true);
+                setStarsBalance(balanceData.balance);
+                haptic.error();
+                toast.error(`Недостаточно звёзд для обмена. Требуется ${requiredAmount} звёзд.`, { duration: 3000 });
+                return;
+              }
+            }
       } catch (balanceError) {
         console.warn('Failed to check balance before invoice:', balanceError);
         // Продолжаем - Telegram проверит баланс при открытии инвойса
@@ -208,7 +224,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         if (errorMsg.includes('Недостаточно') || errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
           setHasInsufficientBalance(true);
           haptic.error();
-          toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
+          toast.error(`Недостаточно звёзд для обмена. Требуется ${requiredStarsAmount} звёзд.`, { duration: 3000 });
         } else {
           throw new Error(errorMsg);
         }
@@ -345,7 +361,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
               lineHeight: 1.5
             }}
           >
-            Обменяй 50 звезд на 20 прокруток<br />рулетки и приблизься к своему призу
+            Обменяй {requiredStarsAmount} звезд на 20 прокруток<br />рулетки и приблизься к своему призу
           </p>
 
           {/* Info badge */}
@@ -394,7 +410,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
                   margin: 0
                 }}
               >
-                Недостаточно звёзд для обмена. Требуется 50 звёзд.
+                Недостаточно звёзд для обмена. Требуется {requiredStarsAmount} звёзд.
               </p>
               {starsBalance !== null && (
                 <p 
@@ -431,7 +447,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           id="exchange-stars-btn"
           onClick={handleExchangeStars}
           disabled={isButtonDisabled}
-          aria-label="Обменять 50 звезд на 20 прокруток"
+          aria-label={`Обменять ${requiredStarsAmount} звезд на 20 прокруток`}
           style={{
             width: '100%',
             marginTop: '16px',
@@ -464,7 +480,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
               ? "Проверка баланса..."
               : hasInsufficientBalance
               ? "Недостаточно звёзд"
-              : "Обменять 50 звезд сейчас"
+              : `Обменять ${requiredStarsAmount} звезд сейчас`
             }
           </span>
         </button>

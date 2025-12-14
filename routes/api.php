@@ -135,7 +135,8 @@ Route::middleware('auth:sanctum')->group(function () {
                 Route::get('wheel', [\App\Http\Controllers\Api\Admin\WheelController::class, 'index']);
                 Route::put('wheel/sectors/{id}', [\App\Http\Controllers\Api\Admin\WheelController::class, 'update']);
                 Route::post('wheel/bulk-update', [\App\Http\Controllers\Api\Admin\WheelController::class, 'bulkUpdate']);
-                Route::post('wheel/settings', [\App\Http\Controllers\Api\Admin\WheelController::class, 'updateSettings']);
+                Route::get('wheel/settings', [\App\Http\Controllers\Api\Admin\WheelController::class, 'getSettings']);
+                Route::put('wheel/settings', [\App\Http\Controllers\Api\Admin\WheelController::class, 'updateSettings']);
                 Route::get('wheel/validate', [\App\Http\Controllers\Api\Admin\WheelController::class, 'validateProbabilities']);
                 
                 // Ошибки рулетки

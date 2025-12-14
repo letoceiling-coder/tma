@@ -309,6 +309,12 @@ const routes = [
                 component: () => import('./pages/admin/BotConfig.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
+            {
+                path: 'settings/stars',
+                name: 'admin.settings.stars',
+                component: () => import('./pages/admin/StarsSettings.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin', 'superadmin'] },
+            },
             // Документация
             {
                 path: 'documentation',

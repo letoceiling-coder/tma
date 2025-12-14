@@ -33,6 +33,7 @@ class WheelController extends Controller
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
                 'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
+                'stars_per_ticket_purchase' => $settings->stars_per_ticket_purchase ?? 50,
             ],
         ]);
     }
@@ -291,6 +292,24 @@ class WheelController extends Controller
     }
 
     /**
+     * Получить настройки рулетки
+     */
+    public function getSettings(): JsonResponse
+    {
+        $settings = WheelSetting::getSettings();
+
+        return response()->json([
+            'settings' => [
+                'always_empty_mode' => $settings->always_empty_mode,
+                'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
+                'admin_username' => $settings->admin_username,
+                'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
+                'stars_per_ticket_purchase' => $settings->stars_per_ticket_purchase ?? 50,
+            ],
+        ]);
+    }
+
+    /**
      * Обновить настройки рулетки
      */
     public function updateSettings(Request $request): JsonResponse
@@ -300,6 +319,7 @@ class WheelController extends Controller
             'ticket_restore_hours' => 'nullable|integer|min:1|max:24',
             'admin_username' => 'nullable|string|max:255',
             'initial_tickets_count' => 'nullable|integer|min:0|max:100',
+            'stars_per_ticket_purchase' => 'nullable|integer|min:1|max:5000',
         ]);
 
         if ($validator->fails()) {
@@ -334,6 +354,17 @@ class WheelController extends Controller
             }
         }
 
+        if ($request->has('stars_per_ticket_purchase')) {
+            $value = $request->stars_per_ticket_purchase;
+            // Если значение null, пустое, > 5000 или < 1 — не сохраняем (будет использовано дефолтное значение 50)
+            if ($value !== null && $value !== '' && $value >= 1 && $value <= 5000) {
+                $updateData['stars_per_ticket_purchase'] = (int) $value;
+            } else {
+                // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 50)
+                $updateData['stars_per_ticket_purchase'] = null;
+            }
+        }
+
         if (empty($updateData)) {
             return response()->json([
                 'message' => 'Нет данных для обновления',
@@ -343,12 +374,14 @@ class WheelController extends Controller
         $settings = WheelSetting::updateSettings($updateData);
 
         return response()->json([
+            'success' => true,
             'message' => 'Настройки успешно обновлены',
             'settings' => [
                 'always_empty_mode' => $settings->always_empty_mode,
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
                 'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
+                'stars_per_ticket_purchase' => $settings->stars_per_ticket_purchase ?? 50,
             ],
         ]);
     }
