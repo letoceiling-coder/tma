@@ -112,6 +112,12 @@ class AdminMenu
                         'icon' => 'bot',
                         'roles' => ['admin'],
                     ],
+                    [
+                        'title' => 'Telegram Stars',
+                        'route' => 'admin.settings.stars',
+                        'icon' => 'star',
+                        'roles' => ['admin', 'superadmin'],
+                    ],
                 ],
             ],
             [
