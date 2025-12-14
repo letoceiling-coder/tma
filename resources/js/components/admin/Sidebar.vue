@@ -1,7 +1,19 @@
 <template>
     <aside
-        class="relative flex flex-col bg-sidebar-background text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border hidden lg:flex"
-        :class="isCollapsed ? 'lg:w-16' : 'lg:w-72'"
+        class="relative flex flex-col bg-sidebar-background text-sidebar-foreground transition-all duration-300 border-r border-sidebar-border"
+        :class="[
+            // Desktop: всегда видим на lg и выше
+            'lg:flex',
+            // Mobile: показываем только если меню открыто
+            isMobileMenuOpen ? 'flex' : 'hidden',
+            // Позиционирование на мобильных
+            'lg:relative fixed lg:inset-auto inset-y-0 left-0 z-50 lg:z-auto',
+            // Ширина
+            isCollapsed ? 'lg:w-16 w-72' : 'lg:w-72 w-72',
+            // Анимация открытия/закрытия на мобильных
+            'lg:translate-x-0 transition-transform duration-300 ease-in-out',
+            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        ]"
     >
         <div class="flex h-16 items-center border-b border-sidebar-border justify-between px-6">
             <h1 v-if="!isCollapsed" class="text-xl font-bold text-sidebar-foreground">CMS Admin</h1>
@@ -29,6 +41,7 @@
                 <router-link
                     v-if="!item.children"
                     :to="{ name: item.route }"
+                    @click="handleMobileMenuClick"
                     class="nav-menu-item flex items-center rounded-xl text-sm font-medium transition-all text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground px-4 py-3 gap-3"
                     :class="isCollapsed ? 'justify-center' : ''"
                     active-class="router-link-active"
@@ -73,6 +86,7 @@
                                 v-for="child in item.children"
                                 :key="child.route"
                                 :to="{ name: child.route }"
+                                @click="handleMobileMenuClick"
                                 class="resource-submenu-item flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-all text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                             >
                                 <span class="h-4 w-4 shrink-0">
@@ -132,11 +146,13 @@ export default {
     setup() {
         const store = useStore();
         const router = useRouter();
+        const mobileMenu = inject('mobileMenu', null);
         const expandedItems = ref([]);
         const isCollapsed = ref(localStorage.getItem('sidebarCollapsed') === 'true');
 
         const menu = computed(() => store.getters.menu);
         const user = computed(() => store.getters.user);
+        const isMobileMenuOpen = computed(() => mobileMenu?.isOpen?.value ?? false);
         
         const toggleCollapse = () => {
             isCollapsed.value = !isCollapsed.value;
@@ -200,17 +216,26 @@ export default {
             router.push('/login');
         };
 
+        // Закрываем мобильное меню при клике на пункт меню
+        const handleMobileMenuClick = () => {
+            if (mobileMenu && window.innerWidth < 1024) { // lg breakpoint
+                mobileMenu.close();
+            }
+        };
+
         return {
             menu,
             user,
             userInitials,
             expandedItems,
             isCollapsed,
+            isMobileMenuOpen,
             toggleCollapse,
             toggleExpanded,
             isExpanded,
             getIconComponent,
             handleLogout,
+            handleMobileMenuClick,
         };
     },
 };

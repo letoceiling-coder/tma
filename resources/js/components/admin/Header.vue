@@ -1,7 +1,11 @@
 <template>
     <header class="relative flex h-16 items-center justify-between border-b border-border bg-card backdrop-blur-xl px-4 sm:px-6 gap-2 sm:gap-4 z-30">
         <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-            <button class="lg:hidden flex-shrink-0 h-11 w-11 flex items-center justify-center rounded-md hover:bg-accent/10 transition-colors">
+            <button
+                @click="toggleMobileMenu"
+                class="lg:hidden flex-shrink-0 h-11 w-11 flex items-center justify-center rounded-md hover:bg-accent/10 transition-colors"
+                aria-label="Открыть меню"
+            >
                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                 </svg>
@@ -52,7 +56,7 @@
 </template>
 
 <script>
-import { computed } from 'vue';
+import { computed, inject } from 'vue';
 import { useStore } from 'vuex';
 import { useRoute } from 'vue-router';
 import NotificationDropdown from './NotificationDropdown.vue';
@@ -65,6 +69,8 @@ export default {
     setup() {
         const store = useStore();
         const route = useRoute();
+        const mobileMenu = inject('mobileMenu', null);
+        
         const user = computed(() => store.getters.user);
         const isDarkMode = computed(() => store.getters.isDarkMode);
         const userInitials = computed(() => {
@@ -80,12 +86,19 @@ export default {
             store.dispatch('toggleTheme');
         };
 
+        const toggleMobileMenu = () => {
+            if (mobileMenu) {
+                mobileMenu.toggle();
+            }
+        };
+
         return {
             user,
             userInitials,
             currentPageTitle,
             isDarkMode,
             toggleTheme,
+            toggleMobileMenu,
         };
     },
 };
