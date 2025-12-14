@@ -596,6 +596,44 @@ class Bot extends TelegramClient
         ]);
     }
 
+    /**
+     * Создать инвойс для Telegram Stars
+     * Для Stars используется createInvoiceLink с currency="XTR" и provider_token=""
+     * 
+     * @param int $userId Telegram user ID
+     * @param string $title Название товара
+     * @param string $description Описание товара
+     * @param string $payload Уникальный payload для идентификации платежа
+     * @param int $amount Количество звезд (будет преобразовано в nanostars: amount * 1000)
+     * @param array $params Дополнительные параметры
+     * @return array
+     */
+    public function createStarsInvoice(
+        int $userId,
+        string $title,
+        string $description,
+        string $payload,
+        int $amount,
+        array $params = []
+    ): array {
+        // Для Telegram Stars: 1 star = 1000 nanostars
+        $amountInNanostars = $amount * 1000;
+        
+        // Для Stars инвойсов user_id не передается в createInvoiceLink
+        // Пользователь определяется автоматически при открытии через Telegram.WebApp.openInvoice()
+        return $this->createInvoiceLink(
+            title: $title,
+            description: $description,
+            payload: $payload,
+            providerToken: '', // Пусто для Telegram Stars
+            currency: 'XTR', // XTR = Telegram Stars
+            prices: [
+                ['label' => $title, 'amount' => $amountInNanostars],
+            ],
+            params: $params
+        );
+    }
+
     // ==========================================
     // Games
     // ==========================================

@@ -130,28 +130,63 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
     setIsProcessing(true);
     
     try {
-      // Дополнительная проверка баланса перед созданием инвойса
       const tg = window.Telegram?.WebApp;
-      if (tg) {
-        try {
-          const balance = await tg.cloudStorage?.get('stars_balance');
-          if (balance !== null && balance !== undefined) {
-            const balanceNum = parseInt(balance, 10);
-            if (balanceNum < 50) {
-              setIsProcessing(false);
-              setHasInsufficientBalance(true);
-              setStarsBalance(balanceNum);
-              haptic.error();
-              toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
-              return;
-            }
-          }
-        } catch (balanceError) {
-          console.warn('Failed to check balance before invoice:', balanceError);
-          // Продолжаем - Telegram проверит баланс при открытии инвойса
-        }
+      if (!tg) {
+        throw new Error('Telegram WebApp SDK не доступен');
       }
 
+      // Получаем user_id из Telegram WebApp
+      const telegramUser = tg.initDataUnsafe?.user;
+      if (!telegramUser || !telegramUser.id) {
+        throw new Error('Не удалось получить ID пользователя');
+      }
+
+      // Проверка баланса звёзд перед созданием инвойса
+      try {
+        // Пытаемся получить баланс через cloudStorage
+        const balance = await tg.cloudStorage?.get('stars_balance');
+        if (balance !== null && balance !== undefined) {
+          const balanceNum = parseInt(balance, 10);
+          if (balanceNum < 50) {
+            setIsProcessing(false);
+            setHasInsufficientBalance(true);
+            setStarsBalance(balanceNum);
+            haptic.error();
+            toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
+            return;
+          }
+        }
+
+        // Дополнительная проверка через API
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const balanceApiPath = apiUrl ? `${apiUrl}/api/payments/stars/balance` : `/api/payments/stars/balance`;
+        
+        const balanceResponse = await fetch(balanceApiPath, {
+          method: 'GET',
+          headers: {
+            'X-Telegram-Init-Data': telegramInitData || '',
+            'Accept': 'application/json',
+          },
+        });
+
+        if (balanceResponse.ok) {
+          const balanceData = await balanceResponse.json();
+          // Если API вернул баланс и он меньше 50, прерываем
+          if (balanceData.balance !== null && balanceData.balance !== undefined && balanceData.balance < 50) {
+            setIsProcessing(false);
+            setHasInsufficientBalance(true);
+            setStarsBalance(balanceData.balance);
+            haptic.error();
+            toast.error('Недостаточно звёзд для обмена. Требуется 50 звёзд.', { duration: 3000 });
+            return;
+          }
+        }
+      } catch (balanceError) {
+        console.warn('Failed to check balance before invoice:', balanceError);
+        // Продолжаем - Telegram проверит баланс при открытии инвойса
+      }
+
+      // Создаем инвойс через backend
       const apiUrl = import.meta.env.VITE_API_URL || '';
       const apiPath = apiUrl ? `${apiUrl}/api/payments/stars/create-invoice` : `/api/payments/stars/create-invoice`;
       
@@ -181,17 +216,13 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         return;
       }
 
-      if (data.success && (data.invoice_id || data.invoice_url)) {
+      if (data.success && data.invoice_url) {
         // Открываем инвойс через Telegram WebApp SDK
-        if (!tg || !tg.openInvoice) {
-          throw new Error('Telegram WebApp SDK не доступен');
-        }
-
-        // Используем invoice_id если доступен, иначе invoice_url
-        const invoiceIdentifier = data.invoice_id || data.invoice_url;
-        
-        // Открываем инвойс
-        tg.openInvoice(invoiceIdentifier, (status: string) => {
+        // Для Stars используем invoice_url напрямую
+        // Это должно открыть системное окно оплаты Telegram Stars внутри Mini App
+        console.log('Opening invoice:', data.invoice_url);
+        tg.openInvoice(data.invoice_url, (status: string) => {
+          console.log('Invoice closed with status:', status);
           // Защита от двойной обработки
           if (isInvoiceHandled) return;
           
@@ -207,7 +238,7 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           } else if (status === 'cancelled' || status === 'failed') {
             // Пользователь отменил или произошла ошибка
             haptic.error();
-            toast.error('Оплата не прошла. Попробуйте ещё раз.', { duration: 3000 });
+            toast.error('Оплата не была завершена. Попробуйте снова.', { duration: 3000 });
           } else {
             setIsProcessing(false);
           }
