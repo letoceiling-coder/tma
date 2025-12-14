@@ -147,6 +147,8 @@ class StarsPaymentController extends Controller
                         'invoice_result' => $invoiceResult,
                         'amount' => $amount,
                         'tickets_amount' => $ticketsAmount,
+                        'currency' => 'XTR',
+                        'provider_token_empty' => true,
                     ]);
                     
                     // Также логируем в основной лог
@@ -158,7 +160,21 @@ class StarsPaymentController extends Controller
                         'error_description' => $errorDescription,
                     ]);
                     
-                    throw new \Exception('Failed to create invoice: ' . $errorDescription . ($errorCode ? ' (code: ' . $errorCode . ')' : ''));
+                    // Обновляем статус платежа на failed
+                    $payment->status = 'failed';
+                    $payment->telegram_response = [
+                        'error' => $errorDescription,
+                        'error_code' => $errorCode,
+                    ];
+                    $payment->save();
+                    
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'invoice_creation_failed',
+                        'message' => 'Ошибка при создании платежа. Попробуйте снова позже.',
+                        'error_code' => $errorCode,
+                        'error_description' => $errorDescription,
+                    ], 500);
                 }
 
                 $invoiceUrl = $invoiceResult['result'] ?? null;
@@ -228,6 +244,24 @@ class StarsPaymentController extends Controller
                     'amount' => $amount,
                     'tickets_amount' => $ticketsAmount,
                 ]);
+
+                // Финальная проверка перед возвратом
+                if (empty($invoiceUrl) || !is_string($invoiceUrl)) {
+                    Log::error('Invoice URL is invalid before returning to client', [
+                        'user_id' => $user->id,
+                        'payment_id' => $payment->id,
+                        'invoice_url' => $invoiceUrl,
+                    ]);
+                    
+                    $payment->status = 'failed';
+                    $payment->save();
+                    
+                    return response()->json([
+                        'success' => false,
+                        'error' => 'invalid_invoice_url',
+                        'message' => 'Ошибка при создании платежа. Попробуйте снова позже.',
+                    ], 500);
+                }
 
                 return response()->json([
                     'success' => true,

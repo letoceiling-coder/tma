@@ -238,6 +238,17 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
 
       if (!response.ok) {
         const errorMsg = data.message || data.error || 'Ошибка при создании платежа';
+        const errorCode = data.error_code;
+        const errorDescription = data.error_description;
+        
+        // Логируем ошибку для отладки
+        console.error('Invoice creation failed:', {
+          status: response.status,
+          error: errorMsg,
+          error_code: errorCode,
+          error_description: errorDescription,
+          response_data: data,
+        });
         
         // Если ошибка связана с недостаточным балансом
         if (errorMsg.includes('Недостаточно') || errorMsg.includes('insufficient') || errorMsg.includes('balance')) {
@@ -248,17 +259,39 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           // Показываем alert через Telegram WebApp SDK, если доступен
           if (tg && typeof tg.showAlert === 'function') {
             try {
-              tg.showAlert('Ошибка инициализации оплаты. Попробуйте снова через минуту.');
+              tg.showAlert('Ошибка при создании платежа. Попробуйте снова позже.');
             } catch (alertError) {
               console.error('Failed to show Telegram alert:', alertError);
             }
           }
-          throw new Error(errorMsg);
+          
+          // Показываем понятное сообщение пользователю
+          const userMessage = errorCode === 400 
+            ? 'Ошибка инициализации оплаты. Проверьте настройки бота в BotFather.'
+            : 'Ошибка при создании платежа. Попробуйте снова позже.';
+          
+          toast.error(userMessage, { duration: 4000 });
         }
         setIsProcessing(false);
         return;
       }
 
+      // Проверяем успешность создания инвойса
+      if (!data.success) {
+        const errorMsg = data.message || data.error || 'Ошибка при создании платежа';
+        console.error('Invoice creation failed:', data);
+        
+        if (tg && typeof tg.showAlert === 'function') {
+          try {
+            tg.showAlert('Ошибка при создании платежа. Попробуйте снова позже.');
+          } catch (alertError) {
+            console.error('Failed to show Telegram alert:', alertError);
+          }
+        }
+        
+        throw new Error(errorMsg);
+      }
+      
       if (data.success && data.invoice_url) {
         // ВАЖНО: Telegram.WebApp.openInvoice() требует полный HTTPS URL от Telegram API
         // Не нужно извлекать slug - используем URL как есть
@@ -282,6 +315,12 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
         if (!invoiceUrl.startsWith('https://t.me/')) {
           console.error('Invalid invoice URL format - must start with https://t.me/:', invoiceUrl);
           throw new Error('Неверный формат URL инвойса. URL должен начинаться с https://t.me/');
+        }
+        
+        // Дополнительная валидация - URL не должен быть пустым после trim
+        if (invoiceUrl.length < 15) {
+          console.error('Invoice URL too short:', invoiceUrl);
+          throw new Error('URL инвойса слишком короткий');
         }
         
         console.log('Opening invoice with URL:', invoiceUrl);
@@ -435,7 +474,19 @@ const SecretGiftPopup = ({ isOpen, onClose, onExchange }: SecretGiftPopupProps) 
           }
         }
       } else {
-        throw new Error(data.message || 'Ошибка при создании платежа');
+        // Если success=false или нет invoice_url
+        const errorMsg = data.message || data.error || 'Ошибка при создании платежа';
+        console.error('Invoice creation failed - no invoice_url:', data);
+        
+        if (tg && typeof tg.showAlert === 'function') {
+          try {
+            tg.showAlert('Ошибка при создании платежа. Попробуйте снова позже.');
+          } catch (alertError) {
+            console.error('Failed to show Telegram alert:', alertError);
+          }
+        }
+        
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
       setIsProcessing(false);
