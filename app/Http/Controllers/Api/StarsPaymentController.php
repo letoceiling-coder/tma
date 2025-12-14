@@ -96,7 +96,7 @@ class StarsPaymentController extends Controller
                 $bot = new Bot();
                 
                 // Используем createStarsInvoice для правильного формата Stars
-                // Для Stars: 50 звезд = 50000 nanostars
+                // Для Stars: amount передается напрямую в единицах звёзд (50, а не 50000)
                 $invoiceResult = $bot->createStarsInvoice(
                     userId: (int) $telegramId, // Используется для логирования, но не передается в API
                     title: 'Покупка билетов',
@@ -107,7 +107,7 @@ class StarsPaymentController extends Controller
                         'stars_amount' => $amount,
                         'tickets_amount' => $ticketsAmount,
                     ]),
-                    amount: $amount, // 50 звезд (будет преобразовано в 50000 nanostars внутри метода)
+                    amount: $amount, // 50 звёзд (передается напрямую, без умножения)
                     params: []
                 );
 

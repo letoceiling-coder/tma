@@ -637,11 +637,11 @@ class Bot extends TelegramClient
      * Создать инвойс для Telegram Stars
      * Для Stars используется createInvoiceLink с currency="XTR" и provider_token=""
      * 
-     * @param int $userId Telegram user ID
+     * @param int $userId Telegram user ID (используется для логирования, не передается в API)
      * @param string $title Название товара
      * @param string $description Описание товара
      * @param string $payload Уникальный payload для идентификации платежа
-     * @param int $amount Количество звезд (будет преобразовано в nanostars: amount * 1000)
+     * @param int $amount Количество звезд (передается напрямую, без умножения)
      * @param array $params Дополнительные параметры
      * @return array
      */
@@ -653,8 +653,9 @@ class Bot extends TelegramClient
         int $amount,
         array $params = []
     ): array {
-        // Для Telegram Stars: 1 star = 1000 nanostars
-        $amountInNanostars = $amount * 1000;
+        // ВАЖНО: Для Telegram Stars API amount передается напрямую в единицах звёзд
+        // НЕ нужно умножать на 1000! Telegram Stars не имеют дробных единиц.
+        // Для валюты XTR (Telegram Stars) amount - это целое число звёзд.
         
         // Для Stars инвойсов user_id не передается в createInvoiceLink
         // Пользователь определяется автоматически при открытии через Telegram.WebApp.openInvoice()
@@ -665,7 +666,7 @@ class Bot extends TelegramClient
             providerToken: '', // Пусто для Telegram Stars
             currency: 'XTR', // XTR = Telegram Stars
             prices: [
-                ['label' => $title, 'amount' => $amountInNanostars],
+                ['label' => $title, 'amount' => $amount], // Передаем amount напрямую, без умножения
             ],
             params: $params
         );
