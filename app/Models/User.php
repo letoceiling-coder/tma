@@ -37,6 +37,7 @@ class User extends Authenticatable
         'invited_by',
         'total_spins',
         'total_wins',
+        'last_ticket_received_at',
     ];
 
     /**
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'last_notification_sent_at' => 'datetime',
             'tickets_depleted_at' => 'datetime',
             'referral_popup_shown_at' => 'datetime',
+            'last_ticket_received_at' => 'datetime',
             'stars_balance' => 'integer',
             'tickets_available' => 'integer',
             'total_spins' => 'integer',

@@ -40,6 +40,60 @@
                         </p>
                     </div>
 
+                    <div class="pt-4 border-t border-border">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <label 
+                                    for="show_gift_button" 
+                                    class="block text-sm font-medium text-foreground mb-2"
+                                >
+                                    Показывать кнопку "Подарок" на главной странице
+                                </label>
+                                <p class="text-sm text-muted-foreground">
+                                    Включите, чтобы отображать кнопку "Подарок" справа от кнопки "Как играть?" на главной странице мини-приложения.
+                                </p>
+                            </div>
+                            <div class="ml-4">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        id="show_gift_button"
+                                        v-model="formData.show_gift_button"
+                                        type="checkbox"
+                                        class="sr-only peer"
+                                    />
+                                    <div class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-ring/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-border">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <label 
+                                    for="send_ticket_notification" 
+                                    class="block text-sm font-medium text-foreground mb-2"
+                                >
+                                    Отправлять уведомления о начислении билетов
+                                </label>
+                                <p class="text-sm text-muted-foreground">
+                                    Включите, чтобы отправлять пользователям уведомления в Telegram при начислении новых билетов (например, через 24 часа по таймеру).
+                                </p>
+                            </div>
+                            <div class="ml-4">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        id="send_ticket_notification"
+                                        v-model="formData.send_ticket_notification"
+                                        type="checkbox"
+                                        class="sr-only peer"
+                                    />
+                                    <div class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-ring/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="bg-muted/50 rounded-lg p-4">
                         <h3 class="text-sm font-semibold text-foreground mb-2">Текущее значение</h3>
                         <p class="text-sm text-muted-foreground">
@@ -81,6 +135,8 @@ export default {
     setup() {
         const formData = ref({
             stars_per_ticket_purchase: 50,
+            show_gift_button: false,
+            send_ticket_notification: true,
         });
         const currentValue = ref(null);
         const errors = ref({});
@@ -92,6 +148,8 @@ export default {
                 if (response.data?.settings) {
                     const settings = response.data.settings;
                     formData.value.stars_per_ticket_purchase = settings.stars_per_ticket_purchase ?? 50;
+                    formData.value.show_gift_button = settings.show_gift_button ?? false;
+                    formData.value.send_ticket_notification = settings.send_ticket_notification ?? true;
                     currentValue.value = settings.stars_per_ticket_purchase ?? 50;
                 }
             } catch (error) {
@@ -119,6 +177,8 @@ export default {
             try {
                 const response = await axios.put('/api/v1/wow/wheel/settings', {
                     stars_per_ticket_purchase: formData.value.stars_per_ticket_purchase,
+                    show_gift_button: formData.value.show_gift_button,
+                    send_ticket_notification: formData.value.send_ticket_notification,
                 });
 
                 if (response.data?.success) {

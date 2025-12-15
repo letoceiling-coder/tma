@@ -84,15 +84,30 @@ class TelegramNotificationService
      * @param User $user
      * @return bool
      */
-    public static function notifyNewTicket(User $user): bool
+    /**
+     * Уведомление о новом билете
+     * 
+     * @param User $user
+     * @param bool $checkSettings Проверять ли настройку send_ticket_notification (по умолчанию true)
+     * @return bool
+     */
+    public static function notifyNewTicket(User $user, bool $checkSettings = true): bool
     {
         if (!$user->telegram_id) {
             return false;
         }
 
-        $message = "🎫 <b>Новый билет доступен!</b>\n\n";
-        $message .= "У вас теперь {$user->tickets_available} билет(ов).\n";
-        $message .= "Крутите колесо и выигрывайте призы! 🎰";
+        // Проверяем настройку, если требуется
+        if ($checkSettings) {
+            $settings = \App\Models\WheelSetting::getSettings();
+            if (!$settings->send_ticket_notification ?? true) {
+                // Уведомления отключены в настройках
+                return false;
+            }
+        }
+
+        $message = "🎫 <b>У тебя новый билет!</b>\n\n";
+        $message .= "Заходи и используй его в рулетке.";
 
         return self::sendNotification($user->telegram_id, $message);
     }

@@ -42,6 +42,7 @@ class WheelController extends Controller
             'total_probability' => (float) $sectors->sum('probability_percent'),
             'settings' => [
                 'admin_username' => $settings->admin_username,
+                'show_gift_button' => $settings->show_gift_button ?? false,
             ],
         ]);
     }

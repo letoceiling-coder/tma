@@ -33,7 +33,12 @@ class WheelController extends Controller
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
                 'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
+                'daily_tickets' => $settings->daily_tickets ?? 1,
+                'default_daily_tickets' => $settings->default_daily_tickets ?? 1,
                 'stars_per_ticket_purchase' => $settings->stars_per_ticket_purchase ?? 50,
+                'stars_enabled' => $settings->stars_enabled ?? true,
+                'show_gift_button' => $settings->show_gift_button ?? false,
+                'send_ticket_notification' => $settings->send_ticket_notification ?? true,
             ],
         ]);
     }
@@ -304,7 +309,12 @@ class WheelController extends Controller
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
                 'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
+                'daily_tickets' => $settings->daily_tickets ?? 1,
+                'default_daily_tickets' => $settings->default_daily_tickets ?? 1,
                 'stars_per_ticket_purchase' => $settings->stars_per_ticket_purchase ?? 50,
+                'stars_enabled' => $settings->stars_enabled ?? true,
+                'show_gift_button' => $settings->show_gift_button ?? false,
+                'send_ticket_notification' => $settings->send_ticket_notification ?? true,
             ],
         ]);
     }
@@ -319,7 +329,12 @@ class WheelController extends Controller
             'ticket_restore_hours' => 'nullable|integer|min:1|max:24',
             'admin_username' => 'nullable|string|max:255',
             'initial_tickets_count' => 'nullable|integer|min:0|max:100',
+            'daily_tickets' => 'nullable|integer|min:0|max:100',
+            'default_daily_tickets' => 'nullable|integer|min:0|max:100',
             'stars_per_ticket_purchase' => 'nullable|integer|min:1|max:5000',
+            'stars_enabled' => 'nullable|boolean',
+            'show_gift_button' => 'nullable|boolean',
+            'send_ticket_notification' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -354,6 +369,28 @@ class WheelController extends Controller
             }
         }
 
+        if ($request->has('daily_tickets')) {
+            $value = $request->daily_tickets;
+            // Если значение null, пустое, > 100 или < 0 — не сохраняем (будет использовано дефолтное значение 1)
+            if ($value !== null && $value !== '' && $value >= 0 && $value <= 100) {
+                $updateData['daily_tickets'] = (int) $value;
+            } else {
+                // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 1)
+                $updateData['daily_tickets'] = null;
+            }
+        }
+
+        if ($request->has('default_daily_tickets')) {
+            $value = $request->default_daily_tickets;
+            // Если значение null, пустое, > 100 или < 0 — не сохраняем (будет использовано дефолтное значение 1)
+            if ($value !== null && $value !== '' && $value >= 0 && $value <= 100) {
+                $updateData['default_daily_tickets'] = (int) $value;
+            } else {
+                // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 1)
+                $updateData['default_daily_tickets'] = null;
+            }
+        }
+
         if ($request->has('stars_per_ticket_purchase')) {
             $value = $request->stars_per_ticket_purchase;
             // Если значение null, пустое, > 5000 или < 1 — не сохраняем (будет использовано дефолтное значение 50)
@@ -363,6 +400,18 @@ class WheelController extends Controller
                 // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 50)
                 $updateData['stars_per_ticket_purchase'] = null;
             }
+        }
+
+        if ($request->has('stars_enabled')) {
+            $updateData['stars_enabled'] = (bool) $request->stars_enabled;
+        }
+
+        if ($request->has('show_gift_button')) {
+            $updateData['show_gift_button'] = (bool) $request->show_gift_button;
+        }
+
+        if ($request->has('send_ticket_notification')) {
+            $updateData['send_ticket_notification'] = (bool) $request->send_ticket_notification;
         }
 
         if (empty($updateData)) {

@@ -35,10 +35,10 @@
                 </div>
             </div>
 
-            <!-- Баннер -->
+            <!-- Баннер / Карта -->
             <div class="bg-card rounded-lg border border-border p-6 space-y-4">
                 <div>
-                    <label class="text-sm font-medium mb-2 block">URL баннера (картинки)</label>
+                    <label class="text-sm font-medium mb-2 block">URL баннера (картинки карты)</label>
                     <div class="flex gap-2">
                         <input
                             v-model="welcomeBannerUrl"
@@ -56,15 +56,125 @@
                         </button>
                     </div>
                     <p class="text-xs text-muted-foreground mt-1">
-                        URL изображения для баннера. Будет отправлено перед текстовым сообщением.
+                        URL изображения для баннера/карты. Будет отправлено перед текстовым сообщением.
                     </p>
-                    <div v-if="welcomeBannerUrl" class="mt-3">
-                        <img
-                            :src="welcomeBannerUrl"
-                            alt="Баннер"
-                            class="max-w-md h-auto object-contain rounded border border-border"
-                            @error="handleImageError"
-                        />
+                    
+                    <!-- Превью карты с возможностью управления домиками -->
+                    <div v-if="welcomeBannerUrl" class="mt-4">
+                        <div class="relative w-full overflow-hidden rounded-lg border border-border bg-background" style="min-height: 400px;">
+                            <!-- Карта фото - отображается по ширине экрана полностью -->
+                            <img
+                                :src="welcomeBannerUrl"
+                                alt="Карта"
+                                ref="mapImageRef"
+                                class="w-full h-auto object-contain"
+                                style="display: block; max-width: 100%; height: auto;"
+                                @load="onMapImageLoad"
+                                @error="handleImageError"
+                            />
+                            
+                            <!-- Домики на карте -->
+                            <div
+                                v-for="(house, index) in houses"
+                                :key="index"
+                                class="absolute cursor-move transition-all hover:scale-110"
+                                :style="{
+                                    left: house.x + '%',
+                                    top: house.y + '%',
+                                    transform: 'translate(-50%, -50%)',
+                                    zIndex: house.active ? 20 : 10
+                                }"
+                                @mousedown="startDrag(index, $event)"
+                                @click="selectHouse(index)"
+                            >
+                                <div
+                                    class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold"
+                                    :class="house.active ? 'bg-accent border-accent text-accent-foreground' : 'bg-white border-gray-400 text-gray-700'"
+                                >
+                                    {{ index + 1 }}
+                                </div>
+                            </div>
+                            
+                            <!-- Кнопка добавления домика -->
+                            <button
+                                v-if="!isDragging"
+                                @click="addHouse"
+                                type="button"
+                                class="absolute top-4 right-4 px-3 py-2 bg-accent/90 text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors shadow-lg"
+                                :disabled="houses.length >= 20"
+                            >
+                                + Добавить домик
+                            </button>
+                            
+                            <!-- Информация о выбранном домике -->
+                            <div
+                                v-if="selectedHouseIndex !== null && houses[selectedHouseIndex]"
+                                class="absolute bottom-4 left-4 right-4 p-3 bg-background/95 backdrop-blur-sm rounded-lg border border-border shadow-lg"
+                            >
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-sm font-medium">Домик #{{ selectedHouseIndex + 1 }}</span>
+                                    <button
+                                        @click="removeHouse(selectedHouseIndex)"
+                                        type="button"
+                                        class="text-destructive hover:text-destructive/80 text-sm"
+                                    >
+                                        Удалить
+                                    </button>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                        <label class="text-muted-foreground">X:</label>
+                                        <input
+                                            v-model.number="houses[selectedHouseIndex].x"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            class="w-full px-2 py-1 border border-border rounded bg-background text-xs"
+                                            @input="updateHousePosition(selectedHouseIndex)"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="text-muted-foreground">Y:</label>
+                                        <input
+                                            v-model.number="houses[selectedHouseIndex].y"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.1"
+                                            class="w-full px-2 py-1 border border-border rounded bg-background text-xs"
+                                            @input="updateHousePosition(selectedHouseIndex)"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Список домиков -->
+                        <div v-if="houses.length > 0" class="mt-4 p-3 bg-muted/50 rounded-lg">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium">Домики на карте ({{ houses.length }})</span>
+                                <button
+                                    @click="clearAllHouses"
+                                    type="button"
+                                    class="text-xs text-destructive hover:text-destructive/80"
+                                >
+                                    Очистить все
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="(house, index) in houses"
+                                    :key="index"
+                                    @click="selectHouse(index)"
+                                    type="button"
+                                    class="px-2 py-1 rounded text-xs border transition-colors"
+                                    :class="house.active ? 'bg-accent text-accent-foreground border-accent' : 'bg-background border-border hover:bg-muted'"
+                                >
+                                    Домик {{ index + 1 }} ({{ Math.round(house.x) }}%, {{ Math.round(house.y) }}%)
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -178,7 +288,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { apiGet, apiPost } from '../../../utils/api'
 import Swal from 'sweetalert2'
 import Media from '../Media.vue'
@@ -197,6 +307,17 @@ export default {
         const welcomeButtons = ref([])
         const showMediaModal = ref(false)
         const selectedMediaFile = ref(null)
+        const mapImageRef = ref(null)
+        const houses = ref([])
+        const selectedHouseIndex = ref(null)
+        const isDragging = ref(false)
+        const dragState = ref({
+            houseIndex: null,
+            startX: 0,
+            startY: 0,
+            startLeft: 0,
+            startTop: 0
+        })
 
         const isFormValid = computed(() => {
             // Проверяем, что все кнопки заполнены правильно
@@ -231,6 +352,12 @@ export default {
                 welcomeText.value = data.welcome_text || ''
                 welcomeBannerUrl.value = data.welcome_banner_url || ''
                 welcomeButtons.value = (data.welcome_buttons || []).map(btn => ({ ...btn }))
+                // Загружаем домики из данных
+                if (data.houses && Array.isArray(data.houses)) {
+                    houses.value = data.houses.map(h => ({ ...h, active: false }))
+                } else {
+                    houses.value = []
+                }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки настроек'
             } finally {
@@ -256,6 +383,7 @@ export default {
                     welcome_text: welcomeText.value || null,
                     welcome_banner_url: welcomeBannerUrl.value || null,
                     welcome_buttons: welcomeButtons.value.length > 0 ? welcomeButtons.value : null,
+                    houses: houses.value.length > 0 ? houses.value.map(h => ({ x: h.x, y: h.y })) : null,
                 })
 
                 if (!response.ok) {

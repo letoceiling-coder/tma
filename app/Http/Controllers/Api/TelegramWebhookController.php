@@ -376,9 +376,12 @@ class TelegramWebhookController extends Controller
             
             $referrer->tickets_available = $referrer->tickets_available + 1;
             
-            // Если билеты стали больше 0, сбрасываем точку восстановления
+            // Если билеты стали больше 0, сбрасываем точку восстановления и флаг показа pop-up
+            // Таймер не должен зависеть от наличия билетов на момент приглашения
             if ($referrer->tickets_available > 0) {
                 $referrer->tickets_depleted_at = null;
+                // Сбрасываем флаг показа pop-up, чтобы он мог появиться снова при следующем обнулении
+                $referrer->referral_popup_shown_at = null;
             }
             
             $referrer->save();

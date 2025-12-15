@@ -86,6 +86,13 @@ class TicketController extends Controller
             $settings = \App\Models\WheelSetting::getSettings();
             $restoreIntervalSeconds = ($settings->ticket_restore_hours ?? 3) * 3600;
 
+            // Проверяем и начисляем ежедневные билеты (ДО проверки восстановления)
+            // Это должно работать независимо от текущего баланса
+            $this->checkDailyTickets($user);
+            
+            // Обновляем данные пользователя после возможного начисления ежедневных билетов
+            $user->refresh();
+
             // ВАЖНО: Если у пользователя 0 билетов, но tickets_depleted_at не установлен,
             // устанавливаем его на текущий момент (для запуска таймера)
             // НО: если referral_popup_shown_at уже установлен, это означает, что билеты уже были 0 ранее
@@ -192,6 +199,102 @@ class TicketController extends Controller
             return response()->json([
                 'tickets_available' => 0,
             ]);
+        }
+    }
+
+    /**
+     * Проверка и начисление ежедневных билетов
+     * 
+     * ЛОГИКА:
+     * - Если last_ticket_received_at === null (новый пользователь) и билетов 0 → начислить default_daily_tickets
+     * - Если прошло >= 24 часов с last_ticket_received_at → начислить daily_tickets
+     * - Работает независимо от текущего баланса билетов
+     * 
+     * @param User $user
+     * @return void
+     */
+    private function checkDailyTickets(User $user): void
+    {
+        $settings = \App\Models\WheelSetting::getSettings();
+        $dailyTickets = $settings->daily_tickets ?? 1;
+        $defaultTickets = $settings->default_daily_tickets ?? 1;
+        
+        $shouldAllocate = false;
+        $ticketsToAllocate = 0;
+        
+        // Если это первый раз (last_ticket_received_at === null)
+        if (!$user->last_ticket_received_at) {
+            // При первом входе, если у пользователя 0 билетов, начисляем default_daily_tickets
+            if ($user->tickets_available === 0) {
+                $shouldAllocate = true;
+                $ticketsToAllocate = $defaultTickets;
+                
+                Log::info('First login: allocating default daily tickets', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'tickets_before' => $user->tickets_available,
+                    'tickets_to_allocate' => $ticketsToAllocate,
+                ]);
+            }
+        } else {
+            // Проверяем, прошло ли 24 часа с последнего начисления
+            // Ежедневные билеты начисляются независимо от текущего баланса
+            $hoursSinceLastTicket = now()->diffInHours($user->last_ticket_received_at);
+            
+            if ($hoursSinceLastTicket >= 24) {
+                $shouldAllocate = true;
+                $ticketsToAllocate = $dailyTickets;
+                
+                Log::info('24 hours passed: allocating daily tickets', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'tickets_before' => $user->tickets_available,
+                    'tickets_to_allocate' => $ticketsToAllocate,
+                    'hours_since_last' => $hoursSinceLastTicket,
+                    'last_ticket_received_at' => $user->last_ticket_received_at->toIso8601String(),
+                ]);
+            }
+        }
+        
+        if ($shouldAllocate && $ticketsToAllocate > 0) {
+            $oldTickets = $user->tickets_available;
+            $wasFirstTime = !$user->last_ticket_received_at;
+            $user->tickets_available = $user->tickets_available + $ticketsToAllocate;
+            $user->last_ticket_received_at = now();
+            
+            // Если билеты стали больше 0, сбрасываем точку восстановления
+            if ($user->tickets_available > 0 && $user->tickets_depleted_at) {
+                $user->tickets_depleted_at = null;
+                // Сбрасываем флаг показа pop-up
+                if ($user->referral_popup_shown_at) {
+                    $user->referral_popup_shown_at = null;
+                }
+            }
+            
+            $user->save();
+            
+            // Создаем запись в user_tickets для отслеживания источника
+            $source = $wasFirstTime ? 'default_daily_bonus' : 'daily_bonus';
+            \App\Models\UserTicket::create([
+                'user_id' => $user->id,
+                'tickets_count' => $ticketsToAllocate,
+                'restored_at' => null, // Ежедневные билеты доступны сразу
+                'source' => $source,
+            ]);
+            
+            Log::info('Daily tickets allocated', [
+                'user_id' => $user->id,
+                'telegram_id' => $user->telegram_id,
+                'tickets_before' => $oldTickets,
+                'tickets_after' => $user->tickets_available,
+                'tickets_allocated' => $ticketsToAllocate,
+                'last_ticket_received_at' => $user->last_ticket_received_at->toIso8601String(),
+            ]);
+            
+            // Отправляем уведомление о начислении билетов
+            if ($user->tickets_available > $oldTickets) {
+                TelegramNotificationService::notifyNewTicket($user);
+            }
         }
     }
 

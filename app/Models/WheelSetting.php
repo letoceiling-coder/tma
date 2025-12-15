@@ -15,7 +15,12 @@ class WheelSetting extends Model
         'leaderboard_period_months',
         'admin_username',
         'initial_tickets_count',
+        'daily_tickets',
+        'default_daily_tickets',
         'stars_per_ticket_purchase',
+        'stars_enabled',
+        'show_gift_button',
+        'send_ticket_notification',
         'welcome_text',
         'welcome_banner_url',
         'welcome_buttons',
@@ -26,7 +31,12 @@ class WheelSetting extends Model
         'ticket_restore_hours' => 'integer',
         'leaderboard_period_months' => 'integer',
         'initial_tickets_count' => 'integer',
+        'daily_tickets' => 'integer',
+        'default_daily_tickets' => 'integer',
         'stars_per_ticket_purchase' => 'integer',
+        'stars_enabled' => 'boolean',
+        'show_gift_button' => 'boolean',
+        'send_ticket_notification' => 'boolean',
         'welcome_buttons' => 'array',
     ];
 
@@ -42,7 +52,12 @@ class WheelSetting extends Model
                 'ticket_restore_hours' => 3, // По умолчанию 3 часа
                 'leaderboard_period_months' => 1, // По умолчанию 1 месяц
                 'initial_tickets_count' => 1, // По умолчанию 1 билет
+                'daily_tickets' => 1, // По умолчанию 1 билет ежедневно
+                'default_daily_tickets' => 1, // По умолчанию 1 билет для новых пользователей
                 'stars_per_ticket_purchase' => 50, // По умолчанию 50 звёзд за покупку билетов
+                'stars_enabled' => true, // По умолчанию Stars включены
+                'show_gift_button' => false, // По умолчанию кнопка "Подарок" скрыта
+                'send_ticket_notification' => true, // По умолчанию уведомления о билетах включены
             ]
         );
     }

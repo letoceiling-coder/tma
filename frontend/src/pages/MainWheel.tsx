@@ -45,6 +45,7 @@ const MainWheel = () => {
   const [lastPrizeValue, setLastPrizeValue] = useState(0);
   const [lastPrizeMessage, setLastPrizeMessage] = useState<string | null>(null);
   const [adminUsername, setAdminUsername] = useState<string | null>(null);
+  const [showGiftButton, setShowGiftButton] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [wheelSegments, setWheelSegments] = useState<WheelSegment[]>([]);
   const [loadingSectors, setLoadingSectors] = useState(true);
@@ -88,6 +89,10 @@ const MainWheel = () => {
         // Если не загрузился, сбрасываем в null
         setAdminUsername(null);
       }
+      
+      // Сохраняем настройку show_gift_button
+      const showGiftButtonValue = data.settings?.show_gift_button ?? false;
+      setShowGiftButton(showGiftButtonValue);
       
       // Сортируем секторы по sector_number (1-12)
       const sortedSectors = (data.sectors || []).sort((a: WheelSector, b: WheelSector) => 
@@ -923,48 +928,50 @@ const MainWheel = () => {
       </button>
 
       {/* Gift bunny - animated */}
-      <button 
-        className="absolute flex flex-col items-center"
-        style={{ 
-          ...buttonBaseStyle,
-          top: '54px', 
-          right: '12px', 
-          background: 'transparent', 
-          border: 'none', 
-          cursor: 'pointer',
-          opacity: isLoaded ? 1 : 0,
-          transform: isLoaded ? 'translateX(0)' : 'translateX(20px)',
-        }}
-        onClick={() => {
-          haptic.lightTap();
-          setShowGiftPopup(true);
-        }}
-        onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
-        onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-      >
-        <img 
-          src={wowBunny} 
-          alt="WOW Bunny" 
+      {showGiftButton && (
+        <button 
+          className="absolute flex flex-col items-center"
           style={{ 
-            width: '50px', 
-            height: '72px', 
-            objectFit: 'contain',
-            filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))'
-          }} 
-        />
-        <span style={{ 
-          fontSize: '9px', 
-          fontWeight: 700, 
-          color: '#FFFFFF', 
-          marginTop: '4px', 
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          textShadow: '0 1px 2px rgba(0,0,0,0.2)'
-        }}>
-          ПОДАРОК
-        </span>
-      </button>
+            ...buttonBaseStyle,
+            top: '54px', 
+            right: '12px', 
+            background: 'transparent', 
+            border: 'none', 
+            cursor: 'pointer',
+            opacity: isLoaded ? 1 : 0,
+            transform: isLoaded ? 'translateX(0)' : 'translateX(20px)',
+          }}
+          onClick={() => {
+            haptic.lightTap();
+            setShowGiftPopup(true);
+          }}
+          onMouseDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
+          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          <img 
+            src={wowBunny} 
+            alt="WOW Bunny" 
+            style={{ 
+              width: '50px', 
+              height: '72px', 
+              objectFit: 'contain',
+              filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))'
+            }} 
+          />
+          <span style={{ 
+            fontSize: '9px', 
+            fontWeight: 700, 
+            color: '#FFFFFF', 
+            marginTop: '4px', 
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px',
+            textShadow: '0 1px 2px rgba(0,0,0,0.2)'
+          }}>
+            ПОДАРОК
+          </span>
+        </button>
+      )}
 
       {/* Wheel - animated with scale on spin */}
       <div 

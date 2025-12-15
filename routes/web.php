@@ -96,9 +96,9 @@ Route::get('/subscription-expired', [\App\Http\Controllers\SubscriptionExpiredCo
 
 // Маршруты для админ-панели (Vue) - с проверкой подписки
 Route::middleware('subscription.check')->group(function () {
-    Route::get('/admin/{any?}', function () {
-        return view('admin');
-    })->where('any', '.*')->name('admin');
+Route::get('/admin/{any?}', function () {
+    return view('admin');
+})->where('any', '.*')->name('admin');
 });
 
 // Публичный роут для просмотра логов
