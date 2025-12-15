@@ -121,6 +121,12 @@ class AdminMenu
                 ],
             ],
             [
+                'title' => 'Подписка',
+                'route' => 'admin.subscription',
+                'icon' => 'credit-card',
+                'roles' => ['admin', 'manager'],
+            ],
+            [
                 'title' => 'Поддержка',
                 'route' => 'admin.support',
                 'icon' => 'chat',

@@ -236,6 +236,12 @@ const routes = [
                 component: () => import('./pages/admin/Roles.vue'),
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
+            {
+                path: 'subscription',
+                name: 'admin.subscription',
+                component: () => import('./pages/admin/Subscription.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
+            },
             // WOW Рулетка
             {
                 path: 'wow/channels',
