@@ -442,7 +442,28 @@ router.beforeEach(async (to, from, next) => {
         return;
     }
     
-    // 3. Проверка ролей - ВАЖНО: проверяем ПОСЛЕ загрузки пользователя
+    // 3. Проверка подписки для админ-панели
+    if (to.meta.requiresAuth && isAuthenticated && to.path !== '/subscription-expired') {
+        try {
+            const subscriptionResponse = await axios.get('/api/subscription/check');
+            if (!subscriptionResponse.data.success || !subscriptionResponse.data.is_active) {
+                console.log('❌ Router Guard - Subscription expired or inactive, redirecting to expired page');
+                window.location.href = '/subscription-expired';
+                return;
+            }
+        } catch (error) {
+            // Если получили 403, значит подписка истекла
+            if (error.response && error.response.status === 403) {
+                console.log('❌ Router Guard - Subscription check failed (403), redirecting to expired page');
+                window.location.href = '/subscription-expired';
+                return;
+            }
+            // Для других ошибок продолжаем (может быть временная проблема с API)
+            console.warn('⚠️ Router Guard - Subscription check error, continuing:', error.message);
+        }
+    }
+    
+    // 4. Проверка ролей - ВАЖНО: проверяем ПОСЛЕ загрузки пользователя
     if (to.meta.requiresRole) {
         const requiredRoles = Array.isArray(to.meta.requiresRole) 
             ? to.meta.requiresRole 

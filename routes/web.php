@@ -90,10 +90,16 @@ Route::get('/assets/{path}', function ($path) {
     ]);
 })->where('path', '.+')->name('react.assets');
 
-// Маршруты для админ-панели (Vue)
-Route::get('/admin/{any?}', function () {
-    return view('admin');
-})->where('any', '.*')->name('admin');
+// Страница истечения подписки (должна быть до админ-панели)
+Route::get('/subscription-expired', [\App\Http\Controllers\SubscriptionExpiredController::class, 'index'])
+    ->name('subscription.expired');
+
+// Маршруты для админ-панели (Vue) - с проверкой подписки
+Route::middleware('subscription.check')->group(function () {
+    Route::get('/admin/{any?}', function () {
+        return view('admin');
+    })->where('any', '.*')->name('admin');
+});
 
 // Публичный роут для просмотра логов
 Route::get('/logs', [\App\Http\Controllers\LogController::class, 'index'])->name('logs.index');

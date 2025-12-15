@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'deploy.token' => \App\Http\Middleware\VerifyDeployToken::class,
             'telegram.initdata' => \App\Http\Middleware\ValidateTelegramInitData::class,
             'telegram.webhook' => \App\Http\Middleware\TelegramWebhook::class,
+            'subscription.check' => \App\Http\Middleware\CheckSubscription::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
