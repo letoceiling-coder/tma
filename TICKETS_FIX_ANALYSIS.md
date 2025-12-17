@@ -392,3 +392,4 @@ const shouldShowTimer = tickets === 0 && nextTicketAt !== null;
 6. Добавить настройку включения/отключения Stars
 7. Улучшить статистику
 
+

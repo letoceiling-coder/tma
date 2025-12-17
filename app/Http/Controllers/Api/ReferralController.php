@@ -139,6 +139,7 @@ class ReferralController extends Controller
                         'name' => 'Telegram User',
                         'email' => "telegram_{$telegramId}@telegram.local",
                         'password' => bcrypt(str()->random(32)),
+                        'last_ticket_accrual_at' => now(), // Устанавливаем время для автоматического начисления
                     ]
                 );
 

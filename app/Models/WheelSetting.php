@@ -21,6 +21,9 @@ class WheelSetting extends Model
         'stars_enabled',
         'show_gift_button',
         'send_ticket_notification',
+        'ticket_accrual_enabled',
+        'ticket_accrual_interval_hours',
+        'ticket_accrual_notifications_enabled',
         'welcome_text',
         'welcome_banner_url',
         'welcome_buttons',
@@ -37,6 +40,9 @@ class WheelSetting extends Model
         'stars_enabled' => 'boolean',
         'show_gift_button' => 'boolean',
         'send_ticket_notification' => 'boolean',
+        'ticket_accrual_enabled' => 'boolean',
+        'ticket_accrual_interval_hours' => 'integer',
+        'ticket_accrual_notifications_enabled' => 'boolean',
         'welcome_buttons' => 'array',
     ];
 
@@ -58,6 +64,9 @@ class WheelSetting extends Model
                 'stars_enabled' => true, // По умолчанию Stars включены
                 'show_gift_button' => false, // По умолчанию кнопка "Подарок" скрыта
                 'send_ticket_notification' => true, // По умолчанию уведомления о билетах включены
+                'ticket_accrual_enabled' => true, // По умолчанию автоматическое начисление билетов включено
+                'ticket_accrual_interval_hours' => 24, // По умолчанию 24 часа
+                'ticket_accrual_notifications_enabled' => true, // По умолчанию уведомления о начислении включены
             ]
         );
     }

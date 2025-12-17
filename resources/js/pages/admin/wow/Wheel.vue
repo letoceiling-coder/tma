@@ -115,6 +115,76 @@
                     <span class="text-sm text-muted-foreground">билетов</span>
                 </div>
             </div>
+
+            <!-- Разделитель -->
+            <div class="border-t border-border my-4"></div>
+
+            <!-- Начисление билетов -->
+            <h3 class="text-lg font-semibold mb-4">Начисление билетов</h3>
+
+            <!-- Включить автоматическое начисление билетов -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-medium mb-1">Включить автоматическое начисление билетов</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Включает или отключает механику автоматического начисления билетов.
+                    </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input
+                        v-model="ticketAccrualEnabled"
+                        @change="saveSettings"
+                        type="checkbox"
+                        class="sr-only peer"
+                    />
+                    <div
+                        class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"
+                    ></div>
+                </label>
+            </div>
+
+            <!-- Период начисления -->
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h3 class="text-base font-medium mb-1">Период начисления</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Интервал в часах, через который пользователю будет начисляться 1 билет, вне зависимости от текущего баланса (от 1 до 24 часов)
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model.number="ticketAccrualIntervalHours"
+                        @change="saveSettings"
+                        type="number"
+                        min="1"
+                        max="24"
+                        step="1"
+                        class="w-24 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent text-center"
+                    />
+                    <span class="text-sm text-muted-foreground">часов</span>
+                </div>
+            </div>
+
+            <!-- Уведомлять пользователя о начислении -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-medium mb-1">Уведомлять пользователя о начислении</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Если включено, пользователю будет отправлено уведомление при начислении нового билета.
+                    </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input
+                        v-model="ticketAccrualNotificationsEnabled"
+                        @change="saveSettings"
+                        type="checkbox"
+                        class="sr-only peer"
+                    />
+                    <div
+                        class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"
+                    ></div>
+                </label>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -269,6 +339,9 @@ export default {
         const ticketRestoreHours = ref(3)
         const adminUsername = ref('')
         const initialTicketsCount = ref(1)
+        const ticketAccrualEnabled = ref(true)
+        const ticketAccrualIntervalHours = ref(24)
+        const ticketAccrualNotificationsEnabled = ref(true)
         const showMediaModal = ref(false)
         const currentSector = ref(null)
         const selectedMediaFile = ref(null)
@@ -317,6 +390,9 @@ export default {
                     ticketRestoreHours.value = data.settings.ticket_restore_hours || 3
                     adminUsername.value = data.settings.admin_username || ''
                     initialTicketsCount.value = data.settings.initial_tickets_count || 1
+                    ticketAccrualEnabled.value = data.settings.ticket_accrual_enabled ?? true
+                    ticketAccrualIntervalHours.value = data.settings.ticket_accrual_interval_hours ?? 24
+                    ticketAccrualNotificationsEnabled.value = data.settings.ticket_accrual_notifications_enabled ?? true
                 }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки секторов'
@@ -466,6 +542,9 @@ export default {
                     ticket_restore_hours: ticketRestoreHours.value,
                     admin_username: adminUsername.value,
                     initial_tickets_count: initialTicketsCount.value,
+                    ticket_accrual_enabled: ticketAccrualEnabled.value,
+                    ticket_accrual_interval_hours: ticketAccrualIntervalHours.value,
+                    ticket_accrual_notifications_enabled: ticketAccrualNotificationsEnabled.value,
                 })
 
                 if (!response.ok) {
@@ -509,6 +588,10 @@ export default {
             alwaysEmptyMode,
             ticketRestoreHours,
             adminUsername,
+            initialTicketsCount,
+            ticketAccrualEnabled,
+            ticketAccrualIntervalHours,
+            ticketAccrualNotificationsEnabled,
             totalProbability,
             probabilityValid,
             saveAllSectors,

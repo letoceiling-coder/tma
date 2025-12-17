@@ -39,6 +39,9 @@ class WheelController extends Controller
                 'stars_enabled' => $settings->stars_enabled ?? true,
                 'show_gift_button' => $settings->show_gift_button ?? false,
                 'send_ticket_notification' => $settings->send_ticket_notification ?? true,
+                'ticket_accrual_enabled' => $settings->ticket_accrual_enabled ?? true,
+                'ticket_accrual_interval_hours' => $settings->ticket_accrual_interval_hours ?? 24,
+                'ticket_accrual_notifications_enabled' => $settings->ticket_accrual_notifications_enabled ?? true,
             ],
         ]);
     }
@@ -315,6 +318,9 @@ class WheelController extends Controller
                 'stars_enabled' => $settings->stars_enabled ?? true,
                 'show_gift_button' => $settings->show_gift_button ?? false,
                 'send_ticket_notification' => $settings->send_ticket_notification ?? true,
+                'ticket_accrual_enabled' => $settings->ticket_accrual_enabled ?? true,
+                'ticket_accrual_interval_hours' => $settings->ticket_accrual_interval_hours ?? 24,
+                'ticket_accrual_notifications_enabled' => $settings->ticket_accrual_notifications_enabled ?? true,
             ],
         ]);
     }
@@ -335,6 +341,9 @@ class WheelController extends Controller
             'stars_enabled' => 'nullable|boolean',
             'show_gift_button' => 'nullable|boolean',
             'send_ticket_notification' => 'nullable|boolean',
+            'ticket_accrual_enabled' => 'nullable|boolean',
+            'ticket_accrual_interval_hours' => 'nullable|integer|min:1|max:24',
+            'ticket_accrual_notifications_enabled' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -412,6 +421,25 @@ class WheelController extends Controller
 
         if ($request->has('send_ticket_notification')) {
             $updateData['send_ticket_notification'] = (bool) $request->send_ticket_notification;
+        }
+
+        if ($request->has('ticket_accrual_enabled')) {
+            $updateData['ticket_accrual_enabled'] = (bool) $request->ticket_accrual_enabled;
+        }
+
+        if ($request->has('ticket_accrual_interval_hours')) {
+            $value = $request->ticket_accrual_interval_hours;
+            // Если значение null, пустое, > 24 или < 1 — не сохраняем (будет использовано дефолтное значение 24)
+            if ($value !== null && $value !== '' && $value >= 1 && $value <= 24) {
+                $updateData['ticket_accrual_interval_hours'] = (int) $value;
+            } else {
+                // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 24)
+                $updateData['ticket_accrual_interval_hours'] = null;
+            }
+        }
+
+        if ($request->has('ticket_accrual_notifications_enabled')) {
+            $updateData['ticket_accrual_notifications_enabled'] = (bool) $request->ticket_accrual_notifications_enabled;
         }
 
         if (empty($updateData)) {

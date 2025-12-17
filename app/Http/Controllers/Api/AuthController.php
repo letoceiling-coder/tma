@@ -34,6 +34,7 @@ class AuthController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'last_ticket_accrual_at' => now(), // Устанавливаем время для автоматического начисления
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;

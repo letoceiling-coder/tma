@@ -82,6 +82,7 @@ class WowAuthController extends Controller
                         'stars_balance' => 0,
                         'total_spins' => 0,
                         'total_wins' => 0,
+                        'last_ticket_accrual_at' => now(), // Устанавливаем время для автоматического начисления
                     ]
                 );
 
