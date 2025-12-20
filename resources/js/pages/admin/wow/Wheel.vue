@@ -185,6 +185,72 @@
                     ></div>
                 </label>
             </div>
+
+            <!-- Разделитель -->
+            <div class="border-t border-border my-4"></div>
+
+            <!-- Рассылки -->
+            <h3 class="text-lg font-semibold mb-4">Рассылки</h3>
+
+            <!-- Включить рассылку -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-base font-medium mb-1">Рассылка включена</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Флаг для включения/отключения автоматической рассылки сообщений пользователям.
+                    </p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input
+                        v-model="broadcastEnabled"
+                        @change="saveSettings"
+                        type="checkbox"
+                        class="sr-only peer"
+                    />
+                    <div
+                        class="w-11 h-6 bg-muted peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"
+                    ></div>
+                </label>
+            </div>
+
+            <!-- Интервал рассылки -->
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <h3 class="text-base font-medium mb-1">Интервал рассылки после регистрации (в часах)</h3>
+                    <p class="text-sm text-muted-foreground">
+                        Через сколько часов после регистрации отправлять сообщение (от 1 до 24 часов). Используются переменные: {{username}}, {{tickets_count}}
+                    </p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input
+                        v-model.number="broadcastIntervalHours"
+                        @change="saveSettings"
+                        type="number"
+                        min="1"
+                        max="24"
+                        step="1"
+                        class="w-24 h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent text-center"
+                    />
+                    <span class="text-sm text-muted-foreground">часов</span>
+                </div>
+            </div>
+
+            <!-- Текст сообщения -->
+            <div class="space-y-2">
+                <div>
+                    <h3 class="text-base font-medium mb-1">Текст сообщения</h3>
+                    <p class="text-sm text-muted-foreground mb-2">
+                        Текст, который будет отправляться пользователю. Используются переменные: <code class="bg-muted px-1 rounded">{{username}}</code>, <code class="bg-muted px-1 rounded">{{tickets_count}}</code>
+                    </p>
+                </div>
+                <textarea
+                    v-model="broadcastMessageText"
+                    @change="saveSettings"
+                    rows="4"
+                    placeholder="Привет! У тебя есть новые возможности. Проверь приложение!"
+                    class="w-full px-4 py-2 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent resize-y"
+                ></textarea>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -342,6 +408,9 @@ export default {
         const ticketAccrualEnabled = ref(true)
         const ticketAccrualIntervalHours = ref(24)
         const ticketAccrualNotificationsEnabled = ref(true)
+        const broadcastEnabled = ref(true)
+        const broadcastMessageText = ref('Привет! У тебя есть новые возможности. Проверь приложение!')
+        const broadcastIntervalHours = ref(24)
         const showMediaModal = ref(false)
         const currentSector = ref(null)
         const selectedMediaFile = ref(null)
@@ -393,6 +462,9 @@ export default {
                     ticketAccrualEnabled.value = data.settings.ticket_accrual_enabled ?? true
                     ticketAccrualIntervalHours.value = data.settings.ticket_accrual_interval_hours ?? 24
                     ticketAccrualNotificationsEnabled.value = data.settings.ticket_accrual_notifications_enabled ?? true
+                    broadcastEnabled.value = data.settings.broadcast_enabled ?? true
+                    broadcastMessageText.value = data.settings.broadcast_message_text ?? 'Привет! У тебя есть новые возможности. Проверь приложение!'
+                    broadcastIntervalHours.value = data.settings.broadcast_interval_hours ?? 24
                 }
             } catch (err) {
                 error.value = err.message || 'Ошибка загрузки секторов'
@@ -545,6 +617,9 @@ export default {
                     ticket_accrual_enabled: ticketAccrualEnabled.value,
                     ticket_accrual_interval_hours: ticketAccrualIntervalHours.value,
                     ticket_accrual_notifications_enabled: ticketAccrualNotificationsEnabled.value,
+                    broadcast_enabled: broadcastEnabled.value,
+                    broadcast_message_text: broadcastMessageText.value,
+                    broadcast_interval_hours: broadcastIntervalHours.value,
                 })
 
                 if (!response.ok) {
@@ -592,6 +667,9 @@ export default {
             ticketAccrualEnabled,
             ticketAccrualIntervalHours,
             ticketAccrualNotificationsEnabled,
+            broadcastEnabled,
+            broadcastMessageText,
+            broadcastIntervalHours,
             totalProbability,
             probabilityValid,
             saveAllSectors,

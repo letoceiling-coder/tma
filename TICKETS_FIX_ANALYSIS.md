@@ -393,3 +393,4 @@ const shouldShowTimer = tickets === 0 && nextTicketAt !== null;
 7. Улучшить статистику
 
 
+

@@ -21,6 +21,13 @@ Schedule::command('wow:accrue-tickets')
     ->withoutOverlapping()
     ->runInBackground();
 
+// Автоматическая рассылка сообщений пользователям
+// Запускаем каждый час для проверки условий отправки
+Schedule::command('wow:send-broadcast-messages')
+    ->hourly()
+    ->withoutOverlapping()
+    ->runInBackground();
+
 // Персональные уведомления о доступности бесплатной прокрутки
 // Запускаем каждые 5 минут для проверки индивидуальных 24-часовых таймеров
 Schedule::command('wow:send-reminders')

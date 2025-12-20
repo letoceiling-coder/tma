@@ -42,6 +42,9 @@ class WheelController extends Controller
                 'ticket_accrual_enabled' => $settings->ticket_accrual_enabled ?? true,
                 'ticket_accrual_interval_hours' => $settings->ticket_accrual_interval_hours ?? 24,
                 'ticket_accrual_notifications_enabled' => $settings->ticket_accrual_notifications_enabled ?? true,
+                'broadcast_enabled' => $settings->broadcast_enabled ?? true,
+                'broadcast_message_text' => $settings->broadcast_message_text ?? 'Привет! У тебя есть новые возможности. Проверь приложение!',
+                'broadcast_interval_hours' => $settings->broadcast_interval_hours ?? 24,
             ],
         ]);
     }
@@ -344,6 +347,9 @@ class WheelController extends Controller
             'ticket_accrual_enabled' => 'nullable|boolean',
             'ticket_accrual_interval_hours' => 'nullable|integer|min:1|max:24',
             'ticket_accrual_notifications_enabled' => 'nullable|boolean',
+            'broadcast_enabled' => 'nullable|boolean',
+            'broadcast_message_text' => 'nullable|string',
+            'broadcast_interval_hours' => 'nullable|integer|min:1|max:24',
         ]);
 
         if ($validator->fails()) {
@@ -440,6 +446,25 @@ class WheelController extends Controller
 
         if ($request->has('ticket_accrual_notifications_enabled')) {
             $updateData['ticket_accrual_notifications_enabled'] = (bool) $request->ticket_accrual_notifications_enabled;
+        }
+
+        if ($request->has('broadcast_enabled')) {
+            $updateData['broadcast_enabled'] = (bool) $request->broadcast_enabled;
+        }
+
+        if ($request->has('broadcast_message_text')) {
+            $updateData['broadcast_message_text'] = $request->broadcast_message_text;
+        }
+
+        if ($request->has('broadcast_interval_hours')) {
+            $value = $request->broadcast_interval_hours;
+            // Если значение null, пустое, > 24 или < 1 — не сохраняем (будет использовано дефолтное значение 24)
+            if ($value !== null && $value !== '' && $value >= 1 && $value <= 24) {
+                $updateData['broadcast_interval_hours'] = (int) $value;
+            } else {
+                // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 24)
+                $updateData['broadcast_interval_hours'] = null;
+            }
         }
 
         if (empty($updateData)) {

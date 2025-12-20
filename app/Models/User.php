@@ -153,4 +153,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(StarExchange::class);
     }
+
+    /**
+     * Логи рассылки сообщений
+     */
+    public function broadcastLogs(): HasMany
+    {
+        return $this->hasMany(BroadcastLog::class);
+    }
 }
