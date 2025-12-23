@@ -27,6 +27,7 @@ class WheelSetting extends Model
         'broadcast_enabled',
         'broadcast_message_text',
         'broadcast_interval_hours',
+        'broadcast_trigger',
         'welcome_text',
         'welcome_banner_url',
         'welcome_buttons',
@@ -75,6 +76,7 @@ class WheelSetting extends Model
                 'broadcast_enabled' => true, // По умолчанию рассылка включена
                 'broadcast_message_text' => 'Привет! У тебя есть новые возможности. Проверь приложение!', // По умолчанию текст сообщения
                 'broadcast_interval_hours' => 24, // По умолчанию 24 часа после регистрации
+                'broadcast_trigger' => 'after_registration', // По умолчанию триггер - после регистрации
             ]
         );
     }

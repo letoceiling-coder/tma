@@ -256,6 +256,12 @@ const routes = [
                 meta: { requiresAuth: true, requiresRole: ['admin'] },
             },
             {
+                path: 'wow/broadcast',
+                name: 'admin.wow.broadcast',
+                component: () => import('./pages/admin/wow/Broadcast.vue'),
+                meta: { requiresAuth: true, requiresRole: ['admin'] },
+            },
+            {
                 path: 'wow/prize-types',
                 name: 'admin.wow.prize-types',
                 component: () => import('./pages/admin/wow/PrizeTypes.vue'),

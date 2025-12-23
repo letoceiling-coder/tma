@@ -45,6 +45,7 @@ class WheelController extends Controller
                 'broadcast_enabled' => $settings->broadcast_enabled ?? true,
                 'broadcast_message_text' => $settings->broadcast_message_text ?? 'Привет! У тебя есть новые возможности. Проверь приложение!',
                 'broadcast_interval_hours' => $settings->broadcast_interval_hours ?? 24,
+                'broadcast_trigger' => $settings->broadcast_trigger ?? 'after_registration',
             ],
         ]);
     }
@@ -350,6 +351,7 @@ class WheelController extends Controller
             'broadcast_enabled' => 'nullable|boolean',
             'broadcast_message_text' => 'nullable|string',
             'broadcast_interval_hours' => 'nullable|integer|min:1|max:24',
+            'broadcast_trigger' => 'nullable|string|in:after_registration,after_last_spin',
         ]);
 
         if ($validator->fails()) {
@@ -464,6 +466,13 @@ class WheelController extends Controller
             } else {
                 // Если значение некорректное, устанавливаем null (будет использовано дефолтное значение 24)
                 $updateData['broadcast_interval_hours'] = null;
+            }
+        }
+
+        if ($request->has('broadcast_trigger')) {
+            $value = $request->broadcast_trigger;
+            if (in_array($value, ['after_registration', 'after_last_spin'])) {
+                $updateData['broadcast_trigger'] = $value;
             }
         }
 
