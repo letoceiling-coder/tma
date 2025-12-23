@@ -79,9 +79,9 @@
                     <div
                         v-if="!isCollapsed"
                         class="overflow-hidden transition-all duration-300 ease-in-out"
-                        :class="isExpanded(item) ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'"
+                        :class="isExpanded(item) ? 'max-h-[800px] opacity-100' : 'max-h-0 opacity-0'"
                     >
-                        <div class="pl-4 pr-2 py-2 space-y-1">
+                        <div class="pl-4 pr-2 py-2 space-y-1 overflow-y-auto max-h-[800px]">
                             <router-link
                                 v-for="child in item.children"
                                 :key="child.route"
