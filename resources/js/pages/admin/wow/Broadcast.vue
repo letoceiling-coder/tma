@@ -123,6 +123,63 @@
                 </button>
             </div>
 
+            <!-- Разовая рассылка -->
+            <div class="bg-card rounded-lg border border-border p-6 space-y-4">
+                <div>
+                    <h3 class="text-base font-medium mb-2">Разовая рассылка</h3>
+                    <p class="text-sm text-muted-foreground mb-4">
+                        Отправить сообщение всем пользователям с telegram_id прямо сейчас. Сообщение будет отправлено независимо от настроек периодической рассылки.
+                    </p>
+                    
+                    <div v-if="manualBroadcastAt" class="mb-4 p-3 bg-muted/30 rounded-lg">
+                        <div class="text-sm font-medium mb-1">Последняя разовая рассылка:</div>
+                        <div class="text-sm text-muted-foreground">
+                            {{ new Date(manualBroadcastAt).toLocaleString('ru-RU') }}
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="text-sm font-medium mb-2 block">Текст разовой рассылки</label>
+                        <textarea
+                            v-model="manualBroadcastText"
+                            rows="4"
+                            placeholder="Введите текст сообщения для разовой рассылки..."
+                            class="w-full px-4 py-3 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+                        ></textarea>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            Доступные переменные: <code class="bg-muted px-1 rounded">{{username}}</code>, <code class="bg-muted px-1 rounded">{{tickets_count}}</code>
+                        </p>
+                    </div>
+
+                    <button
+                        @click="confirmManualBroadcast"
+                        :disabled="!manualBroadcastText || sendingManualBroadcast"
+                        class="h-11 px-6 bg-orange-500/10 backdrop-blur-xl text-orange-600 border border-orange-500/40 hover:bg-orange-500/20 rounded-2xl shadow-lg shadow-orange-500/10 inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <span>{{ sendingManualBroadcast ? 'Отправка...' : 'Отправить разовую рассылку' }}</span>
+                    </button>
+
+                    <!-- Результат разовой рассылки -->
+                    <div v-if="manualBroadcastResult" class="mt-4 p-4 rounded-lg" :class="manualBroadcastResult.success ? 'bg-green-500/10 border border-green-500/20' : 'bg-destructive/10 border border-destructive/20'">
+                        <div :class="manualBroadcastResult.success ? 'text-green-600' : 'text-destructive'" class="font-medium mb-2">
+                            {{ manualBroadcastResult.success ? '✓ Разовая рассылка завершена' : '✗ Ошибка при рассылке' }}
+                        </div>
+                        <div v-if="manualBroadcastResult.stats" class="text-sm text-muted-foreground space-y-1">
+                            <div>Всего пользователей: {{ manualBroadcastResult.stats.total }}</div>
+                            <div class="text-green-600">Успешно отправлено: {{ manualBroadcastResult.stats.sent }}</div>
+                            <div v-if="manualBroadcastResult.stats.failed > 0" class="text-destructive">Ошибок: {{ manualBroadcastResult.stats.failed }}</div>
+                            <div v-if="manualBroadcastResult.stats.skipped > 0" class="text-yellow-600">Пропущено: {{ manualBroadcastResult.stats.skipped }}</div>
+                        </div>
+                        <div v-if="manualBroadcastResult.errors && manualBroadcastResult.errors.length > 0" class="mt-2 text-xs text-muted-foreground">
+                            <div class="font-medium mb-1">Ошибки:</div>
+                            <div class="max-h-32 overflow-y-auto space-y-1">
+                                <div v-for="(error, index) in manualBroadcastResult.errors" :key="index">{{ error }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Тестовая отправка -->
             <div class="bg-card rounded-lg border border-border p-6 space-y-4">
                 <div>
@@ -233,6 +290,7 @@ const broadcastEnabled = ref(false)
 const broadcastMessageText = ref('')
 const broadcastIntervalHours = ref(24)
 const broadcastTrigger = ref('after_registration')
+const manualBroadcastAt = ref(null)
 
 // Тестовая отправка
 const userSearch = ref('')
@@ -242,6 +300,11 @@ const selectedUser = ref(null)
 const testMessage = ref('')
 const sendingTest = ref(false)
 const testResult = ref(null)
+
+// Разовая рассылка
+const manualBroadcastText = ref('')
+const sendingManualBroadcast = ref(false)
+const manualBroadcastResult = ref(null)
 
 let searchTimeout = null
 
@@ -257,6 +320,7 @@ const fetchSettings = async () => {
             broadcastMessageText.value = settings.broadcast_message_text ?? ''
             broadcastIntervalHours.value = settings.broadcast_interval_hours ?? 24
             broadcastTrigger.value = settings.broadcast_trigger ?? 'after_registration'
+            manualBroadcastAt.value = settings.manual_broadcast_at || null
         }
     } catch (err) {
         error.value = err.response?.data?.message || 'Ошибка загрузки настроек'
@@ -368,6 +432,56 @@ const sendTestMessage = async () => {
         }
     } finally {
         sendingTest.value = false
+    }
+}
+
+const confirmManualBroadcast = async () => {
+    if (!manualBroadcastText.value || !manualBroadcastText.value.trim()) {
+        error.value = 'Введите текст сообщения для разовой рассылки'
+        return
+    }
+
+    // Подтверждение
+    if (!confirm('Вы уверены, что хотите отправить сообщение всем пользователям прямо сейчас?')) {
+        return
+    }
+
+    await sendManualBroadcast()
+}
+
+const sendManualBroadcast = async () => {
+    sendingManualBroadcast.value = true
+    manualBroadcastResult.value = null
+    error.value = null
+
+    try {
+        const response = await axios.post('/api/v1/wow/wheel/manual-broadcast', {
+            message: manualBroadcastText.value
+        })
+
+        if (response.data.success) {
+            manualBroadcastResult.value = {
+                success: true,
+                message: response.data.message,
+                stats: response.data.stats,
+                errors: response.data.errors || []
+            }
+            // Обновляем время последней разовой рассылки
+            manualBroadcastAt.value = new Date().toISOString()
+        } else {
+            manualBroadcastResult.value = {
+                success: false,
+                message: response.data.message || 'Ошибка при рассылке'
+            }
+        }
+    } catch (err) {
+        manualBroadcastResult.value = {
+            success: false,
+            message: err.response?.data?.message || 'Ошибка отправки рассылки'
+        }
+        error.value = err.response?.data?.message || 'Ошибка отправки рассылки'
+    } finally {
+        sendingManualBroadcast.value = false
     }
 }
 

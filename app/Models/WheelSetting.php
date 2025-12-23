@@ -28,6 +28,7 @@ class WheelSetting extends Model
         'broadcast_message_text',
         'broadcast_interval_hours',
         'broadcast_trigger',
+        'manual_broadcast_at',
         'welcome_text',
         'welcome_banner_url',
         'welcome_buttons',
@@ -47,9 +48,10 @@ class WheelSetting extends Model
         'ticket_accrual_enabled' => 'boolean',
         'ticket_accrual_interval_hours' => 'integer',
         'ticket_accrual_notifications_enabled' => 'boolean',
-        'broadcast_enabled' => 'boolean',
-        'broadcast_interval_hours' => 'integer',
-        'welcome_buttons' => 'array',
+            'broadcast_enabled' => 'boolean',
+            'broadcast_interval_hours' => 'integer',
+            'manual_broadcast_at' => 'datetime',
+            'welcome_buttons' => 'array',
     ];
 
     /**
@@ -73,7 +75,7 @@ class WheelSetting extends Model
                 'ticket_accrual_enabled' => true, // По умолчанию автоматическое начисление билетов включено
                 'ticket_accrual_interval_hours' => 24, // По умолчанию 24 часа
                 'ticket_accrual_notifications_enabled' => true, // По умолчанию уведомления о начислении включены
-                'broadcast_enabled' => true, // По умолчанию рассылка включена
+                'broadcast_enabled' => false, // По умолчанию рассылка выключена
                 'broadcast_message_text' => 'Привет! У тебя есть новые возможности. Проверь приложение!', // По умолчанию текст сообщения
                 'broadcast_interval_hours' => 24, // По умолчанию 24 часа после регистрации
                 'broadcast_trigger' => 'after_registration', // По умолчанию триггер - после регистрации

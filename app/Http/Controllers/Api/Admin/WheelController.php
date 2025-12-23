@@ -7,6 +7,7 @@ use App\Models\WheelSector;
 use App\Models\WheelSetting;
 use App\Models\PrizeType;
 use App\Models\User;
+use App\Models\BroadcastLog;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -43,10 +44,11 @@ class WheelController extends Controller
                 'ticket_accrual_enabled' => $settings->ticket_accrual_enabled ?? true,
                 'ticket_accrual_interval_hours' => $settings->ticket_accrual_interval_hours ?? 24,
                 'ticket_accrual_notifications_enabled' => $settings->ticket_accrual_notifications_enabled ?? true,
-                'broadcast_enabled' => $settings->broadcast_enabled ?? true,
-                'broadcast_message_text' => $settings->broadcast_message_text ?? 'Привет! У тебя есть новые возможности. Проверь приложение!',
+                'broadcast_enabled' => $settings->broadcast_enabled ?? false,
+                'broadcast_message_text' => $settings->broadcast_message_text ?? '',
                 'broadcast_interval_hours' => $settings->broadcast_interval_hours ?? 24,
                 'broadcast_trigger' => $settings->broadcast_trigger ?? 'after_registration',
+                'manual_broadcast_at' => $settings->manual_broadcast_at ? $settings->manual_broadcast_at->toDateTimeString() : null,
             ],
         ]);
     }
@@ -326,6 +328,11 @@ class WheelController extends Controller
                 'ticket_accrual_enabled' => $settings->ticket_accrual_enabled ?? true,
                 'ticket_accrual_interval_hours' => $settings->ticket_accrual_interval_hours ?? 24,
                 'ticket_accrual_notifications_enabled' => $settings->ticket_accrual_notifications_enabled ?? true,
+                'broadcast_enabled' => $settings->broadcast_enabled ?? false,
+                'broadcast_message_text' => $settings->broadcast_message_text ?? '',
+                'broadcast_interval_hours' => $settings->broadcast_interval_hours ?? 24,
+                'broadcast_trigger' => $settings->broadcast_trigger ?? 'after_registration',
+                'manual_broadcast_at' => $settings->manual_broadcast_at ? $settings->manual_broadcast_at->toDateTimeString() : null,
             ],
         ]);
     }
@@ -509,6 +516,7 @@ class WheelController extends Controller
                 'broadcast_message_text' => $settings->broadcast_message_text ?? '',
                 'broadcast_interval_hours' => $settings->broadcast_interval_hours ?? 24,
                 'broadcast_trigger' => $settings->broadcast_trigger ?? 'after_registration',
+                'manual_broadcast_at' => $settings->manual_broadcast_at ? $settings->manual_broadcast_at->toDateTimeString() : null,
             ],
         ]);
     }
@@ -598,6 +606,166 @@ class WheelController extends Controller
                 'message' => 'Ошибка отправки: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Отправить разовую рассылку всем пользователям
+     */
+    public function sendManualBroadcast(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'message' => 'required|string|max:4096',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $messageText = $request->message;
+        $botToken = config('services.telegram.bot_token');
+        
+        if (!$botToken) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Telegram bot token не настроен',
+            ], 500);
+        }
+
+        // Получаем всех пользователей с telegram_id
+        $users = User::whereNotNull('telegram_id')->get();
+        
+        $sent = 0;
+        $failed = 0;
+        $skipped = 0;
+        $errors = [];
+
+        // Rate limiting: 30 сообщений в секунду = ~33ms между сообщениями, используем 50-70ms для безопасности
+        $delayBetweenMessages = 0.06; // 60ms между сообщениями (примерно 16-17 сообщений в секунду для безопасности)
+        $lastMessageTime = 0;
+
+        foreach ($users as $index => $user) {
+            // Rate limiting: задержка между сообщениями
+            if ($index > 0) {
+                $elapsed = microtime(true) - $lastMessageTime;
+                if ($elapsed < $delayBetweenMessages) {
+                    usleep((int)(($delayBetweenMessages - $elapsed) * 1000000));
+                }
+            }
+            $lastMessageTime = microtime(true);
+
+            try {
+                // Заменяем переменные в сообщении
+                $personalizedMessage = str_replace(
+                    ['{{username}}', '{{tickets_count}}'],
+                    [$user->name ?? 'друг', (string)($user->tickets_available ?? 0)],
+                    $messageText
+                );
+
+                $response = \Illuminate\Support\Facades\Http::timeout(10)->post(
+                    "https://api.telegram.org/bot{$botToken}/sendMessage",
+                    [
+                        'chat_id' => $user->telegram_id,
+                        'text' => $personalizedMessage,
+                        'parse_mode' => 'HTML',
+                    ]
+                );
+
+                if ($response->successful()) {
+                    $sent++;
+                    
+                    // Логируем успешную отправку
+                    BroadcastLog::create([
+                        'user_id' => $user->id,
+                        'message_text' => $personalizedMessage,
+                        'sent_at' => now(),
+                        'status' => 'success',
+                        'error_message' => null,
+                    ]);
+                } else {
+                    $responseData = $response->json();
+                    $errorCode = $responseData['error_code'] ?? null;
+                    $errorDescription = $responseData['description'] ?? 'Unknown error';
+
+                    // Обработка специфичных ошибок
+                    if ($errorCode === 403) {
+                        // Бот заблокирован пользователем
+                        $skipped++;
+                        Log::info('Bot blocked by user during manual broadcast', [
+                            'telegram_id' => $user->telegram_id,
+                        ]);
+                    } elseif ($errorCode === 400) {
+                        // Некорректный telegram_id
+                        $skipped++;
+                        Log::warning('Invalid telegram_id during manual broadcast', [
+                            'telegram_id' => $user->telegram_id,
+                            'error' => $errorDescription,
+                        ]);
+                    } elseif ($errorCode === 429) {
+                        // Rate limit - добавляем дополнительную паузу
+                        $failed++;
+                        $errors[] = "Rate limit для пользователя {$user->telegram_id}";
+                        usleep(1000000); // 1 секунда пауза
+                    } else {
+                        $failed++;
+                        $errors[] = "Ошибка для пользователя {$user->telegram_id}: {$errorDescription}";
+                    }
+
+                    // Логируем неудачную отправку
+                    BroadcastLog::create([
+                        'user_id' => $user->id,
+                        'message_text' => $personalizedMessage,
+                        'sent_at' => now(),
+                        'status' => 'failed',
+                        'error_message' => "Error {$errorCode}: {$errorDescription}",
+                    ]);
+                }
+            } catch (\Exception $e) {
+                $failed++;
+                $errors[] = "Исключение для пользователя {$user->telegram_id}: {$e->getMessage()}";
+                
+                Log::error('Exception during manual broadcast', [
+                    'user_id' => $user->id,
+                    'telegram_id' => $user->telegram_id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                // Логируем ошибку
+                try {
+                    BroadcastLog::create([
+                        'user_id' => $user->id,
+                        'message_text' => $messageText,
+                        'sent_at' => now(),
+                        'status' => 'failed',
+                        'error_message' => $e->getMessage(),
+                    ]);
+                } catch (\Exception $logException) {
+                    Log::error('Failed to create broadcast log', [
+                        'user_id' => $user->id,
+                        'error' => $logException->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        // Обновляем время последней разовой рассылки
+        $settings = WheelSetting::getSettings();
+        $settings->manual_broadcast_at = now();
+        $settings->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Разовая рассылка завершена',
+            'stats' => [
+                'total' => $users->count(),
+                'sent' => $sent,
+                'failed' => $failed,
+                'skipped' => $skipped,
+            ],
+            'errors' => $errors,
+        ]);
     }
 }
 
