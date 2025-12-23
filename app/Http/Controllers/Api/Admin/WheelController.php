@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WheelSector;
 use App\Models\WheelSetting;
 use App\Models\PrizeType;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -484,6 +485,9 @@ class WheelController extends Controller
 
         $settings = WheelSetting::updateSettings($updateData);
 
+        // Обновляем настройки из БД для возврата актуальных значений
+        $settings->refresh();
+
         return response()->json([
             'success' => true,
             'message' => 'Настройки успешно обновлены',
@@ -492,9 +496,108 @@ class WheelController extends Controller
                 'ticket_restore_hours' => $settings->ticket_restore_hours ?? 3,
                 'admin_username' => $settings->admin_username,
                 'initial_tickets_count' => $settings->initial_tickets_count ?? 1,
+                'daily_tickets' => $settings->daily_tickets ?? 1,
+                'default_daily_tickets' => $settings->default_daily_tickets ?? 1,
                 'stars_per_ticket_purchase' => $settings->stars_per_ticket_purchase ?? 50,
+                'stars_enabled' => $settings->stars_enabled ?? true,
+                'show_gift_button' => $settings->show_gift_button ?? false,
+                'send_ticket_notification' => $settings->send_ticket_notification ?? true,
+                'ticket_accrual_enabled' => $settings->ticket_accrual_enabled ?? true,
+                'ticket_accrual_interval_hours' => $settings->ticket_accrual_interval_hours ?? 24,
+                'ticket_accrual_notifications_enabled' => $settings->ticket_accrual_notifications_enabled ?? true,
+                'broadcast_enabled' => $settings->broadcast_enabled ?? false,
+                'broadcast_message_text' => $settings->broadcast_message_text ?? '',
+                'broadcast_interval_hours' => $settings->broadcast_interval_hours ?? 24,
+                'broadcast_trigger' => $settings->broadcast_trigger ?? 'after_registration',
             ],
         ]);
+    }
+
+    /**
+     * Отправить тестовое сообщение пользователю
+     */
+    public function sendTestBroadcast(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required|integer|exists:users,id',
+            'message' => 'nullable|string|max:4096',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Ошибка валидации',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $user = User::findOrFail($request->user_id);
+
+        if (!$user->telegram_id) {
+            return response()->json([
+                'message' => 'У пользователя нет telegram_id',
+            ], 422);
+        }
+
+        $settings = WheelSetting::getSettings();
+        $messageText = $request->message ?? $settings->broadcast_message_text ?? 'Тестовое сообщение';
+
+        // Заменяем переменные в сообщении
+        $personalizedMessage = str_replace(
+            ['{{username}}', '{{tickets_count}}'],
+            [$user->name ?? 'друг', (string)($user->tickets_available ?? 0)],
+            $messageText
+        );
+
+        // Отправляем сообщение
+        $botToken = config('services.telegram.bot_token');
+        
+        if (!$botToken) {
+            return response()->json([
+                'message' => 'Telegram bot token не настроен',
+            ], 500);
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::post(
+                "https://api.telegram.org/bot{$botToken}/sendMessage",
+                [
+                    'chat_id' => $user->telegram_id,
+                    'text' => $personalizedMessage,
+                    'parse_mode' => 'HTML',
+                ]
+            );
+
+            if ($response->successful()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Тестовое сообщение успешно отправлено',
+                    'telegram_id' => $user->telegram_id,
+                    'sent_message' => $personalizedMessage,
+                ]);
+            } else {
+                $responseData = $response->json();
+                $errorCode = $responseData['error_code'] ?? null;
+                $errorDescription = $responseData['description'] ?? 'Unknown error';
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Ошибка отправки сообщения',
+                    'error_code' => $errorCode,
+                    'error_description' => $errorDescription,
+                ], 400);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error sending test broadcast message', [
+                'user_id' => $user->id,
+                'telegram_id' => $user->telegram_id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Ошибка отправки: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }
 

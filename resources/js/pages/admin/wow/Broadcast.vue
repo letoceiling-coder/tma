@@ -122,6 +122,100 @@
                     <span>{{ saving ? 'Сохранение...' : 'Сохранить настройки' }}</span>
                 </button>
             </div>
+
+            <!-- Тестовая отправка -->
+            <div class="bg-card rounded-lg border border-border p-6 space-y-4">
+                <div>
+                    <h3 class="text-base font-medium mb-2">Тестовая отправка</h3>
+                    <p class="text-sm text-muted-foreground mb-4">
+                        Выберите пользователя для тестовой отправки сообщения и проверки работоспособности рассылки
+                    </p>
+                    
+                    <!-- Поиск пользователя -->
+                    <div class="mb-4">
+                        <label class="text-sm font-medium mb-2 block">Поиск пользователя</label>
+                        <input
+                            v-model="userSearch"
+                            @input="searchUsers"
+                            type="text"
+                            placeholder="Поиск по ID, username или имени..."
+                            class="w-full h-10 px-4 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent"
+                        />
+                    </div>
+
+                    <!-- Список пользователей -->
+                    <div v-if="users.length > 0" class="mb-4 max-h-64 overflow-y-auto border border-border rounded-lg">
+                        <div
+                            v-for="user in users"
+                            :key="user.id"
+                            @click="selectUser(user)"
+                            class="px-4 py-3 border-b border-border last:border-b-0 cursor-pointer hover:bg-muted/10 transition-colors"
+                            :class="selectedUser?.id === user.id ? 'bg-accent/10' : ''"
+                        >
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-sm font-medium">{{ user.name || 'Без имени' }}</div>
+                                    <div class="text-xs text-muted-foreground">
+                                        ID: {{ user.id }} | Telegram ID: {{ user.telegram_id }} | @{{ user.username || 'нет username' }}
+                                    </div>
+                                </div>
+                                <div v-if="selectedUser?.id === user.id" class="text-accent">✓</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else-if="userSearch && !loadingUsers" class="mb-4 text-sm text-muted-foreground text-center py-4">
+                        Пользователи не найдены
+                    </div>
+                    <div v-else-if="!userSearch" class="mb-4 text-sm text-muted-foreground text-center py-4">
+                        Введите поисковый запрос для поиска пользователей
+                    </div>
+
+                    <!-- Выбранный пользователь -->
+                    <div v-if="selectedUser" class="mb-4 p-3 bg-muted/30 rounded-lg">
+                        <div class="text-sm font-medium mb-1">Выбранный пользователь:</div>
+                        <div class="text-sm text-muted-foreground">
+                            {{ selectedUser.name || 'Без имени' }} (ID: {{ selectedUser.id }}, Telegram: {{ selectedUser.telegram_id }})
+                        </div>
+                    </div>
+
+                    <!-- Тестовое сообщение -->
+                    <div class="mb-4">
+                        <label class="text-sm font-medium mb-2 block">Тестовое сообщение (опционально)</label>
+                        <textarea
+                            v-model="testMessage"
+                            rows="3"
+                            placeholder="Оставьте пустым, чтобы использовать текст из настроек"
+                            class="w-full px-4 py-3 border border-border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+                        ></textarea>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            Если оставить пустым, будет использован текст из настроек рассылки
+                        </p>
+                    </div>
+
+                    <!-- Кнопка отправки -->
+                    <button
+                        @click="sendTestMessage"
+                        :disabled="!selectedUser || sendingTest"
+                        class="h-11 px-6 bg-blue-500/10 backdrop-blur-xl text-blue-600 border border-blue-500/40 hover:bg-blue-500/20 rounded-2xl shadow-lg shadow-blue-500/10 inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <span>{{ sendingTest ? 'Отправка...' : 'Отправить тестовое сообщение' }}</span>
+                    </button>
+
+                    <!-- Результат тестовой отправки -->
+                    <div v-if="testResult" class="mt-4 p-4 rounded-lg" :class="testResult.success ? 'bg-green-500/10 border border-green-500/20' : 'bg-destructive/10 border border-destructive/20'">
+                        <div :class="testResult.success ? 'text-green-600' : 'text-destructive'" class="font-medium mb-1">
+                            {{ testResult.success ? '✓ Сообщение отправлено успешно' : '✗ Ошибка отправки' }}
+                        </div>
+                        <div class="text-sm text-muted-foreground" v-if="testResult.message">
+                            {{ testResult.message }}
+                        </div>
+                        <div class="text-sm text-muted-foreground mt-2" v-if="testResult.sent_message">
+                            <div class="font-medium">Отправленное сообщение:</div>
+                            <div class="mt-1 p-2 bg-background rounded border border-border">{{ testResult.sent_message }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </template>
@@ -139,6 +233,17 @@ const broadcastEnabled = ref(false)
 const broadcastMessageText = ref('')
 const broadcastIntervalHours = ref(24)
 const broadcastTrigger = ref('after_registration')
+
+// Тестовая отправка
+const userSearch = ref('')
+const users = ref([])
+const loadingUsers = ref(false)
+const selectedUser = ref(null)
+const testMessage = ref('')
+const sendingTest = ref(false)
+const testResult = ref(null)
+
+let searchTimeout = null
 
 const fetchSettings = async () => {
     loading.value = true
@@ -174,6 +279,14 @@ const saveSettings = async () => {
         
         if (response.data.success) {
             successMessage.value = 'Настройки успешно сохранены'
+            // Обновляем настройки из ответа
+            if (response.data.settings) {
+                const settings = response.data.settings
+                broadcastEnabled.value = settings.broadcast_enabled ?? false
+                broadcastMessageText.value = settings.broadcast_message_text ?? ''
+                broadcastIntervalHours.value = settings.broadcast_interval_hours ?? 24
+                broadcastTrigger.value = settings.broadcast_trigger ?? 'after_registration'
+            }
             setTimeout(() => {
                 successMessage.value = null
             }, 3000)
@@ -182,6 +295,79 @@ const saveSettings = async () => {
         error.value = err.response?.data?.message || 'Ошибка сохранения настроек'
     } finally {
         saving.value = false
+    }
+}
+
+const searchUsers = async () => {
+    if (searchTimeout) {
+        clearTimeout(searchTimeout)
+    }
+    
+    if (!userSearch.value || userSearch.value.length < 2) {
+        users.value = []
+        return
+    }
+
+    searchTimeout = setTimeout(async () => {
+        loadingUsers.value = true
+        try {
+            const response = await axios.get('/api/v1/wow/users', {
+                params: {
+                    search: userSearch.value,
+                    per_page: 20
+                }
+            })
+            users.value = response.data.data || []
+        } catch (err) {
+            console.error('Error searching users:', err)
+            users.value = []
+        } finally {
+            loadingUsers.value = false
+        }
+    }, 500)
+}
+
+const selectUser = (user) => {
+    selectedUser.value = user
+    testResult.value = null
+}
+
+const sendTestMessage = async () => {
+    if (!selectedUser.value) {
+        return
+    }
+
+    sendingTest.value = true
+    testResult.value = null
+    error.value = null
+
+    try {
+        const response = await axios.post('/api/v1/wow/wheel/test-broadcast', {
+            user_id: selectedUser.value.id,
+            message: testMessage.value || null
+        })
+
+        if (response.data.success) {
+            testResult.value = {
+                success: true,
+                message: response.data.message,
+                sent_message: response.data.sent_message
+            }
+        } else {
+            testResult.value = {
+                success: false,
+                message: response.data.message || 'Ошибка отправки',
+                error_code: response.data.error_code,
+                error_description: response.data.error_description
+            }
+        }
+    } catch (err) {
+        testResult.value = {
+            success: false,
+            message: err.response?.data?.message || 'Ошибка отправки сообщения'
+        }
+    } finally {
+        sendingTest.value = false
     }
 }
 
