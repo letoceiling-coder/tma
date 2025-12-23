@@ -1,6 +1,6 @@
 {
-  "_StatusBadge-CT8NZlXM.js": {
-    "file": "assets/StatusBadge-CT8NZlXM.js",
+  "_StatusBadge-BXfuu8IX.js": {
+    "file": "assets/StatusBadge-BXfuu8IX.js",
     "name": "StatusBadge",
     "imports": [
       "resources/js/admin.js"
@@ -24,7 +24,7 @@
     ]
   },
   "resources/js/admin.js": {
-    "file": "assets/admin-ClPi5g1x.js",
+    "file": "assets/admin-DaTN_OsE.js",
     "name": "admin",
     "src": "resources/js/admin.js",
     "isEntry": true,
@@ -60,7 +60,7 @@
     ]
   },
   "resources/js/layouts/AdminLayout.vue": {
-    "file": "assets/AdminLayout-xk8p9wCy.js",
+    "file": "assets/AdminLayout-DuuIYVXk.js",
     "name": "AdminLayout",
     "src": "resources/js/layouts/AdminLayout.vue",
     "isDynamicEntry": true,
@@ -69,7 +69,7 @@
     ]
   },
   "resources/js/pages/admin/BotConfig.vue": {
-    "file": "assets/BotConfig-DKL_q8t9.js",
+    "file": "assets/BotConfig-CZBNAdAf.js",
     "name": "BotConfig",
     "src": "resources/js/pages/admin/BotConfig.vue",
     "isDynamicEntry": true,
@@ -78,7 +78,7 @@
     ]
   },
   "resources/js/pages/admin/Dashboard.vue": {
-    "file": "assets/Dashboard-lzeemhGL.js",
+    "file": "assets/Dashboard-CAlQ4X0F.js",
     "name": "Dashboard",
     "src": "resources/js/pages/admin/Dashboard.vue",
     "isDynamicEntry": true,
@@ -90,7 +90,7 @@
     ]
   },
   "resources/js/pages/admin/Documentation.vue": {
-    "file": "assets/Documentation-wGaT52NH.js",
+    "file": "assets/Documentation-BPVu1Zc4.js",
     "name": "Documentation",
     "src": "resources/js/pages/admin/Documentation.vue",
     "isDynamicEntry": true,
@@ -102,7 +102,7 @@
     ]
   },
   "resources/js/pages/admin/Media.vue": {
-    "file": "assets/Media-DDsmu8ZB.js",
+    "file": "assets/Media-BtYaNlo7.js",
     "name": "Media",
     "src": "resources/js/pages/admin/Media.vue",
     "isDynamicEntry": true,
@@ -116,7 +116,7 @@
     ]
   },
   "resources/js/pages/admin/Notifications.vue": {
-    "file": "assets/Notifications-Bs98viiX.js",
+    "file": "assets/Notifications-ByjntXWi.js",
     "name": "Notifications",
     "src": "resources/js/pages/admin/Notifications.vue",
     "isDynamicEntry": true,
@@ -126,7 +126,7 @@
     ]
   },
   "resources/js/pages/admin/Roles.vue": {
-    "file": "assets/Roles-DGcEsIAZ.js",
+    "file": "assets/Roles-BVuqOXR5.js",
     "name": "Roles",
     "src": "resources/js/pages/admin/Roles.vue",
     "isDynamicEntry": true,
@@ -137,7 +137,7 @@
     ]
   },
   "resources/js/pages/admin/StarsSettings.vue": {
-    "file": "assets/StarsSettings-BU3tLk_6.js",
+    "file": "assets/StarsSettings-DIXfGD2i.js",
     "name": "StarsSettings",
     "src": "resources/js/pages/admin/StarsSettings.vue",
     "isDynamicEntry": true,
@@ -146,7 +146,7 @@
     ]
   },
   "resources/js/pages/admin/Subscription.vue": {
-    "file": "assets/Subscription-B-yF1YV0.js",
+    "file": "assets/Subscription-ekXNsJxP.js",
     "name": "Subscription",
     "src": "resources/js/pages/admin/Subscription.vue",
     "isDynamicEntry": true,
@@ -158,29 +158,29 @@
     ]
   },
   "resources/js/pages/admin/Support.vue": {
-    "file": "assets/Support-CtD77yTD.js",
+    "file": "assets/Support-C2W7kz2Y.js",
     "name": "Support",
     "src": "resources/js/pages/admin/Support.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/admin.js",
       "_sweetalert2.esm.all-C0u8rGqG.js",
-      "_StatusBadge-CT8NZlXM.js"
+      "_StatusBadge-BXfuu8IX.js"
     ]
   },
   "resources/js/pages/admin/SupportTicket.vue": {
-    "file": "assets/SupportTicket-B51fcV__.js",
+    "file": "assets/SupportTicket-D7YGnIRO.js",
     "name": "SupportTicket",
     "src": "resources/js/pages/admin/SupportTicket.vue",
     "isDynamicEntry": true,
     "imports": [
       "resources/js/admin.js",
       "_sweetalert2.esm.all-C0u8rGqG.js",
-      "_StatusBadge-CT8NZlXM.js"
+      "_StatusBadge-BXfuu8IX.js"
     ]
   },
   "resources/js/pages/admin/Users.vue": {
-    "file": "assets/Users-C--a4sse.js",
+    "file": "assets/Users-Btz9lkoI.js",
     "name": "Users",
     "src": "resources/js/pages/admin/Users.vue",
     "isDynamicEntry": true,
@@ -191,7 +191,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Broadcast.vue": {
-    "file": "assets/Broadcast-CBJPd1ND.js",
+    "file": "assets/Broadcast-DuQGpL9h.js",
     "name": "Broadcast",
     "src": "resources/js/pages/admin/wow/Broadcast.vue",
     "isDynamicEntry": true,
@@ -203,7 +203,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Channels.vue": {
-    "file": "assets/Channels-Ce7Y_-QS.js",
+    "file": "assets/Channels-Cy0d8ZI_.js",
     "name": "Channels",
     "src": "resources/js/pages/admin/wow/Channels.vue",
     "isDynamicEntry": true,
@@ -214,7 +214,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Leaderboard.vue": {
-    "file": "assets/Leaderboard-CVnipiD2.js",
+    "file": "assets/Leaderboard-BPwY7e6P.js",
     "name": "Leaderboard",
     "src": "resources/js/pages/admin/wow/Leaderboard.vue",
     "isDynamicEntry": true,
@@ -224,7 +224,7 @@
     ]
   },
   "resources/js/pages/admin/wow/LeaderboardPrizes.vue": {
-    "file": "assets/LeaderboardPrizes-Cm3B8My5.js",
+    "file": "assets/LeaderboardPrizes-CdxXRXn7.js",
     "name": "LeaderboardPrizes",
     "src": "resources/js/pages/admin/wow/LeaderboardPrizes.vue",
     "isDynamicEntry": true,
@@ -235,7 +235,7 @@
     ]
   },
   "resources/js/pages/admin/wow/PrizeTypes.vue": {
-    "file": "assets/PrizeTypes-CW4MwwpJ.js",
+    "file": "assets/PrizeTypes-XfNtcedG.js",
     "name": "PrizeTypes",
     "src": "resources/js/pages/admin/wow/PrizeTypes.vue",
     "isDynamicEntry": true,
@@ -247,7 +247,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Referrals.vue": {
-    "file": "assets/Referrals-DvdwAwxs.js",
+    "file": "assets/Referrals-VXriWKY2.js",
     "name": "Referrals",
     "src": "resources/js/pages/admin/wow/Referrals.vue",
     "isDynamicEntry": true,
@@ -257,7 +257,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Statistics.vue": {
-    "file": "assets/Statistics-d-cDt7fe.js",
+    "file": "assets/Statistics-DINSuKC1.js",
     "name": "Statistics",
     "src": "resources/js/pages/admin/wow/Statistics.vue",
     "isDynamicEntry": true,
@@ -267,7 +267,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Welcome.vue": {
-    "file": "assets/Welcome-B5iGN9fU.js",
+    "file": "assets/Welcome-yiO-zFEC.js",
     "name": "Welcome",
     "src": "resources/js/pages/admin/wow/Welcome.vue",
     "isDynamicEntry": true,
@@ -278,11 +278,11 @@
       "resources/js/pages/admin/Media.vue"
     ],
     "css": [
-      "assets/Welcome-D2mXHwiX.css"
+      "assets/Welcome-Dz2Pb4a2.css"
     ]
   },
   "resources/js/pages/admin/wow/Wheel.vue": {
-    "file": "assets/Wheel-yMI2fGL8.js",
+    "file": "assets/Wheel-Dw8eEO5H.js",
     "name": "Wheel",
     "src": "resources/js/pages/admin/wow/Wheel.vue",
     "isDynamicEntry": true,
@@ -294,7 +294,7 @@
     ]
   },
   "resources/js/pages/admin/wow/Wins.vue": {
-    "file": "assets/Wins-naK2LX_g.js",
+    "file": "assets/Wins-DvOQ1ofs.js",
     "name": "Wins",
     "src": "resources/js/pages/admin/wow/Wins.vue",
     "isDynamicEntry": true,
@@ -304,7 +304,7 @@
     ]
   },
   "resources/js/pages/admin/wow/WowUsers.vue": {
-    "file": "assets/WowUsers-DX8m3vks.js",
+    "file": "assets/WowUsers-B7AIQUio.js",
     "name": "WowUsers",
     "src": "resources/js/pages/admin/wow/WowUsers.vue",
     "isDynamicEntry": true,
@@ -315,7 +315,7 @@
     ]
   },
   "resources/js/pages/auth/ForgotPassword.vue": {
-    "file": "assets/ForgotPassword-BAqpAFgS.js",
+    "file": "assets/ForgotPassword-pjI5drjV.js",
     "name": "ForgotPassword",
     "src": "resources/js/pages/auth/ForgotPassword.vue",
     "isDynamicEntry": true,
@@ -324,7 +324,7 @@
     ]
   },
   "resources/js/pages/auth/Login.vue": {
-    "file": "assets/Login-DkDUqd2U.js",
+    "file": "assets/Login-CCtqtF2b.js",
     "name": "Login",
     "src": "resources/js/pages/auth/Login.vue",
     "isDynamicEntry": true,
@@ -333,7 +333,7 @@
     ]
   },
   "resources/js/pages/auth/Register.vue": {
-    "file": "assets/Register-Dci0XpK3.js",
+    "file": "assets/Register-DCqCIUWS.js",
     "name": "Register",
     "src": "resources/js/pages/auth/Register.vue",
     "isDynamicEntry": true,
@@ -342,7 +342,7 @@
     ]
   },
   "resources/js/pages/auth/ResetPassword.vue": {
-    "file": "assets/ResetPassword-CYy5JJ_T.js",
+    "file": "assets/ResetPassword-DmWQlUbP.js",
     "name": "ResetPassword",
     "src": "resources/js/pages/auth/ResetPassword.vue",
     "isDynamicEntry": true,

@@ -74,26 +74,28 @@
                             />
                             
                             <!-- Домики на карте -->
-                            <div
-                                v-for="(house, index) in houses"
-                                :key="index"
-                                class="absolute cursor-move transition-all hover:scale-110"
-                                :style="{
-                                    left: house.x + '%',
-                                    top: house.y + '%',
-                                    transform: 'translate(-50%, -50%)',
-                                    zIndex: house.active ? 20 : 10
-                                }"
-                                @mousedown="startDrag(index, $event)"
-                                @click="selectHouse(index)"
-                            >
+                            <template v-if="houses && houses.length">
                                 <div
-                                    class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold"
-                                    :class="house.active ? 'bg-accent border-accent text-accent-foreground' : 'bg-white border-gray-400 text-gray-700'"
+                                    v-for="(house, index) in houses"
+                                    :key="index"
+                                    class="absolute cursor-move transition-all hover:scale-110"
+                                    :style="{
+                                        left: house.x + '%',
+                                        top: house.y + '%',
+                                        transform: 'translate(-50%, -50%)',
+                                        zIndex: house.active ? 20 : 10
+                                    }"
+                                    @mousedown="startDrag(index, $event)"
+                                    @click="selectHouse(index)"
                                 >
-                                    {{ index + 1 }}
+                                    <div
+                                        class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold"
+                                        :class="house.active ? 'bg-accent border-accent text-accent-foreground' : 'bg-white border-gray-400 text-gray-700'"
+                                    >
+                                        {{ index + 1 }}
+                                    </div>
                                 </div>
-                            </div>
+                            </template>
                             
                             <!-- Кнопка добавления домика -->
                             <button
@@ -101,7 +103,7 @@
                                 @click="addHouse"
                                 type="button"
                                 class="absolute top-4 right-4 px-3 py-2 bg-accent/90 text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors shadow-lg"
-                                :disabled="houses.length >= 20"
+                                :disabled="!houses || houses.length >= 20"
                             >
                                 + Добавить домик
                             </button>
@@ -151,7 +153,7 @@
                         </div>
                         
                         <!-- Список домиков -->
-                        <div v-if="houses.length > 0" class="mt-4 p-3 bg-muted/50 rounded-lg">
+                        <div v-if="houses && houses.length > 0" class="mt-4 p-3 bg-muted/50 rounded-lg">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-sm font-medium">Домики на карте ({{ houses.length }})</span>
                                 <button
@@ -187,7 +189,7 @@
                         <button
                             @click="addButton"
                             type="button"
-                            :disabled="welcomeButtons.length >= 5"
+                            :disabled="!welcomeButtons || welcomeButtons.length >= 5"
                             class="h-8 px-3 text-sm bg-accent/10 text-accent border border-accent/40 hover:bg-accent/20 rounded-lg inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             + Добавить кнопку
@@ -197,7 +199,7 @@
                         Максимум 5 кнопок. Кнопки будут отображаться под сообщением.
                     </p>
 
-                    <div v-if="welcomeButtons.length === 0" class="text-sm text-muted-foreground py-4 text-center border border-dashed border-border rounded-lg">
+                    <div v-if="!welcomeButtons || welcomeButtons.length === 0" class="text-sm text-muted-foreground py-4 text-center border border-dashed border-border rounded-lg">
                         Нет кнопок. Нажмите "Добавить кнопку" для создания.
                     </div>
 
@@ -321,8 +323,9 @@ export default {
 
         const isFormValid = computed(() => {
             // Проверяем, что все кнопки заполнены правильно
-            if (welcomeButtons.value.length > 0) {
+            if (Array.isArray(welcomeButtons.value) && welcomeButtons.value.length > 0) {
                 return welcomeButtons.value.every(button => 
+                    button && 
                     button.label && button.label.trim() && 
                     button.url && button.url.trim() &&
                     isValidUrl(button.url)
@@ -351,7 +354,14 @@ export default {
                 const data = await response.json()
                 welcomeText.value = data.welcome_text || ''
                 welcomeBannerUrl.value = data.welcome_banner_url || ''
-                welcomeButtons.value = (data.welcome_buttons || []).map(btn => ({ ...btn }))
+                
+                // Безопасная инициализация welcomeButtons
+                if (Array.isArray(data.welcome_buttons)) {
+                    welcomeButtons.value = data.welcome_buttons.map(btn => ({ ...btn }))
+                } else {
+                    welcomeButtons.value = []
+                }
+                
                 // Загружаем домики из данных
                 if (data.houses && Array.isArray(data.houses)) {
                     houses.value = data.houses.map(h => ({ ...h, active: false }))
@@ -382,8 +392,8 @@ export default {
                 const response = await apiPost('/wow/welcome', {
                     welcome_text: welcomeText.value || null,
                     welcome_banner_url: welcomeBannerUrl.value || null,
-                    welcome_buttons: welcomeButtons.value.length > 0 ? welcomeButtons.value : null,
-                    houses: houses.value.length > 0 ? houses.value.map(h => ({ x: h.x, y: h.y })) : null,
+                    welcome_buttons: (Array.isArray(welcomeButtons.value) && welcomeButtons.value.length > 0) ? welcomeButtons.value : null,
+                    houses: (Array.isArray(houses.value) && houses.value.length > 0) ? houses.value.map(h => ({ x: h.x, y: h.y })) : null,
                 })
 
                 if (!response.ok) {
@@ -423,6 +433,9 @@ export default {
         }
 
         const addButton = () => {
+            if (!Array.isArray(welcomeButtons.value)) {
+                welcomeButtons.value = []
+            }
             if (welcomeButtons.value.length < 5) {
                 welcomeButtons.value.push({
                     label: '',
@@ -432,7 +445,9 @@ export default {
         }
 
         const removeButton = (index) => {
-            welcomeButtons.value.splice(index, 1)
+            if (Array.isArray(welcomeButtons.value)) {
+                welcomeButtons.value.splice(index, 1)
+            }
         }
 
         const openMediaSelector = () => {
@@ -461,6 +476,93 @@ export default {
             event.target.style.display = 'none'
         }
 
+        // Функции для работы с домиками
+        const onMapImageLoad = () => {
+            // Изображение загружено, можно инициализировать домики
+        }
+
+        const addHouse = () => {
+            if (!Array.isArray(houses.value)) {
+                houses.value = []
+            }
+            if (houses.value.length < 20) {
+                houses.value.push({
+                    x: 50,
+                    y: 50,
+                    active: false
+                })
+            }
+        }
+
+        const removeHouse = (index) => {
+            if (Array.isArray(houses.value) && index >= 0 && index < houses.value.length) {
+                houses.value.splice(index, 1)
+                if (selectedHouseIndex.value === index) {
+                    selectedHouseIndex.value = null
+                }
+            }
+        }
+
+        const clearAllHouses = () => {
+            houses.value = []
+            selectedHouseIndex.value = null
+        }
+
+        const selectHouse = (index) => {
+            if (Array.isArray(houses.value) && index >= 0 && index < houses.value.length) {
+                // Деактивируем все домики
+                houses.value.forEach(h => h.active = false)
+                // Активируем выбранный
+                houses.value[index].active = true
+                selectedHouseIndex.value = index
+            }
+        }
+
+        const updateHousePosition = (index) => {
+            if (Array.isArray(houses.value) && index >= 0 && index < houses.value.length) {
+                const house = houses.value[index]
+                // Ограничиваем значения от 0 до 100
+                house.x = Math.max(0, Math.min(100, house.x || 0))
+                house.y = Math.max(0, Math.min(100, house.y || 0))
+            }
+        }
+
+        const startDrag = (index, event) => {
+            if (!Array.isArray(houses.value) || index < 0 || index >= houses.value.length) {
+                return
+            }
+            isDragging.value = true
+            dragState.value.houseIndex = index
+            dragState.value.startX = event.clientX
+            dragState.value.startY = event.clientY
+            const house = houses.value[index]
+            dragState.value.startLeft = house.x
+            dragState.value.startTop = house.y
+
+            const onMouseMove = (e) => {
+                if (!isDragging.value || dragState.value.houseIndex !== index) return
+                
+                const rect = mapImageRef.value?.getBoundingClientRect()
+                if (!rect) return
+
+                const deltaX = ((e.clientX - dragState.value.startX) / rect.width) * 100
+                const deltaY = ((e.clientY - dragState.value.startY) / rect.height) * 100
+
+                house.x = Math.max(0, Math.min(100, dragState.value.startLeft + deltaX))
+                house.y = Math.max(0, Math.min(100, dragState.value.startTop + deltaY))
+            }
+
+            const onMouseUp = () => {
+                isDragging.value = false
+                dragState.value.houseIndex = null
+                document.removeEventListener('mousemove', onMouseMove)
+                document.removeEventListener('mouseup', onMouseUp)
+            }
+
+            document.addEventListener('mousemove', onMouseMove)
+            document.addEventListener('mouseup', onMouseUp)
+        }
+
         onMounted(() => {
             fetchSettings()
         })
@@ -475,6 +577,10 @@ export default {
             showMediaModal,
             selectedMediaFile,
             isFormValid,
+            mapImageRef,
+            houses,
+            selectedHouseIndex,
+            isDragging,
             fetchSettings,
             saveSettings,
             addButton,
@@ -483,6 +589,13 @@ export default {
             closeMediaModal,
             handleMediaFileSelected,
             handleImageError,
+            onMapImageLoad,
+            addHouse,
+            removeHouse,
+            clearAllHouses,
+            selectHouse,
+            updateHousePosition,
+            startDrag,
         }
     },
 }
